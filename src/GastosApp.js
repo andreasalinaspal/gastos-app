@@ -94,6 +94,7 @@ export default function App() {
   const [editExpId, setEditExpId] = useState(null);
   const [editExpAmt, setEditExpAmt] = useState("");
   const [editExpDesc, setEditExpDesc] = useState("");
+  const [editExpDate, setEditExpDate] = useState("");
   const [toast, setToast] = useState(null);
   const timerRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -146,8 +147,13 @@ export default function App() {
   };
   const deleteExpense = (id) => setConfirm({ message: "Eliminar este gasto?", onConfirm: () => { setData(p => ({ ...p, expenses: p.expenses.filter(e => e.id !== id) })); showToast("Gasto eliminado"); }});
   const saveExpenseEdit = (id) => {
-    setData(p => ({ ...p, expenses: p.expenses.map(e => e.id === id ? { ...e, description: editExpDesc || e.description, amount: Number(editExpAmt) || e.amount } : e) }));
-    setEditExpId(null); setEditExpDesc(""); setEditExpAmt("");
+    setData(p => ({ ...p, expenses: p.expenses.map(e => {
+      if (e.id !== id) return e;
+      const newDate = editExpDate ? new Date(editExpDate + "T12:00:00").toISOString() : e.date;
+      const newMonth = (() => { const d = new Date(newDate); return MONTHS[d.getMonth()] + " " + d.getFullYear(); })();
+      return { ...e, description: editExpDesc || e.description, amount: Number(editExpAmt) || e.amount, date: newDate, month: newMonth };
+    })}));
+    setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); setEditExpDate("");
   };
   const togglePaid = (id) => setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, paid: !f.paid } : f) }));
   const saveFixedAmt = (id) => { setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, amount: Number(editFixedAmt) || 0 } : f) })); setEditFixed(null); setEditFixedAmt(""); };
@@ -328,15 +334,19 @@ export default function App() {
               {editExpId === e.id ? (
                 <div>
                   <input type="text" value={editExpDesc} onChange={ev => setEditExpDesc(ev.target.value)} placeholder="Descripcion" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
-                  <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, color: C.black, marginBottom: 10, fontSize: 14, padding: "8px 12px" }} />
+                  <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Fecha</div>
+                    <input type="date" value={editExpDate} onChange={ev => setEditExpDate(ev.target.value)} style={{ ...inputStyle, color: C.black, fontSize: 14, padding: "8px 12px" }} />
+                  </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => saveExpenseEdit(e.id)} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#fff", color: C.green, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
-                    <button onClick={() => { setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                    <button onClick={() => { setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); setEditExpDate(""); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
                   </div>
                 </div>
               ) : (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); }}>
+                  <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); setEditExpDate(new Date(e.date).toISOString().split("T")[0]); }}>
                     <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>{e.description}</div>
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Toca para editar</div>
                   </div>
@@ -412,16 +422,20 @@ export default function App() {
                   {editExpId === e.id ? (
                     <div>
                       <input type="text" value={editExpDesc} onChange={ev => setEditExpDesc(ev.target.value)} placeholder="Descripcion" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
-                      <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, color: C.black, marginBottom: 10, fontSize: 14, padding: "8px 12px" }} />
+                      <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, marginBottom: 4 }}>Fecha</div>
+                        <input type="date" value={editExpDate} onChange={ev => setEditExpDate(ev.target.value)} style={{ ...inputStyle, color: C.black, fontSize: 14, padding: "8px 12px" }} />
+                      </div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => saveExpenseEdit(e.id)} style={{ flex: 1, padding: 10, borderRadius: 10, background: C.green, color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
-                        <button onClick={() => { setEditExpId(null); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#E0DCD4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                        <button onClick={() => { setEditExpId(null); setEditExpDate(""); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#E0DCD4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
                       </div>
                     </div>
                   ) : (
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#E8E4DA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: C.textMuted, marginRight: 14, flexShrink: 0 }}>{dt.getDate()}</div>
-                      <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); }}>
+                      <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); setEditExpDate(new Date(e.date).toISOString().split("T")[0]); }}>
                         <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{e.description}</div>
                         <div style={{ fontSize: 12, color: C.textMuted }}>{DAYS[dt.getDay()].toLowerCase().slice(0,3)}, {dt.getDate()} {MONTHS_SHORT[dt.getMonth()].toLowerCase()}.</div>
                       </div>
