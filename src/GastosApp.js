@@ -93,6 +93,7 @@ export default function App() {
   const [confirm, setConfirm] = useState(null); // { message, onConfirm }
   const [toast, setToast] = useState(null);
   const timerRef = useRef(null);
+  const recognitionRef = useRef(null);
   const fmt = useCallback((n) => fmtWith(n, data.currency), [data.currency]);
   const showToast = useCallback((m) => { setToast(m); setTimeout(() => setToast(null), 2000); }, []);
 
@@ -172,12 +173,73 @@ export default function App() {
     setData(p => ({ ...p, incomeExtra: p.incomeExtra.map(i => i.id === id ? { ...i, name: editExtraName || i.name, amount: Number(editExtraAmt) || i.amount } : i) }));
     setEditExtraId(null); setEditExtraName(""); setEditExtraAmt("");
   };
-  const handleRecord = () => { if (!recording) { setRecording(true); } else { setRecording(false); addExpense(Math.floor(Math.random() * 800) + 50, "Gasto por voz"); } };
+  const handleRecord = () => {
+    if (!recording) {
+      setRecording(true);
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        showToast("Tu navegador no soporta grabacion de voz");
+        setRecording(false);
+        return;
+      }
+      const recognition = new SpeechRecognition();
+      recognition.lang = "es-ES";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognitionRef.current = recognition;
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript.toLowerCase();
+        // Try to extract amount from speech
+        const numMatch = transcript.match(/(\d[\d.,]*)/);
+        let amount = 0;
+        if (numMatch) {
+          amount = parseFloat(numMatch[1].replace(",", "."));
+        }
+        // Extract description (remove numbers and currency words)
+        let desc = transcript
+          .replace(/(\d[\d.,]*)/g, "")
+          .replace(/\b(soles?|dolares?|pesos?|mil|cien|ciento)\b/gi, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        // Handle "mil" multiplier
+        if (/mil/i.test(transcript) && amount > 0 && amount < 1000) {
+          amount = amount * 1000;
+        }
+        if (amount > 0) {
+          addExpense(amount, desc || "Gasto por voz");
+        } else {
+          showToast("No entendi el monto. Dijiste: \"" + transcript + "\"");
+        }
+        setRecording(false);
+      };
+
+      recognition.onerror = (event) => {
+        if (event.error === "no-speech") {
+          showToast("No se detecto voz, intenta de nuevo");
+        } else {
+          showToast("Error de grabacion: " + event.error);
+        }
+        setRecording(false);
+      };
+
+      recognition.onend = () => {
+        setRecording(false);
+      };
+
+      recognition.start();
+    } else {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setRecording(false);
+    }
+  };
   const handleManual = () => { addExpense(Number(manAmt), manDesc); setManAmt(""); setManDesc(""); setShowManual(false); };
   const typeLabel = (t) => t === "manual" ? "Lo pago yo" : t === "debito" ? "Debito automatico" : "Descuento sueldo";
   const typeBg = (t) => t === "manual" ? C.yellowBadge : t === "debito" ? C.pinkBadge : "#7B68EE";
 
-  const HomeScreen = () => (
+  const homeScreen = (
     <div style={{ flex: 1, background: C.red, minHeight: "100vh", display: "flex", flexDirection: "column", paddingBottom: 80 }}>
       <div style={{ padding: "48px 28px 0" }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, marginBottom: 6 }}>{getToday()}</div>
@@ -209,7 +271,7 @@ export default function App() {
     </div>
   );
 
-  const MiMesScreen = () => {
+  const MiMesScreen = (() => {
     const mtabs = [{ label: "Este mes", val: 0 }, { label: getMonthShort(-1), val: -1 }, { label: getMonthShort(-2), val: -2 }, { label: "Historico", val: "hist" }];
     const d = monthTab === "hist" ? getMonthData(0) : getMonthData(monthTab);
     const isNeg = d.balance < 0;
@@ -277,9 +339,9 @@ export default function App() {
         )}
       </div>
     );
-  };
+  })();
 
-  const FijosScreen = () => {
+  const FijosScreen = (() => {
     const fixedCur = data.fixed.filter(f => f.month === curMonth);
     const totalAll = fixedCur.reduce((s, f) => s + f.amount, 0);
     const totalPaid = fixedCur.filter(f => f.paid).reduce((s, f) => s + f.amount, 0);
@@ -374,9 +436,9 @@ export default function App() {
         </div>
       </div>
     );
-  };
+  })();
 
-  const IngresosScreen = () => {
+  const IngresosScreen = (() => {
     const totalInc = data.incomeFixed.filter(i => i.month === curMonth).reduce((s, i) => s + i.amount, 0) + data.incomeExtra.filter(i => i.month === curMonth).reduce((s, i) => s + i.amount, 0);
     return (
       <div style={{ flex: 1, background: C.beige, minHeight: "100vh", paddingBottom: 80 }}>
@@ -471,9 +533,9 @@ export default function App() {
         </div>
       </div>
     );
-  };
+  })();
 
-  const ConfigScreen = () => (
+  const configScreen = (
     <div style={{ flex: 1, background: C.beige, minHeight: "100vh", paddingBottom: 80 }}>
       <div style={{ padding: "32px 24px 0" }}>
         <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic" }}>Config</h1>
@@ -541,11 +603,11 @@ export default function App() {
           </div>
         </div>
       )}
-      {tab === "home" && <HomeScreen />}
-      {tab === "month" && <MiMesScreen />}
-      {tab === "fixed" && <FijosScreen />}
-      {tab === "income" && <IngresosScreen />}
-      {tab === "config" && <ConfigScreen />}
+      {tab === "home" && homeScreen}
+      {tab === "month" && MiMesScreen}
+      {tab === "fixed" && FijosScreen}
+      {tab === "income" && IngresosScreen}
+      {tab === "config" && configScreen}
       <nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: tab === "home" ? "rgba(180,40,10,0.95)" : "#fff", borderTop: tab === "home" ? "1px solid rgba(255,255,255,0.12)" : "1px solid #E0DCD4", display: "flex", justifyContent: "space-around", padding: "8px 0 14px", zIndex: 100, backdropFilter: "blur(12px)" }}>
         {TABS.map(t => { const active = tab === t.id; const color = tab === "home" ? (active ? "#fff" : "rgba(255,255,255,0.45)") : (active ? C.red : C.textMuted); return (
           <button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "none", border: "none", cursor: "pointer", padding: "4px 10px", color, fontSize: 10, fontWeight: active ? 700 : 500, fontFamily: "inherit", letterSpacing: 0.3 }}>
