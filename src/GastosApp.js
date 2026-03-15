@@ -91,6 +91,9 @@ export default function App() {
   const [showAddFixedIncome, setShowAddFixedIncome] = useState(false);
   const [newFixedIncomeName, setNewFixedIncomeName] = useState("");
   const [confirm, setConfirm] = useState(null); // { message, onConfirm }
+  const [editExpId, setEditExpId] = useState(null);
+  const [editExpAmt, setEditExpAmt] = useState("");
+  const [editExpDesc, setEditExpDesc] = useState("");
   const [toast, setToast] = useState(null);
   const timerRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -136,12 +139,16 @@ export default function App() {
   const addExpense = (amt, desc) => {
     if (!amt || amt <= 0) return;
     const a = Number(amt); const d = desc || "Gasto diario";
-    setConfirm({ message: `Registrar gasto de ${fmt(a)}?`, onConfirm: () => {
+    setConfirm({ message: `Registrar: ${d} ${fmt(a)}?`, onConfirm: () => {
       setData(p => ({ ...p, expenses: [...p.expenses, { id: genId(), amount: a, description: d, date: new Date().toISOString(), month: curMonth }] }));
-      showToast("Gasto registrado: " + fmt(a));
+      showToast(d + " " + fmt(a) + " registrado");
     }});
   };
   const deleteExpense = (id) => setConfirm({ message: "Eliminar este gasto?", onConfirm: () => { setData(p => ({ ...p, expenses: p.expenses.filter(e => e.id !== id) })); showToast("Gasto eliminado"); }});
+  const saveExpenseEdit = (id) => {
+    setData(p => ({ ...p, expenses: p.expenses.map(e => e.id === id ? { ...e, description: editExpDesc || e.description, amount: Number(editExpAmt) || e.amount } : e) }));
+    setEditExpId(null); setEditExpDesc(""); setEditExpAmt("");
+  };
   const togglePaid = (id) => setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, paid: !f.paid } : f) }));
   const saveFixedAmt = (id) => { setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, amount: Number(editFixedAmt) || 0 } : f) })); setEditFixed(null); setEditFixedAmt(""); };
   const saveIncomeAmt = (id) => { setData(p => ({ ...p, incomeFixed: p.incomeFixed.map(i => i.id === id ? { ...i, amount: Number(editIncomeAmt) || 0 } : i) })); setEditIncomeId(null); setEditIncomeAmt(""); };
@@ -175,37 +182,74 @@ export default function App() {
   };
   const handleRecord = () => {
     if (!recording) {
-      setRecording(true);
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-        showToast("Tu navegador no soporta grabacion de voz");
-        setRecording(false);
+        showToast("Tu navegador no soporta grabacion de voz. Usa el ingreso manual.");
         return;
       }
+      setRecording(true);
       const recognition = new SpeechRecognition();
-      recognition.lang = "es-ES";
+      recognition.lang = "es-PE";
       recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
+      recognition.continuous = false;
+      recognition.maxAlternatives = 3;
       recognitionRef.current = recognition;
 
+      let gotResult = false;
+
       recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript.toLowerCase();
-        // Try to extract amount from speech
-        const numMatch = transcript.match(/(\d[\d.,]*)/);
+        gotResult = true;
+        const transcript = event.results[0][0].transcript.toLowerCase().trim();
+        
+        // Parse numbers: handle "veinte", "treinta", etc and digits
         let amount = 0;
-        if (numMatch) {
-          amount = parseFloat(numMatch[1].replace(",", "."));
+        const wordNums = {
+          "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+          "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
+          "once": 11, "doce": 12, "trece": 13, "catorce": 14, "quince": 15,
+          "dieciseis": 16, "diecisiete": 17, "dieciocho": 18, "diecinueve": 19,
+          "veinte": 20, "veintiuno": 21, "veintidos": 22, "veintitres": 23,
+          "veinticuatro": 24, "veinticinco": 25, "treinta": 30, "cuarenta": 40,
+          "cincuenta": 50, "sesenta": 60, "setenta": 70, "ochenta": 80, "noventa": 90,
+          "cien": 100, "ciento": 100, "doscientos": 200, "trescientos": 300,
+          "cuatrocientos": 400, "quinientos": 500, "mil": 1000,
+        };
+
+        // First try digit match
+        const digitMatch = transcript.match(/(\d[\d.,]*)/);
+        if (digitMatch) {
+          amount = parseFloat(digitMatch[1].replace(",", "."));
+        } else {
+          // Try word numbers
+          for (const [word, val] of Object.entries(wordNums)) {
+            if (transcript.includes(word)) {
+              amount = val;
+              break;
+            }
+          }
         }
-        // Extract description (remove numbers and currency words)
+
+        // Handle "mil" multiplier
+        if (/\bmil\b/.test(transcript)) {
+          const beforeMil = transcript.match(/(\d+)\s*mil/);
+          if (beforeMil) {
+            amount = parseFloat(beforeMil[1]) * 1000;
+          } else if (amount > 0 && amount < 1000) {
+            amount = amount * 1000;
+          } else if (amount === 0) {
+            amount = 1000;
+          }
+        }
+
+        // Extract description
         let desc = transcript
           .replace(/(\d[\d.,]*)/g, "")
-          .replace(/\b(soles?|dolares?|pesos?|mil|cien|ciento)\b/gi, "")
+          .replace(/\b(soles?|dolares?|pesos?|mil|cien|ciento|con|por|de|y)\b/gi, "")
           .replace(/\s+/g, " ")
           .trim();
-        // Handle "mil" multiplier
-        if (/mil/i.test(transcript) && amount > 0 && amount < 1000) {
-          amount = amount * 1000;
-        }
+        // Capitalize first letter
+        if (desc) desc = desc.charAt(0).toUpperCase() + desc.slice(1);
+
         if (amount > 0) {
           addExpense(amount, desc || "Gasto por voz");
         } else {
@@ -217,22 +261,31 @@ export default function App() {
       recognition.onerror = (event) => {
         if (event.error === "no-speech") {
           showToast("No se detecto voz, intenta de nuevo");
+        } else if (event.error === "not-allowed") {
+          showToast("Permiso de microfono denegado. Activa el microfono en ajustes de Safari.");
         } else {
-          showToast("Error de grabacion: " + event.error);
+          showToast("Error: " + event.error);
         }
         setRecording(false);
       };
 
       recognition.onend = () => {
+        if (!gotResult) {
+          showToast("No se detecto voz, intenta de nuevo");
+        }
         setRecording(false);
       };
 
-      recognition.start();
+      try {
+        recognition.start();
+      } catch (e) {
+        showToast("Error al iniciar grabacion");
+        setRecording(false);
+      }
     } else {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try { recognitionRef.current.stop(); } catch(e) {}
       }
-      setRecording(false);
     }
   };
   const handleManual = () => { addExpense(Number(manAmt), manDesc); setManAmt(""); setManDesc(""); setShowManual(false); };
@@ -264,10 +317,37 @@ export default function App() {
           </div>
         </div>
       )}
-      <div style={{ textAlign: "center", padding: "6px 0 24px" }}>
+      <div style={{ textAlign: "center", padding: "6px 0 8px" }}>
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 1.5, marginBottom: 4 }}>HOY GASTASTE</div>
         <div style={{ fontSize: 40, fontWeight: 900, color: "#fff" }}>{fmt(todayTotal)}</div>
       </div>
+      {todayExp.length > 0 && (
+        <div style={{ padding: "0 20px 24px" }}>
+          {todayExp.map(e => (
+            <div key={e.id} style={{ background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "12px 16px", marginBottom: 8 }}>
+              {editExpId === e.id ? (
+                <div>
+                  <input type="text" value={editExpDesc} onChange={ev => setEditExpDesc(ev.target.value)} placeholder="Descripcion" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
+                  <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, color: C.black, marginBottom: 10, fontSize: 14, padding: "8px 12px" }} />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => saveExpenseEdit(e.id)} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#fff", color: C.green, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
+                    <button onClick={() => { setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>{e.description}</div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Toca para editar</div>
+                  </div>
+                  <span style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginRight: 10 }}>-{fmt(e.amount)}</span>
+                  <button onClick={() => deleteExpense(e.id)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: 8, cursor: "pointer" }}><TrashIcon size={16} color="rgba(255,255,255,0.7)" /></button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -328,10 +408,27 @@ export default function App() {
               <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Registros del mes</div>
               {d.exps.length === 0 && <div style={{ ...cardStyle, textAlign: "center", color: C.textMuted, fontSize: 14, padding: 24 }}>Sin gastos registrados</div>}
               {d.exps.map(e => { const dt = new Date(e.date); return (
-                <div key={e.id} style={{ ...cardStyle, display: "flex", alignItems: "center", padding: "14px 16px", marginBottom: 10 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#E8E4DA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: C.textMuted, marginRight: 14, flexShrink: 0 }}>{dt.getDate()}</div>
-                  <div style={{ flex: 1 }}><div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{e.description}</div><div style={{ fontSize: 12, color: C.textMuted }}>{DAYS[dt.getDay()].toLowerCase().slice(0,3)}, {dt.getDate()} {MONTHS_SHORT[dt.getMonth()].toLowerCase()}.</div></div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: C.red }}>-{fmt(e.amount)}</div>
+                <div key={e.id} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10 }}>
+                  {editExpId === e.id ? (
+                    <div>
+                      <input type="text" value={editExpDesc} onChange={ev => setEditExpDesc(ev.target.value)} placeholder="Descripcion" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
+                      <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, color: C.black, marginBottom: 10, fontSize: 14, padding: "8px 12px" }} />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => saveExpenseEdit(e.id)} style={{ flex: 1, padding: 10, borderRadius: 10, background: C.green, color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
+                        <button onClick={() => { setEditExpId(null); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#E0DCD4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#E8E4DA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: C.textMuted, marginRight: 14, flexShrink: 0 }}>{dt.getDate()}</div>
+                      <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{e.description}</div>
+                        <div style={{ fontSize: 12, color: C.textMuted }}>{DAYS[dt.getDay()].toLowerCase().slice(0,3)}, {dt.getDate()} {MONTHS_SHORT[dt.getMonth()].toLowerCase()}.</div>
+                      </div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: C.red, marginRight: 8 }}>-{fmt(e.amount)}</div>
+                      <button onClick={() => deleteExpense(e.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><TrashIcon /></button>
+                    </div>
+                  )}
                 </div>
               ); })}
             </div>
