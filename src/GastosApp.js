@@ -359,7 +359,11 @@ export default function App() {
         <h1 style={{ fontSize: 42, fontWeight: 900, color: "#fff", margin: "0 0 4px", fontStyle: "italic", letterSpacing: -1 }}>Hola, {data.userName}.</h1>
         <div style={{ fontSize: 20, color: "rgba(255,255,255,0.8)", fontWeight: 400 }}>Que compraste ahora?</div>
       </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: "16px 0" }}>
+      <div style={{ textAlign: "center", padding: "24px 0 8px" }}>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 1.5, marginBottom: 4 }}>HOY GASTASTE</div>
+        <div style={{ fontSize: 44, fontWeight: 900, color: "#fff" }}>{fmt(todayTotal)}</div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "16px 0 20px", gap: 14 }}>
         <button onClick={handleRecord} style={{ width: 140, height: 140, borderRadius: "50%", background: recording ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.12)", border: "2px solid rgba(255,255,255,0.3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.3s", boxShadow: recording ? "0 0 0 24px rgba(255,255,255,0.06)" : "none", animation: recording ? "pulse 1.4s ease-in-out infinite" : "none" }}>
           {recording ? <StopIcon size={44} /> : <MicIcon size={52} />}
         </button>
@@ -370,7 +374,7 @@ export default function App() {
       </div>
       <div style={{ padding: "0 28px 14px" }}>
         <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleScanImage} style={{ display: "none" }} />
-        <button onClick={() => fileInputRef.current?.click()} disabled={scanLoading} style={{ width: "100%", padding: "14px", borderRadius: 28, background: "rgba(255,255,255,0.22)", border: "1.5px solid rgba(255,255,255,0.35)", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: scanLoading ? 0.6 : 1 }}>
+        <button onClick={() => setShowScanOptions(!showScanOptions)} disabled={scanLoading} style={{ width: "100%", padding: "14px", borderRadius: 28, background: "rgba(255,255,255,0.22)", border: "1.5px solid rgba(255,255,255,0.35)", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: scanLoading ? 0.6 : 1 }}>
           <CameraIcon size={20} color="#fff" />
           {scanLoading ? "Analizando imagen..." : "Subir captura de movimientos"}
         </button>
@@ -390,10 +394,7 @@ export default function App() {
           </div>
         </div>
       )}
-      <div style={{ textAlign: "center", padding: "6px 0 8px" }}>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 1.5, marginBottom: 4 }}>HOY GASTASTE</div>
-        <div style={{ fontSize: 40, fontWeight: 900, color: "#fff" }}>{fmt(todayTotal)}</div>
-      </div>
+
       {todayExp.length > 0 && (
         <div style={{ padding: "0 20px 24px" }}>
           {todayExp.map(e => (
