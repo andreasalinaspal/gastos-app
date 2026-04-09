@@ -97,11 +97,13 @@ export default function App() {
   const [editExpDesc, setEditExpDesc] = useState("");
   const [editExpDate, setEditExpDate] = useState("");
   const [scanLoading, setScanLoading] = useState(false);
-  const [scanResults, setScanResults] = useState(null); // array of {description, amount, date}
+  const [scanResults, setScanResults] = useState(null);
+  const [showScanOptions, setShowScanOptions] = useState(false); // array of {description, amount, date}
   const [toast, setToast] = useState(null);
   const timerRef = useRef(null);
   const recognitionRef = useRef(null);
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const fmt = useCallback((n) => fmtWith(n, data.currency), [data.currency]);
   const showToast = useCallback((m) => { setToast(m); setTimeout(() => setToast(null), 2000); }, []);
 
@@ -372,6 +374,12 @@ export default function App() {
           <CameraIcon size={20} color="#fff" />
           {scanLoading ? "Analizando imagen..." : "Subir captura de movimientos"}
         </button>
+        {showScanOptions && !scanLoading && (
+          <div style={{ marginTop: 8, borderRadius: 16, overflow: "hidden", animation: "slideUp 0.2s ease" }}>
+            <button onClick={() => { cameraInputRef.current?.click(); }} style={{ width: "100%", padding: "14px 20px", background: "rgba(255,255,255,0.95)", border: "none", borderBottom: "1px solid #E0DCD4", fontSize: 15, fontWeight: 600, color: "#1A1A1A", cursor: "pointer", fontFamily: "inherit", textAlign: "left", display: "flex", alignItems: "center", gap: 12 }}>Tomar foto</button>
+            <button onClick={() => { fileInputRef.current?.click(); }} style={{ width: "100%", padding: "14px 20px", background: "rgba(255,255,255,0.95)", border: "none", fontSize: 15, fontWeight: 600, color: "#1A1A1A", cursor: "pointer", fontFamily: "inherit", textAlign: "left", display: "flex", alignItems: "center", gap: 12 }}>Elegir de galeria</button>
+          </div>
+        )}
       </div>
       {showManual && (
         <div style={{ padding: "0 28px 14px", animation: "slideUp 0.25s ease" }}>
