@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { supabase } from "./supabase";
 
 const MONTHS_SHORT = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
@@ -152,6 +153,39 @@ export default function App() {
   // Save data to localStorage on every change
   useEffect(() => {
     try { localStorage.setItem('gastos-data', JSON.stringify(data)); } catch (e) {}
+  }, [data]);
+
+  // Load data from Supabase on mount (cloud is the source of truth)
+  const [cloudStatus, setCloudStatus] = useState("loading"); // loading, synced, offline
+  const skipNextSync = useRef(false);
+  useEffect(() => {
+    supabase.from('app_data').select('data').eq('id', 1).single()
+      .then(({ data: row, error }) => {
+        if (!error && row?.data) {
+          skipNextSync.current = true;
+          setData(row.data);
+          setCloudStatus("synced");
+        } else if (error?.code === 'PGRST116') {
+          // No row yet — insert current data
+          supabase.from('app_data').insert({ id: 1, data }).then(() => setCloudStatus("synced"));
+        } else {
+          setCloudStatus("offline");
+        }
+      })
+      .catch(() => setCloudStatus("offline"));
+  }, []);
+
+  // Sync data to Supabase on every change (debounced)
+  const syncTimer = useRef(null);
+  useEffect(() => {
+    if (skipNextSync.current) { skipNextSync.current = false; return; }
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => {
+      supabase.from('app_data').upsert({ id: 1, data, updated_at: new Date().toISOString() })
+        .then(({ error }) => { if (!error) setCloudStatus("synced"); else setCloudStatus("offline"); })
+        .catch(() => setCloudStatus("offline"));
+    }, 1500);
+    return () => clearTimeout(syncTimer.current);
   }, [data]);
 
   // Register service worker
@@ -793,6 +827,16 @@ export default function App() {
           <input ref={backupInputRef} type="file" accept=".json" onChange={importData} style={{ display: "none" }} />
           <button onClick={() => backupInputRef.current?.click()} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#fff", color: C.black, border: "2px solid #D4D0C8", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Importar backup</button>
           <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, lineHeight: 1.5 }}>Exporta tus datos para tener un respaldo. Si pierdes tus datos, podes restaurarlos importando el archivo.</div>
+        </div>
+        <div style={{ ...cardStyle, padding: 20, marginTop: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 1, marginBottom: 12, textTransform: "uppercase" }}>Nube</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: cloudStatus === "synced" ? C.green : cloudStatus === "loading" ? C.yellow : C.red }} />
+            <span style={{ fontSize: 14, color: C.black, fontWeight: 600 }}>
+              {cloudStatus === "synced" ? "Sincronizado con la nube" : cloudStatus === "loading" ? "Conectando..." : "Sin conexion a la nube"}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, lineHeight: 1.5 }}>Tus datos se guardan automaticamente en la nube. Aunque borres el historial del navegador, tus datos estan seguros.</div>
         </div>
         <button onClick={() => setConfirm({ message: "Resetear todos los datos? Esta accion no se puede deshacer.", onConfirm: () => { setData(initData()); showToast("Datos reseteados"); }})} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.red, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 16 }}>Resetear datos</button>
       </div>
