@@ -373,7 +373,7 @@ export default function App() {
         <button onClick={() => setShowManual(!showManual)} style={{ width: "100%", padding: "14px", borderRadius: 28, background: "rgba(255,255,255,0.12)", border: "1.5px solid rgba(255,255,255,0.28)", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{showManual ? "Cancelar" : "Ingresar manualmente"}</button>
       </div>
       <div style={{ padding: "0 28px 14px" }}>
-        <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleScanImage} style={{ display: "none" }} />
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => { handleScanImage(e); setShowScanOptions(false); }} style={{ display: "none" }} />
         <button onClick={() => setShowScanOptions(!showScanOptions)} disabled={scanLoading} style={{ width: "100%", padding: "14px", borderRadius: 28, background: "rgba(255,255,255,0.22)", border: "1.5px solid rgba(255,255,255,0.35)", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: scanLoading ? 0.6 : 1 }}>
           <CameraIcon size={20} color="#fff" />
           {scanLoading ? "Analizando imagen..." : "Subir captura de movimientos"}
