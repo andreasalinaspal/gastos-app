@@ -21,6 +21,7 @@ const GearIcon = ({ size = 24, color }) => (<svg width={size} height={size} view
 const PlusIcon = ({ size = 22, color = "#fff" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>);
 const TrashIcon = ({ size = 18, color = "#bbb" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>);
 const CheckIcon = ({ size = 22, color = "#fff" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>);
+const CameraIcon = ({ size = 22, color = "#fff" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>);
 
 const FIXED_DEFAULTS = [
   { name: "Gastos Comunes", type: "manual" },
@@ -95,9 +96,12 @@ export default function App() {
   const [editExpAmt, setEditExpAmt] = useState("");
   const [editExpDesc, setEditExpDesc] = useState("");
   const [editExpDate, setEditExpDate] = useState("");
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanResults, setScanResults] = useState(null); // array of {description, amount, date}
   const [toast, setToast] = useState(null);
   const timerRef = useRef(null);
   const recognitionRef = useRef(null);
+  const fileInputRef = useRef(null);
   const fmt = useCallback((n) => fmtWith(n, data.currency), [data.currency]);
   const showToast = useCallback((m) => { setToast(m); setTimeout(() => setToast(null), 2000); }, []);
 
@@ -186,6 +190,54 @@ export default function App() {
     setData(p => ({ ...p, incomeExtra: p.incomeExtra.map(i => i.id === id ? { ...i, name: editExtraName || i.name, amount: Number(editExtraAmt) || i.amount } : i) }));
     setEditExtraId(null); setEditExtraName(""); setEditExtraAmt("");
   };
+  const handleScanImage = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScanLoading(true);
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(",")[1]);
+        r.onerror = () => rej(new Error("Error leyendo archivo"));
+        r.readAsDataURL(file);
+      });
+      const mediaType = file.type || "image/jpeg";
+      const response = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64, mediaType }),
+      });
+      const result = await response.json();
+      if (result.expenses && result.expenses.length > 0) {
+        setScanResults(result.expenses);
+      } else {
+        showToast("No se encontraron gastos en la imagen");
+      }
+    } catch (err) {
+      showToast("Error al analizar la imagen");
+    }
+    setScanLoading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const confirmScanResults = () => {
+    if (!scanResults) return;
+    const newExpenses = scanResults.map(r => ({
+      id: genId(),
+      amount: Number(r.amount),
+      description: r.description,
+      date: r.date ? new Date(r.date + "T12:00:00").toISOString() : new Date().toISOString(),
+      month: r.date ? (() => { const d = new Date(r.date); return MONTHS[d.getMonth()] + " " + d.getFullYear(); })() : curMonth,
+    }));
+    setData(p => ({ ...p, expenses: [...p.expenses, ...newExpenses] }));
+    showToast(newExpenses.length + " gastos registrados");
+    setScanResults(null);
+  };
+
+  const removeScanItem = (idx) => {
+    setScanResults(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const handleRecord = () => {
     if (!recording) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -313,6 +365,13 @@ export default function App() {
       </div>
       <div style={{ padding: "0 28px 14px" }}>
         <button onClick={() => setShowManual(!showManual)} style={{ width: "100%", padding: "14px", borderRadius: 28, background: "rgba(255,255,255,0.12)", border: "1.5px solid rgba(255,255,255,0.28)", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{showManual ? "Cancelar" : "Ingresar manualmente"}</button>
+      </div>
+      <div style={{ padding: "0 28px 14px" }}>
+        <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleScanImage} style={{ display: "none" }} />
+        <button onClick={() => fileInputRef.current?.click()} disabled={scanLoading} style={{ width: "100%", padding: "14px", borderRadius: 28, background: "rgba(255,255,255,0.22)", border: "1.5px solid rgba(255,255,255,0.35)", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: scanLoading ? 0.6 : 1 }}>
+          <CameraIcon size={20} color="#fff" />
+          {scanLoading ? "Analizando imagen..." : "Subir captura de movimientos"}
+        </button>
       </div>
       {showManual && (
         <div style={{ padding: "0 28px 14px", animation: "slideUp 0.25s ease" }}>
@@ -702,6 +761,30 @@ export default function App() {
         ::-webkit-scrollbar { width: 0; }
       `}</style>
       {toast && <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 300, background: C.black, color: "#fff", padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600, animation: "slideUp 0.3s ease", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}>{toast}</div>}
+      {scanResults && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 400, display: "flex", flexDirection: "column", background: C.beige, overflow: "auto" }}>
+          <div style={{ padding: "48px 24px 16px" }}>
+            <h2 style={{ fontSize: 28, fontWeight: 900, color: C.black, fontStyle: "italic", margin: 0 }}>Gastos detectados</h2>
+            <p style={{ fontSize: 14, color: C.textMuted, marginTop: 6 }}>{scanResults.length} movimientos encontrados. Elimina los que no quieras registrar.</p>
+          </div>
+          <div style={{ flex: 1, padding: "0 20px", overflowY: "auto" }}>
+            {scanResults.map((r, i) => (
+              <div key={i} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, display: "flex", alignItems: "center" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{r.description}</div>
+                  <div style={{ fontSize: 12, color: C.textMuted }}>{r.date || "Sin fecha"}</div>
+                </div>
+                <span style={{ fontSize: 17, fontWeight: 800, color: C.red, marginRight: 10 }}>{fmtWith(r.amount, data.currency)}</span>
+                <button onClick={() => removeScanItem(i)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><TrashIcon color="#ccc" /></button>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding: "16px 20px 32px", display: "flex", gap: 10 }}>
+            <button onClick={() => setScanResults(null)} style={{ flex: 1, padding: 16, borderRadius: 14, background: "#E0DCD4", color: "#666", border: "none", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+            <button onClick={confirmScanResults} style={{ flex: 1, padding: 16, borderRadius: 14, background: C.green, color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Registrar todos</button>
+          </div>
+        </div>
+      )}
       {confirm && (
         <div style={{ position: "fixed", inset: 0, zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }} onClick={() => setConfirm(null)}>
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }} />
