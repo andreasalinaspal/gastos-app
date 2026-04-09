@@ -104,6 +104,42 @@ export default function App() {
   const recognitionRef = useRef(null);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const backupInputRef = useRef(null);
+
+  const exportData = () => {
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "gastos-backup-" + new Date().toISOString().split("T")[0] + ".json";
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Backup descargado");
+  };
+
+  const importData = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const imported = JSON.parse(ev.target.result);
+        if (imported && imported.expenses) {
+          setConfirm({ message: "Restaurar backup? Esto reemplaza todos tus datos actuales.", onConfirm: () => {
+            setData(imported);
+            showToast("Datos restaurados");
+          }});
+        } else {
+          showToast("Archivo invalido");
+        }
+      } catch (err) {
+        showToast("Error al leer el archivo");
+      }
+    };
+    reader.readAsText(file);
+    if (backupInputRef.current) backupInputRef.current.value = "";
+  };
   const fmt = useCallback((n) => fmtWith(n, data.currency), [data.currency]);
   const showToast = useCallback((m) => { setToast(m); setTimeout(() => setToast(null), 2000); }, []);
 
@@ -373,7 +409,8 @@ export default function App() {
         <button onClick={() => setShowManual(!showManual)} style={{ width: "100%", padding: "14px", borderRadius: 28, background: "rgba(255,255,255,0.12)", border: "1.5px solid rgba(255,255,255,0.28)", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{showManual ? "Cancelar" : "Ingresar manualmente"}</button>
       </div>
       <div style={{ padding: "0 28px 14px" }}>
-        <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => { handleScanImage(e); setShowScanOptions(false); }} style={{ display: "none" }} />
+        <input ref={fileInputRef} type="file" accept=".jpg,.jpeg,.png,.heic,.webp" onChange={(e) => { handleScanImage(e); setShowScanOptions(false); }} style={{ display: "none" }} />
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => { handleScanImage(e); setShowScanOptions(false); }} style={{ display: "none" }} />
         <button onClick={() => setShowScanOptions(!showScanOptions)} disabled={scanLoading} style={{ width: "100%", padding: "14px", borderRadius: 28, background: "rgba(255,255,255,0.22)", border: "1.5px solid rgba(255,255,255,0.35)", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: scanLoading ? 0.6 : 1 }}>
           <CameraIcon size={20} color="#fff" />
           {scanLoading ? "Analizando imagen..." : "Subir captura de movimientos"}
@@ -749,6 +786,13 @@ export default function App() {
         <div style={{ ...cardStyle, padding: 20, marginTop: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 1, marginBottom: 10, textTransform: "uppercase" }}>Datos</div>
           <div style={{ fontSize: 14, color: "#666", lineHeight: 2 }}>Gastos diarios: {data.expenses.length}<br/>Gastos fijos: {data.fixed.length}<br/>Ingresos: {data.incomeFixed.length + data.incomeExtra.length}</div>
+        </div>
+        <div style={{ ...cardStyle, padding: 20, marginTop: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 1, marginBottom: 12, textTransform: "uppercase" }}>Backup</div>
+          <button onClick={exportData} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.green, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 }}>Exportar datos</button>
+          <input ref={backupInputRef} type="file" accept=".json" onChange={importData} style={{ display: "none" }} />
+          <button onClick={() => backupInputRef.current?.click()} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#fff", color: C.black, border: "2px solid #D4D0C8", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Importar backup</button>
+          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, lineHeight: 1.5 }}>Exporta tus datos para tener un respaldo. Si pierdes tus datos, podes restaurarlos importando el archivo.</div>
         </div>
         <button onClick={() => setConfirm({ message: "Resetear todos los datos? Esta accion no se puede deshacer.", onConfirm: () => { setData(initData()); showToast("Datos reseteados"); }})} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.red, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 16 }}>Resetear datos</button>
       </div>
