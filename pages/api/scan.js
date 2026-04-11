@@ -35,13 +35,15 @@ export default async function handler(req, res) {
                 type: "text",
                 text: `Analiza esta imagen de movimientos bancarios o estado de cuenta. Extrae TODOS los gastos/movimientos que veas.
 
+Hoy es ${new Date().toISOString().split("T")[0]}. Usa el año actual para todas las fechas.
+
 Para cada gasto devuelve:
 - description: nombre/concepto del gasto (corto, ej: "Supermercado", "Uber", "Farmacia")
 - amount: monto numerico (solo el numero, sin simbolos. Si es negativo o un cargo, ponlo positivo)
-- date: fecha en formato YYYY-MM-DD si la ves en la imagen, o null si no hay fecha
+- date: fecha en formato YYYY-MM-DD. Si la imagen no muestra el año, usa ${new Date().getFullYear()}. Si no hay fecha, usa null.
 
 Responde SOLO con un JSON array, sin texto adicional, sin backticks. Ejemplo:
-[{"description":"Supermercado","amount":45.50,"date":"2026-03-10"},{"description":"Uber","amount":12,"date":"2026-03-10"}]
+[{"description":"Supermercado","amount":45.50,"date":"${new Date().getFullYear()}-03-10"},{"description":"Uber","amount":12,"date":"${new Date().getFullYear()}-03-10"}]
 
 Si no encuentras gastos, responde: []
 Importante: NO incluyas transferencias recibidas o ingresos, solo gastos/cargos/compras.`,
