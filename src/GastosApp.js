@@ -307,6 +307,10 @@ export default function App() {
             if (!isNaN(d.getTime())) parsedDate = d;
           } catch (e) {}
         }
+        // Force current year for dates parsed without year
+        if (parsedDate) {
+          parsedDate.setFullYear(new Date().getFullYear());
+        }
       }
       return {
         id: genId(),
