@@ -872,7 +872,7 @@ export default function App() {
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; margin: 0; }
         ::-webkit-scrollbar { width: 0; }
       `}</style>
-      {toast && <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 300, background: C.black, color: "#fff", padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600, animation: "slideUp 0.3s ease", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}>{toast}</div>}
+      {toast && <div style={{ position: "fixed", top: 60, left: "50%", transform: "translateX(-50%)", zIndex: 300, background: C.black, color: "#fff", padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600, animation: "slideUp 0.3s ease", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}>{toast}</div>}
       {scanResults && (
         <div style={{ position: "fixed", inset: 0, zIndex: 400, display: "flex", flexDirection: "column", background: C.beige, overflow: "auto" }}>
           <div style={{ padding: "48px 24px 16px" }}>
