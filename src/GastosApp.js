@@ -294,13 +294,28 @@ export default function App() {
 
   const confirmScanResults = () => {
     if (!scanResults) return;
-    const newExpenses = scanResults.map(r => ({
-      id: genId(),
-      amount: Number(r.amount),
-      description: r.description,
-      date: r.date ? new Date(r.date + "T12:00:00").toISOString() : new Date().toISOString(),
-      month: r.date ? (() => { const d = new Date(r.date); return MONTHS[d.getMonth()] + " " + d.getFullYear(); })() : curMonth,
-    }));
+    const newExpenses = scanResults.map(r => {
+      let parsedDate = null;
+      if (r.date) {
+        try {
+          const d = new Date(r.date + "T12:00:00");
+          if (!isNaN(d.getTime())) parsedDate = d;
+        } catch (e) {}
+        if (!parsedDate) {
+          try {
+            const d = new Date(r.date);
+            if (!isNaN(d.getTime())) parsedDate = d;
+          } catch (e) {}
+        }
+      }
+      return {
+        id: genId(),
+        amount: Number(r.amount) || 0,
+        description: r.description || "Gasto escaneado",
+        date: parsedDate ? parsedDate.toISOString() : new Date().toISOString(),
+        month: parsedDate ? MONTHS[parsedDate.getMonth()] + " " + parsedDate.getFullYear() : curMonth,
+      };
+    });
     setData(p => ({ ...p, expenses: [...p.expenses, ...newExpenses] }));
     showToast(newExpenses.length + " gastos registrados");
     setScanResults(null);
