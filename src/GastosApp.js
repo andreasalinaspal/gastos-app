@@ -1242,7 +1242,7 @@ export default function App() {
             </span>
           </div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Tus datos se guardan automáticamente en la nube. Aunque borres el historial del navegador, tus datos están seguros.</div>
-          <button onClick={async () => { if (!authUser) return; setCloudStatus("loading"); await forceUploadToSupabase(authUser.id, data); showToast("✅ Datos sincronizados con la nube"); }} style={{ width: "100%", marginTop: 14, padding: 13, borderRadius: 12, background: C.purpleSoft, color: C.purple, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+          <button onClick={async () => { if (!authUser) return; setCloudStatus("loading"); await forceUploadToSupabase(authUser.id, data); setCloudStatus(s => { if (s === "synced") showToast("✅ Datos sincronizados con la nube"); else showToast("❌ Error al sincronizar — revisa conexión"); return s; }); }} style={{ width: "100%", marginTop: 14, padding: 13, borderRadius: 12, background: C.purpleSoft, color: C.purple, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
             ☁️ Sincronizar ahora
           </button>
         </div>
