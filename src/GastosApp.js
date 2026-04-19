@@ -1221,9 +1221,79 @@ export default function App() {
   };
 
   const obSlides = [
-    { bg: C.purple, icon: <MicIcon size={80} color="rgba(255,255,255,0.9)" />, title: "Registra al instante", desc: "Di el monto y listo. Qori entiende tu voz y registra tus gastos en segundos." },
-    { bg: C.green, icon: <WalletIcon size={80} color="rgba(255,255,255,0.9)" />, title: "Controla tu mes", desc: "Ve tus gastos fijos, ingresos y balance de un vistazo. Sin complicaciones." },
-    { bg: C.orange, icon: <span style={{ fontSize: 80 }}>☁️</span>, title: "Tu data, segura", desc: "Sincronización automática en la nube. Cambia de dispositivo sin perder nada." },
+    {
+      bg: C.purple,
+      title: "Registra al instante",
+      desc: "Di el monto y listo. Qori entiende tu voz y registra tus gastos en segundos.",
+      icon: (
+        <div style={{ position: "relative", width: 260, height: 210, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ position: "absolute", width: 200, height: 200, borderRadius: "50%", background: "rgba(255,255,255,0.07)" }} />
+          <div style={{ position: "absolute", width: 220, height: 220, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.15)", animation: "ripple 2s ease-out infinite" }} />
+          <div style={{ position: "absolute", width: 175, height: 175, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.22)", animation: "ripple 2s ease-out infinite 0.6s" }} />
+          <div style={{ width: 96, height: 96, borderRadius: "50%", background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 2 }}>
+            <MicIcon size={44} color="#fff" />
+          </div>
+          <div style={{ position: "absolute", top: 12, right: 12, background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "7px 14px", fontSize: 13, fontWeight: 700, color: "#fff", animation: "float 3s ease-in-out infinite" }}>🍽️ S/ 25</div>
+          <div style={{ position: "absolute", bottom: 22, left: 8, background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "7px 14px", fontSize: 13, fontWeight: 700, color: "#fff", animation: "float 3s ease-in-out infinite 1s" }}>🚌 S/ 4.50</div>
+          <div style={{ position: "absolute", top: 58, right: 0, background: "rgba(255,255,255,0.15)", borderRadius: 20, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.85)", animation: "float 3s ease-in-out infinite 0.5s" }}>✅ Guardado</div>
+        </div>
+      )
+    },
+    {
+      bg: C.green,
+      title: "Controla tu mes",
+      desc: "Ve tus gastos fijos, ingresos y balance de un vistazo. Sin complicaciones.",
+      icon: (
+        <div style={{ position: "relative", width: 260, height: 210, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          <div style={{ position: "absolute", inset: 0, borderRadius: 24, background: "rgba(255,255,255,0.07)" }} />
+          <div style={{ position: "absolute", top: 10, right: 12, background: "rgba(255,255,255,0.18)", borderRadius: 14, padding: "10px 14px", animation: "float 3s ease-in-out infinite" }}>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", fontWeight: 600 }}>Balance</div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: "#fff" }}>S/ 1,240</div>
+          </div>
+          <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "flex-end", gap: 12, padding: "0 16px 4px" }}>
+            {[
+              { h: 105, emoji: "🍽️", amt: "S/320", op: 0.25 },
+              { h: 68, emoji: "🚌", amt: "S/180", op: 0.32 },
+              { h: 88, emoji: "🏠", amt: "S/240", op: 1, white: true },
+              { h: 40, emoji: "💊", amt: "S/90", op: 0.25 },
+              { h: 28, emoji: "🎉", amt: "S/60", op: 0.2 },
+            ].map((b, i) => (
+              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)", fontWeight: 700 }}>{b.amt}</div>
+                <div style={{ width: 34, height: b.h, background: b.white ? "#fff" : `rgba(255,255,255,${b.op})`, borderRadius: "7px 7px 0 0" }} />
+                <div style={{ fontSize: 11 }}>{b.emoji}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    },
+    {
+      bg: C.orange,
+      title: "Tu data, segura",
+      desc: "Sincronización automática en la nube. Cambia de dispositivo sin perder nada.",
+      icon: (
+        <div style={{ position: "relative", width: 260, height: 210, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ position: "absolute", width: 180, height: 180, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
+          <div style={{ width: 90, height: 90, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", animation: "pulse 2.5s ease-in-out infinite", position: "relative", zIndex: 2 }}>
+            <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+            </svg>
+          </div>
+          <div style={{ position: "absolute", left: 10, top: 28, background: "rgba(255,255,255,0.18)", borderRadius: 14, padding: "10px 12px", animation: "float 3s ease-in-out infinite", textAlign: "center" }}>
+            <div style={{ fontSize: 22 }}>📱</div>
+            <div style={{ fontSize: 10, color: "#fff", fontWeight: 700, marginTop: 4 }}>iPhone</div>
+          </div>
+          <div style={{ position: "absolute", right: 10, top: 28, background: "rgba(255,255,255,0.18)", borderRadius: 14, padding: "10px 12px", animation: "float 3s ease-in-out infinite 1s", textAlign: "center" }}>
+            <div style={{ fontSize: 22 }}>💻</div>
+            <div style={{ fontSize: 10, color: "#fff", fontWeight: 700, marginTop: 4 }}>Mac</div>
+          </div>
+          <div style={{ position: "absolute", bottom: 18, left: "50%", transform: "translateX(-50%)", background: "rgba(255,255,255,0.18)", borderRadius: 20, padding: "8px 16px", animation: "float 3s ease-in-out infinite 0.5s", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 12, color: "#fff", fontWeight: 700 }}>🔒 Cifrado seguro</span>
+          </div>
+        </div>
+      )
+    },
   ];
   const slide = obSlides[obSlide];
 
@@ -1232,6 +1302,8 @@ export default function App() {
     @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
     @keyframes slideUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
     @keyframes spin { to{transform:rotate(360deg)} }
+    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+    @keyframes ripple { 0%{opacity:0.6;transform:scale(0.85)} 100%{opacity:0;transform:scale(1.15)} }
     input:focus { border-color: #6C5CE7 !important; outline: none; }
     input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
     input[type="number"] { -moz-appearance: textfield; }
