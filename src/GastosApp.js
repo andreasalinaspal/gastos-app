@@ -867,22 +867,22 @@ export default function App() {
             <div style={{ padding: "0 24px", marginBottom: 16 }}>
               <div style={{ background: isNeg ? C.orange : "linear-gradient(135deg, #1B6B3A 0%, #2D9F5B 100%)", borderRadius: 20, padding: "28px 24px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Balance del mes</div>
-                <div style={{ fontSize: 46, fontWeight: 900, color: "#fff", letterSpacing: -1 }}>{fmt(Math.abs(d.balance))}</div>
+                <div style={{ fontSize: "clamp(22px, 9vw, 46px)", fontWeight: 900, color: "#fff", letterSpacing: -1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmt(Math.abs(d.balance))}</div>
                 {isNeg && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.65)", marginTop: 4 }}>estás en rojo</div>}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10, padding: "0 24px", marginBottom: 20 }}>
-              <div style={{ flex: 1, background: C.green, borderRadius: 14, padding: "14px 12px", color: "#fff" }}>
+            <div style={{ display: "flex", gap: 10, padding: "0 24px", marginBottom: 20, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+              <div style={{ minWidth: 110, background: C.green, borderRadius: 14, padding: "14px 12px", color: "#fff", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8 }}>Ingresos</div>
-                <div style={{ fontSize: 20, fontWeight: 900, marginTop: 4 }}>{fmt(d.totalInc)}</div>
+                <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap" }}>{fmt(d.totalInc)}</div>
               </div>
-              <div style={{ flex: 1, background: C.orange, borderRadius: 14, padding: "14px 12px", color: "#fff" }}>
+              <div style={{ minWidth: 110, background: C.orange, borderRadius: 14, padding: "14px 12px", color: "#fff", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8 }}>Gastos Fijos</div>
-                <div style={{ fontSize: 20, fontWeight: 900, marginTop: 4 }}>{fmt(d.totalFijosAll)}</div>
+                <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap" }}>{fmt(d.totalFijosAll)}</div>
               </div>
-              <div style={{ flex: 1, background: C.purple, borderRadius: 14, padding: "14px 12px", color: "#fff" }}>
+              <div style={{ minWidth: 110, background: C.purple, borderRadius: 14, padding: "14px 12px", color: "#fff", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8 }}>Diarios</div>
-                <div style={{ fontSize: 20, fontWeight: 900, marginTop: 4 }}>{fmt(d.totalDiarios)}</div>
+                <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap" }}>{fmt(d.totalDiarios)}</div>
               </div>
             </div>
             <div style={{ padding: "0 24px" }}>
