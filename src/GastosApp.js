@@ -250,27 +250,23 @@ export default function App() {
     }
   };
 
-  // Auth: check session on mount
+  // Auth: single listener handles initial session + changes
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        setAuthUser(session.user);
-        await loadUserData(session.user.id);
-        setAuthPhase("app");
-      } else {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      try {
+        if (session?.user) {
+          setAuthUser(session.user);
+          await loadUserData(session.user.id);
+          setAuthPhase("app");
+        } else if (event === 'INITIAL_SESSION' || event === 'SIGNED_OUT') {
+          setAuthUser(null);
+          if (event === 'SIGNED_OUT') setData(initData());
+          const seen = localStorage.getItem('qori-onboarding');
+          setAuthPhase(seen ? "auth" : "onboarding");
+        }
+      } catch (e) {
         const seen = localStorage.getItem('qori-onboarding');
         setAuthPhase(seen ? "auth" : "onboarding");
-      }
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        setAuthUser(session.user);
-        await loadUserData(session.user.id);
-        setAuthPhase("app");
-      } else if (event === 'SIGNED_OUT') {
-        setAuthUser(null);
-        setData(initData());
-        setAuthPhase("auth");
       }
     });
     return () => subscription.unsubscribe();
