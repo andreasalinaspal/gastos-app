@@ -172,6 +172,13 @@ export default function App() {
   const [pendingExpDesc, setPendingExpDesc] = useState("");
   const [pendingExpCat, setPendingExpCat] = useState(null);
 
+  // AI categorization state
+  const [showAICat, setShowAICat] = useState(false);
+  const [aiCatLoading, setAiCatLoading] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState([]); // [{expId, category}]
+  const [editExpCat, setEditExpCat] = useState(undefined); // category in edit modal
+  const [showExpCatPicker, setShowExpCatPicker] = useState(false);
+
   const exportData = () => {
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: "application/json" });
@@ -225,6 +232,22 @@ export default function App() {
   const [cloudStatus, setCloudStatus] = useState("loading");
   const skipNextSync = useRef(false);
   const isLoadingUserData = useRef(false);
+  const dataRef = useRef(data); // mirrors data state for use in async callbacks
+  useEffect(() => { dataRef.current = data; }, [data]);
+
+  const forceUploadToSupabase = async (userId, dataToUpload) => {
+    try {
+      const { error } = await supabase.from('app_data')
+        .update({ data: dataToUpload, updated_at: new Date().toISOString() })
+        .eq('user_id', userId);
+      if (error) {
+        // Row might not exist yet — insert
+        await supabase.from('app_data')
+          .insert({ user_id: userId, data: dataToUpload, updated_at: new Date().toISOString() });
+      }
+      setCloudStatus("synced");
+    } catch { setCloudStatus("offline"); }
+  };
 
   const loadUserData = async (userId) => {
     try {
@@ -237,14 +260,12 @@ export default function App() {
             ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
           };
         }
-        // If Supabase has empty data, check local backup before using it
         if (!hasSignificantData(loaded)) {
           const backup = loadLocalBackup();
           if (hasSignificantData(backup)) {
             loaded = backup;
-            // Restore backup to Supabase to fix overwritten data
-            await supabase.from('app_data').upsert({ user_id: userId, data: backup, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-            showToast("✅ Datos restaurados desde respaldo local");
+            await forceUploadToSupabase(userId, backup);
+            showToast("✅ Datos restaurados y sincronizados");
           }
         } else {
           saveLocalBackup(loaded);
@@ -274,10 +295,10 @@ export default function App() {
       // No cloud data — check local backup
       const backup = loadLocalBackup();
       if (hasSignificantData(backup)) {
-        await supabase.from('app_data').upsert({ user_id: userId, data: backup, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+        await forceUploadToSupabase(userId, backup);
         skipNextSync.current = true;
         setData(backup);
-        showToast("✅ Datos restaurados desde respaldo local");
+        showToast("✅ Datos restaurados y sincronizados");
       }
       setCloudStatus("synced");
     } catch (e) {
@@ -294,7 +315,13 @@ export default function App() {
           isLoadingUserData.current = true;
           setAuthUser(session.user);
           setAuthPhase("app"); // Show app immediately, don't wait for data
-          loadUserData(session.user.id).finally(() => { isLoadingUserData.current = false; });
+          const uid = session.user.id;
+          loadUserData(uid).finally(() => {
+            isLoadingUserData.current = false;
+            // Force upload current data to Supabase after load completes
+            const current = dataRef.current;
+            if (hasSignificantData(current)) forceUploadToSupabase(uid, current);
+          });
         } else if (event === 'SIGNED_OUT') {
           setAuthUser(null);
           setData(initData());
@@ -365,9 +392,9 @@ export default function App() {
       if (e.id !== id) return e;
       const newDate = editExpDate ? new Date(editExpDate + "T12:00:00").toISOString() : e.date;
       const newMonth = (() => { const d = new Date(newDate); return MONTHS[d.getMonth()] + " " + d.getFullYear(); })();
-      return { ...e, description: editExpDesc || e.description, amount: Number(editExpAmt) || e.amount, date: newDate, month: newMonth };
+      return { ...e, description: editExpDesc || e.description, amount: Number(editExpAmt) || e.amount, date: newDate, month: newMonth, category: editExpCat !== undefined ? editExpCat : e.category };
     })}));
-    setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); setEditExpDate("");
+    setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); setEditExpDate(""); setEditExpCat(undefined); setShowExpCatPicker(false);
   };
   const togglePaid = (id) => setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, paid: !f.paid } : f) }));
   const saveFixedAmt = (id) => { setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, amount: Number(editFixedAmt) || 0 } : f) })); setEditFixed(null); setEditFixedAmt(""); };
@@ -688,6 +715,36 @@ export default function App() {
     setPendingExpCat(null); setShowAddModal(false); setShowCatPicker(true);
   };
 
+  const runAICategorize = async () => {
+    const uncategorized = data.expenses.filter(e => !e.category);
+    if (uncategorized.length === 0) { showToast("Todos los gastos ya tienen categoría ✓"); return; }
+    setAiCatLoading(true);
+    try {
+      const res = await fetch('/api/categorize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expenses: uncategorized.map(e => ({ id: e.id, description: e.description, amount: e.amount })),
+          categories: data.categories?.gastos || []
+        })
+      });
+      const { suggestions } = await res.json();
+      setAiSuggestions(suggestions);
+      setShowAICat(true);
+    } catch (e) { showToast("Error al categorizar"); }
+    setAiCatLoading(false);
+  };
+
+  const applyAISuggestions = () => {
+    setData(p => ({ ...p, expenses: p.expenses.map(e => {
+      const s = aiSuggestions.find(s => s.expId === e.id);
+      return s !== undefined ? { ...e, category: s.category } : e;
+    })}));
+    const count = aiSuggestions.filter(s => s.category).length;
+    showToast(`${count} gastos categorizados ✓`);
+    setShowAICat(false); setAiSuggestions([]);
+  };
+
   const typeLabel = (t) => t === "manual" ? "Lo pago yo" : t === "debito" ? "Debito automatico" : "Descuento sueldo";
   const typeBg = (t) => t === "manual" ? C.orange : t === "debito" ? C.purple : C.green;
 
@@ -748,13 +805,21 @@ export default function App() {
                     <div>
                       <input type="text" value={editExpDesc} onChange={ev => setEditExpDesc(ev.target.value)} placeholder="Descripción" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
                       <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
-                      <div style={{ marginBottom: 10 }}>
+                      <div style={{ marginBottom: 8 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Fecha</div>
                         <input type="date" value={editExpDate} onChange={ev => setEditExpDate(ev.target.value)} style={{ ...inputStyle, color: C.black, fontSize: 14, padding: "8px 12px" }} />
                       </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>Categoría</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {(data.categories?.gastos || []).map(cat => { const sel = (editExpCat !== undefined ? editExpCat : e.category)?.id === cat.id; return (
+                            <button key={cat.id} onClick={() => setEditExpCat(sel ? null : cat)} style={{ padding: "5px 10px", borderRadius: 20, border: sel ? "2px solid #fff" : "2px solid rgba(255,255,255,0.25)", background: sel ? "rgba(255,255,255,0.25)" : "transparent", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
+                          );})}
+                        </div>
+                      </div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => saveExpenseEdit(e.id)} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#fff", color: C.green, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
-                        <button onClick={() => { setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); setEditExpDate(""); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                        <button onClick={() => { setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); setEditExpDate(""); setEditExpCat(undefined); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
                       </div>
                     </div>
                   ) : (
@@ -786,7 +851,12 @@ export default function App() {
     return (
       <div style={{ flex: 1, background: C.beige, minHeight: "100vh", paddingBottom: 80 }}>
         <div style={{ padding: "32px 24px 12px" }}>
-          <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic" }}>Mi Mes</h1>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic" }}>Mi Mes</h1>
+            <button onClick={runAICategorize} disabled={aiCatLoading} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, background: C.purpleSoft, border: "none", color: C.purple, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: aiCatLoading ? 0.6 : 1 }}>
+              {aiCatLoading ? "Analizando..." : "✨ Categorizar con IA"}
+            </button>
+          </div>
           <div style={{ borderBottom: "3px solid " + C.purple, marginTop: 6, width: 70, marginBottom: 16 }} />
         </div>
         <div style={{ display: "flex", gap: 0, padding: "0 24px", marginBottom: 20, overflowX: "auto" }}>
@@ -841,13 +911,21 @@ export default function App() {
                     <div>
                       <input type="text" value={editExpDesc} onChange={ev => setEditExpDesc(ev.target.value)} placeholder="Descripcion" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
                       <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
-                      <div style={{ marginBottom: 10 }}>
+                      <div style={{ marginBottom: 8 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 4 }}>Fecha</div>
                         <input type="date" value={editExpDate} onChange={ev => setEditExpDate(ev.target.value)} style={{ ...inputStyle, color: C.black, fontSize: 14, padding: "8px 12px" }} />
                       </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Categoría</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {(data.categories?.gastos || []).map(cat => { const sel = (editExpCat !== undefined ? editExpCat : e.category)?.id === cat.id; return (
+                            <button key={cat.id} onClick={() => setEditExpCat(sel ? null : cat)} style={{ padding: "5px 10px", borderRadius: 20, border: `2px solid ${sel ? C.purple : "#D4D0C8"}`, background: sel ? C.purpleSoft : "#fff", color: sel ? C.purple : C.muted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
+                          );})}
+                        </div>
+                      </div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => saveExpenseEdit(e.id)} style={{ flex: 1, padding: 10, borderRadius: 10, background: C.green, color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
-                        <button onClick={() => { setEditExpId(null); setEditExpDate(""); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#E0DCD4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                        <button onClick={() => { setEditExpId(null); setEditExpDate(""); setEditExpCat(undefined); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#E0DCD4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
                       </div>
                     </div>
                   ) : (
@@ -1146,6 +1224,9 @@ export default function App() {
             </span>
           </div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Tus datos se guardan automáticamente en la nube. Aunque borres el historial del navegador, tus datos están seguros.</div>
+          <button onClick={async () => { if (!authUser) return; setCloudStatus("loading"); await forceUploadToSupabase(authUser.id, data); showToast("✅ Datos sincronizados con la nube"); }} style={{ width: "100%", marginTop: 14, padding: 13, borderRadius: 12, background: C.purpleSoft, color: C.purple, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            ☁️ Sincronizar ahora
+          </button>
         </div>
         {/* Cuenta */}
         <div style={{ ...cardStyle, padding: 20, marginBottom: 12 }}>
@@ -1522,6 +1603,41 @@ export default function App() {
           </div>
         </div>
       )}
+      {/* AI Categorization review sheet */}
+      {showAICat && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 320 }} onClick={() => setShowAICat(false)}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
+          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", padding: "16px 24px 40px", maxHeight: "85vh", overflowY: "auto", animation: "slideUp 0.3s ease" }}>
+            <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.black, marginBottom: 4 }}>✨ Categorización con IA</div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Revisa y ajusta las sugerencias antes de aplicar</div>
+            {aiSuggestions.map(s => {
+              const exp = data.expenses.find(e => e.id === s.expId);
+              if (!exp) return null;
+              return (
+                <div key={s.expId} style={{ ...cardStyle, padding: "12px 14px", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.black }}>{exp.description}</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{fmtWith(exp.amount, data.currency)}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {(data.categories?.gastos || []).map(cat => { const sel = s.category?.id === cat.id; return (
+                      <button key={cat.id} onClick={() => setAiSuggestions(prev => prev.map(x => x.expId === s.expId ? { ...x, category: sel ? null : cat } : x))} style={{ padding: "4px 10px", borderRadius: 20, border: `2px solid ${sel ? C.purple : "#E0DCD4"}`, background: sel ? C.purpleSoft : "#fff", color: sel ? C.purple : C.muted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
+                    );})}
+                    <button onClick={() => setAiSuggestions(prev => prev.map(x => x.expId === s.expId ? { ...x, category: null } : x))} style={{ padding: "4px 10px", borderRadius: 20, border: `2px solid ${!s.category ? C.orange : "#E0DCD4"}`, background: !s.category ? "#FFF0EB" : "#fff", color: !s.category ? C.orange : C.muted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>✕ Sin categoría</button>
+                  </div>
+                </div>
+              );
+            })}
+            <button onClick={applyAISuggestions} style={{ width: "100%", padding: 16, borderRadius: 14, background: C.purple, color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 8 }}>
+              Aplicar {aiSuggestions.filter(s => s.category).length} categorías
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Category picker modal */}
       {showCatPicker && (
         <div style={{ position: "fixed", inset: 0, zIndex: 310 }} onClick={() => setShowCatPicker(false)}>
