@@ -283,6 +283,15 @@ export default function App() {
 
   // Auth: single listener handles initial session + changes
   useEffect(() => {
+    // Safety timeout — if onAuthStateChange never fires, escape loading after 8s
+    const safetyTimer = setTimeout(() => {
+      setAuthPhase(p => {
+        if (p !== "loading") return p;
+        const seen = localStorage.getItem('qori-onboarding');
+        return seen ? "auth" : "onboarding";
+      });
+    }, 8000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
         if (session?.user) {
@@ -292,18 +301,19 @@ export default function App() {
           setAuthUser(session.user);
           await loadUserData(session.user.id);
           setAuthPhase("app");
-        } else if (event === 'INITIAL_SESSION' || event === 'SIGNED_OUT') {
+        } else {
+          // Any event without a session → leave loading state
           setAuthUser(null);
           if (event === 'SIGNED_OUT') setData(initData());
           const seen = localStorage.getItem('qori-onboarding');
-          setAuthPhase(seen ? "auth" : "onboarding");
+          setAuthPhase(p => p === "app" && event !== 'SIGNED_OUT' ? "app" : (seen ? "auth" : "onboarding"));
         }
       } catch (e) {
         const seen = localStorage.getItem('qori-onboarding');
         setAuthPhase(seen ? "auth" : "onboarding");
       }
     });
-    return () => subscription.unsubscribe();
+    return () => { subscription.unsubscribe(); clearTimeout(safetyTimer); };
   }, []);
 
   // Sync data to Supabase on every change (debounced)
@@ -311,6 +321,8 @@ export default function App() {
   useEffect(() => {
     if (!authUser) return;
     if (skipNextSync.current) { skipNextSync.current = false; return; }
+    // Never overwrite Supabase with empty data — local backup may have real data
+    if (!hasSignificantData(data)) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
       supabase.from('app_data').upsert({ user_id: authUser.id, data, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
