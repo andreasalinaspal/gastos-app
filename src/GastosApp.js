@@ -173,9 +173,6 @@ export default function App() {
   const [pendingExpCat, setPendingExpCat] = useState(null);
 
   // AI categorization state
-  const [showAICat, setShowAICat] = useState(false);
-  const [aiCatLoading, setAiCatLoading] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState([]); // [{expId, category}]
   const [editExpCat, setEditExpCat] = useState(undefined); // category in edit modal
   const [showExpCatPicker, setShowExpCatPicker] = useState(false);
 
@@ -733,35 +730,6 @@ export default function App() {
     setPendingExpCat(null); setShowAddModal(false); setShowCatPicker(true);
   };
 
-  const runAICategorize = async () => {
-    const uncategorized = data.expenses.filter(e => !e.category);
-    if (uncategorized.length === 0) { showToast("Todos los gastos ya tienen categoría ✓"); return; }
-    setAiCatLoading(true);
-    try {
-      const res = await fetch('/api/categorize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          expenses: uncategorized.map(e => ({ id: e.id, description: e.description, amount: e.amount })),
-          categories: data.categories?.gastos || []
-        })
-      });
-      const { suggestions } = await res.json();
-      setAiSuggestions(suggestions);
-      setShowAICat(true);
-    } catch (e) { showToast("Error al categorizar"); }
-    setAiCatLoading(false);
-  };
-
-  const applyAISuggestions = () => {
-    setData(p => ({ ...p, expenses: p.expenses.map(e => {
-      const s = aiSuggestions.find(s => s.expId === e.id);
-      return s !== undefined ? { ...e, category: s.category } : e;
-    })}));
-    const count = aiSuggestions.filter(s => s.category).length;
-    showToast(`${count} gastos categorizados ✓`);
-    setShowAICat(false); setAiSuggestions([]);
-  };
 
   const typeLabel = (t) => t === "manual" ? "Lo pago yo" : t === "debito" ? "Debito automatico" : "Descuento sueldo";
   const typeBg = (t) => t === "manual" ? C.orange : t === "debito" ? C.purple : C.green;
@@ -871,9 +839,6 @@ export default function App() {
         <div style={{ padding: "32px 24px 12px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic" }}>Mi Mes</h1>
-            <button onClick={runAICategorize} disabled={aiCatLoading} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, background: C.purpleSoft, border: "none", color: C.purple, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: aiCatLoading ? 0.6 : 1 }}>
-              {aiCatLoading ? "Analizando..." : "✨ Categorizar con IA"}
-            </button>
           </div>
           <div style={{ borderBottom: "3px solid " + C.purple, marginTop: 6, width: 70, marginBottom: 16 }} />
         </div>
@@ -1618,40 +1583,6 @@ export default function App() {
             <div style={{ width: 80, height: 80, borderRadius: "50%", background: C.purpleSoft, border: "3px solid " + C.purple, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34, margin: "0 auto 16px", animation: "pulse 1.4s ease-in-out infinite" }}>🎙️</div>
             <div style={{ fontSize: 24, fontWeight: 800, color: C.purple, marginBottom: 20 }}>{recTime}s</div>
             <button onClick={() => { if (recognitionRef.current) { recognitionRef.current.onend = () => setRecording(false); try { recognitionRef.current.stop(); } catch(e) {} } setRecording(false); }} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
-          </div>
-        </div>
-      )}
-      {/* AI Categorization review sheet */}
-      {showAICat && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 320 }} onClick={() => setShowAICat(false)}>
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
-          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", padding: "16px 24px 40px", maxHeight: "85vh", overflowY: "auto", animation: "slideUp 0.3s ease" }}>
-            <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
-            <div style={{ fontSize: 20, fontWeight: 800, color: C.black, marginBottom: 4 }}>✨ Categorización con IA</div>
-            <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Revisa y ajusta las sugerencias antes de aplicar</div>
-            {aiSuggestions.map(s => {
-              const exp = data.expenses.find(e => e.id === s.expId);
-              if (!exp) return null;
-              return (
-                <div key={s.expId} style={{ ...cardStyle, padding: "12px 14px", marginBottom: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.black }}>{exp.description}</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>{fmtWith(exp.amount, data.currency)}</div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {(data.categories?.gastos || []).map(cat => { const sel = s.category?.id === cat.id; return (
-                      <button key={cat.id} onClick={() => setAiSuggestions(prev => prev.map(x => x.expId === s.expId ? { ...x, category: sel ? null : cat } : x))} style={{ padding: "4px 10px", borderRadius: 20, border: `2px solid ${sel ? C.purple : "#E0DCD4"}`, background: sel ? C.purpleSoft : "#fff", color: sel ? C.purple : C.muted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
-                    );})}
-                    <button onClick={() => setAiSuggestions(prev => prev.map(x => x.expId === s.expId ? { ...x, category: null } : x))} style={{ padding: "4px 10px", borderRadius: 20, border: `2px solid ${!s.category ? C.orange : "#E0DCD4"}`, background: !s.category ? "#FFF0EB" : "#fff", color: !s.category ? C.orange : C.muted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>✕ Sin categoría</button>
-                  </div>
-                </div>
-              );
-            })}
-            <button onClick={applyAISuggestions} style={{ width: "100%", padding: 16, borderRadius: 14, background: C.purple, color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 8 }}>
-              Aplicar {aiSuggestions.filter(s => s.category).length} categorías
-            </button>
           </div>
         </div>
       )}
