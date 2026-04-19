@@ -232,28 +232,34 @@ export default function App() {
   const [cloudStatus, setCloudStatus] = useState("loading");
   const skipNextSync = useRef(false);
   const isLoadingUserData = useRef(false);
+  const loadedThisSession = useRef(false);
   const dataRef = useRef(data); // mirrors data state for use in async callbacks
   useEffect(() => { dataRef.current = data; }, [data]);
 
   const forceUploadToSupabase = async (userId, dataToUpload) => {
     try {
-      // Find exact row id first to avoid silent failures
-      const { data: rows } = await supabase.from('app_data')
+      const { data: rows, error: selErr } = await supabase.from('app_data')
         .select('id')
         .eq('user_id', userId)
         .order('updated_at', { ascending: false })
         .limit(1);
+      if (selErr) throw selErr;
       const rowId = rows?.[0]?.id;
       if (rowId) {
-        await supabase.from('app_data')
+        const { error } = await supabase.from('app_data')
           .update({ data: dataToUpload, updated_at: new Date().toISOString() })
           .eq('id', rowId);
+        if (error) throw error;
       } else {
-        await supabase.from('app_data')
+        const { error } = await supabase.from('app_data')
           .insert({ user_id: userId, data: dataToUpload, updated_at: new Date().toISOString() });
+        if (error) throw error;
       }
       setCloudStatus("synced");
-    } catch { setCloudStatus("offline"); }
+    } catch (e) {
+      console.error('[Qori] Supabase upload failed:', e);
+      setCloudStatus("offline");
+    }
   };
 
   const loadUserData = async (userId) => {
@@ -279,7 +285,6 @@ export default function App() {
           if (hasSignificantData(backup)) {
             loaded = backup;
             await forceUploadToSupabase(userId, backup);
-            showToast("✅ Datos restaurados y sincronizados");
           }
         } else {
           saveLocalBackup(loaded);
@@ -313,7 +318,6 @@ export default function App() {
         await forceUploadToSupabase(userId, backup);
         skipNextSync.current = true;
         setData(backup);
-        showToast("✅ Datos restaurados y sincronizados");
       }
       setCloudStatus("synced");
     } catch (e) {
@@ -326,18 +330,19 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
         if (session?.user) {
-          skipNextSync.current = true;
-          isLoadingUserData.current = true;
           setAuthUser(session.user);
-          setAuthPhase("app"); // Show app immediately, don't wait for data
-          const uid = session.user.id;
-          loadUserData(uid).finally(() => {
-            isLoadingUserData.current = false;
-            // Force upload current data to Supabase after load completes
-            const current = dataRef.current;
-            if (hasSignificantData(current)) forceUploadToSupabase(uid, current);
-          });
+          setAuthPhase("app");
+          if (!loadedThisSession.current) {
+            loadedThisSession.current = true;
+            skipNextSync.current = true;
+            isLoadingUserData.current = true;
+            const uid = session.user.id;
+            loadUserData(uid).finally(() => {
+              isLoadingUserData.current = false;
+            });
+          }
         } else if (event === 'SIGNED_OUT') {
+          loadedThisSession.current = false;
           setAuthUser(null);
           setData(initData());
           const seen = localStorage.getItem('qori-onboarding');
