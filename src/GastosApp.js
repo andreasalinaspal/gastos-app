@@ -292,24 +292,6 @@ export default function App() {
         setCloudStatus("synced");
         return;
       }
-      // Migration: claim unclaimed legacy row (id=1, user_id IS NULL)
-      const { data: legacyRows } = await supabase.from('app_data').select('data').eq('id', 1).is('user_id', null).limit(1);
-      const legacy = legacyRows?.[0];
-      if (legacy?.data) {
-        await supabase.from('app_data').update({ user_id: userId }).eq('id', 1);
-        skipNextSync.current = true;
-        const loaded = legacy.data;
-        if (!loaded.categories) {
-          loaded.categories = {
-            gastos: DEFAULT_CATS_GASTOS.map(c => ({ id: genId(), ...c })),
-            ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
-          };
-        }
-        if (hasSignificantData(loaded)) saveLocalBackup(userId, loaded);
-        setData(loaded);
-        setCloudStatus("synced");
-        return;
-      }
       // No cloud data — check local backup
       const backup = loadLocalBackup(userId);
       if (hasSignificantData(backup)) {
