@@ -255,6 +255,9 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
         if (session?.user) {
+          // Block sync BEFORE setAuthUser to prevent race condition where
+          // the sync effect fires with empty initData and overwrites real data
+          skipNextSync.current = true;
           setAuthUser(session.user);
           await loadUserData(session.user.id);
           setAuthPhase("app");
