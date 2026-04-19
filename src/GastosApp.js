@@ -1281,9 +1281,9 @@ export default function App() {
       <div style={subStyle(`cats-${type === "gastos" ? "gasto" : "ingreso"}`)}>
         {subHeader(title, () => { setSubScreen(null); setCatEditId(null); setShowAddCat(null); })}
         <div style={{ fontSize: 13, color: C.muted, padding: "0 20px 12px" }}>Toca el nombre o emoji para editar.</div>
-        <div style={{ ...cardStyle, margin: "0 16px", overflow: "hidden", padding: 0 }}>
-          {cats.map(c => (
-            <div key={c.id} style={catRowStyle}>
+        <div style={{ margin: "0 16px" }}>
+          {cats.map((c, i) => (
+            <div key={c.id} style={{ ...catRowStyle, background: "#fff", borderRadius: i === 0 ? "14px 14px 0 0" : i === cats.length - 1 && showAddCat !== type ? "0 0 14px 14px" : 0, borderBottom: i === cats.length - 1 && showAddCat !== type ? "none" : "1px solid #F0EDE4" }}>
               {catEditId === c.id ? (
                 <>
                   <input value={catEditEmoji} onChange={e => setCatEditEmoji(e.target.value)} placeholder="🏷️" style={{ ...inputStyle, width: 52, textAlign: "center", padding: "8px 6px", fontSize: 20, color: C.black, flex: "none" }} />
@@ -1302,19 +1302,19 @@ export default function App() {
           ))}
           {/* Add row */}
           {showAddCat === type ? (
-            <div style={{ ...catRowStyle, borderBottom: "none" }}>
+            <div style={{ ...catRowStyle, background: "#fff", borderRadius: "0 0 14px 14px", borderBottom: "none" }}>
               <input value={newCatEmoji} onChange={e => setNewCatEmoji(e.target.value)} placeholder="🏷️" style={{ ...inputStyle, width: 52, textAlign: "center", padding: "8px 6px", fontSize: 20, color: C.black, flex: "none" }} />
               <input value={newCatName} onChange={e => setNewCatName(e.target.value)} autoFocus placeholder="Nombre" style={{ ...inputStyle, flex: 1, padding: "8px 12px", fontSize: 14, color: C.black }} onKeyDown={e => e.key === "Enter" && addCat(type)} />
               <button onClick={() => addCat(type)} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>OK</button>
               <button onClick={() => setShowAddCat(null)} style={{ background: "#E0DCD4", color: "#666", border: "none", borderRadius: 8, padding: "8px 10px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕</button>
             </div>
           ) : (
-            <button onClick={() => setShowAddCat(type)} style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", borderTop: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, color: C.purple, fontFamily: "inherit", textAlign: "left", display: "flex", alignItems: "center", gap: 8 }}>
+            <button onClick={() => setShowAddCat(type)} style={{ width: "100%", padding: "14px 16px", background: "#fff", border: "none", borderTop: "1px solid #F0EDE4", borderRadius: "0 0 14px 14px", cursor: "pointer", fontSize: 14, fontWeight: 700, color: C.purple, fontFamily: "inherit", textAlign: "left", display: "flex", alignItems: "center", gap: 8 }}>
               <PlusIcon size={16} color={C.purple} /> Agregar categoría
             </button>
           )}
         </div>
-        <div style={{ height: 40 }} />
+        <div style={{ height: "calc(40px + env(safe-area-inset-bottom, 20px))" }} />
       </div>
     );
   };
