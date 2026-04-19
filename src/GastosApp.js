@@ -53,8 +53,9 @@ function hasSignificantData(d) {
   return (d.expenses?.length > 0) || (d.fixed?.some(f => f.amount > 0)) ||
     (d.incomeFixed?.some(i => i.amount > 0)) || (d.incomeExtra?.length > 0);
 }
-function saveLocalBackup(d) { try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(d)); } catch(e) {} }
-function loadLocalBackup() { try { const b = localStorage.getItem(LOCAL_BACKUP_KEY); return b ? JSON.parse(b) : null; } catch(e) { return null; } }
+function saveLocalBackup(userId, d) { try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify({ userId, data: d })); } catch(e) {} }
+function loadLocalBackup(userId) { try { const b = localStorage.getItem(LOCAL_BACKUP_KEY); if (!b) return null; const parsed = JSON.parse(b); return parsed.userId === userId ? parsed.data : null; } catch(e) { return null; } }
+function clearLocalData() { try { localStorage.removeItem(LOCAL_BACKUP_KEY); localStorage.removeItem('gastos-data'); } catch(e) {} }
 
 function initData() {
   return {
@@ -222,7 +223,7 @@ export default function App() {
   // Save data to localStorage on every change; maintain separate backup for recovery
   useEffect(() => {
     try { localStorage.setItem('gastos-data', JSON.stringify(data)); } catch (e) {}
-    if (hasSignificantData(data)) saveLocalBackup(data);
+    if (authUser && hasSignificantData(data)) saveLocalBackup(authUser.id, data);
   }, [data]);
 
   // Cloud sync state
@@ -278,13 +279,13 @@ export default function App() {
           };
         }
         if (!hasSignificantData(loaded)) {
-          const backup = loadLocalBackup();
+          const backup = loadLocalBackup(userId);
           if (hasSignificantData(backup)) {
             loaded = backup;
             await forceUploadToSupabase(userId, backup);
           }
         } else {
-          saveLocalBackup(loaded);
+          saveLocalBackup(userId, loaded);
         }
         skipNextSync.current = true;
         setData(loaded);
@@ -304,13 +305,13 @@ export default function App() {
             ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
           };
         }
-        if (hasSignificantData(loaded)) saveLocalBackup(loaded);
+        if (hasSignificantData(loaded)) saveLocalBackup(userId, loaded);
         setData(loaded);
         setCloudStatus("synced");
         return;
       }
       // No cloud data — check local backup
-      const backup = loadLocalBackup();
+      const backup = loadLocalBackup(userId);
       if (hasSignificantData(backup)) {
         await forceUploadToSupabase(userId, backup);
         skipNextSync.current = true;
@@ -345,6 +346,7 @@ export default function App() {
           }
         } else if (event === 'SIGNED_OUT') {
           loadedThisSession.current = false;
+          clearLocalData();
           setAuthUser(null);
           setData(initData());
           const seen = localStorage.getItem('qori-onboarding');
