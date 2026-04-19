@@ -345,81 +345,108 @@ export default function App() {
       recognitionRef.current = recognition;
 
       let gotResult = false;
+      let gotError = false;
+
+      const wordNums = {
+        "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+        "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
+        "once": 11, "doce": 12, "trece": 13, "catorce": 14, "quince": 15,
+        "dieciseis": 16, "diecisiete": 17, "dieciocho": 18, "diecinueve": 19,
+        "veinte": 20, "veintiuno": 21, "veintiuna": 21, "veintidos": 22, "veintitres": 23,
+        "veinticuatro": 24, "veinticinco": 25, "veintiseis": 26, "veintisiete": 27,
+        "veintiocho": 28, "veintinueve": 29,
+        "treinta": 30, "cuarenta": 40, "cincuenta": 50, "sesenta": 60,
+        "setenta": 70, "ochenta": 80, "noventa": 90,
+        "cien": 100, "ciento": 100,
+        "doscientos": 200, "doscientas": 200,
+        "trescientos": 300, "trescientas": 300,
+        "cuatrocientos": 400, "cuatrocientas": 400,
+        "quinientos": 500, "quinientas": 500,
+        "seiscientos": 600, "seiscientas": 600,
+        "setecientos": 700, "setecientas": 700,
+        "ochocientos": 800, "ochocientas": 800,
+        "novecientos": 900, "novecientas": 900,
+      };
+
+      const parseAmount = (transcript) => {
+        // First try digit match
+        const digitMatch = transcript.match(/(\d[\d.,]*)/);
+        if (digitMatch) return parseFloat(digitMatch[1].replace(",", "."));
+
+        // Handle "X mil" with digits
+        const digitMilMatch = transcript.match(/(\d+)\s*mil/);
+        if (digitMilMatch) {
+          let base = parseFloat(digitMilMatch[1]) * 1000;
+          const rest = transcript.replace(digitMilMatch[0], "");
+          // Add any hundreds/tens/units after "mil"
+          let extra = 0;
+          for (const [word, val] of Object.entries(wordNums)) {
+            if (new RegExp(`\\b${word}\\b`).test(rest)) extra += val;
+          }
+          return base + extra;
+        }
+
+        // Parse word numbers additively: sum hundreds + tens + units
+        let hasMil = /\bmil\b/.test(transcript);
+        let beforeMil = hasMil ? transcript.split(/\bmil\b/)[0] : "";
+        let afterMil = hasMil ? transcript.split(/\bmil\b/).slice(1).join(" ") : transcript;
+
+        const sumWords = (text) => {
+          let hundreds = 0, rest = 0;
+          for (const [word, val] of Object.entries(wordNums)) {
+            if (new RegExp(`\\b${word}\\b`).test(text)) {
+              if (val >= 100) hundreds += val;
+              else rest += val;
+            }
+          }
+          return hundreds + rest;
+        };
+
+        if (hasMil) {
+          const milMultiplier = sumWords(beforeMil) || 1;
+          return milMultiplier * 1000 + sumWords(afterMil);
+        }
+        return sumWords(transcript);
+      };
 
       recognition.onresult = (event) => {
         gotResult = true;
         const transcript = event.results[0][0].transcript.toLowerCase().trim();
-        
-        // Parse numbers: handle "veinte", "treinta", etc and digits
-        let amount = 0;
-        const wordNums = {
-          "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
-          "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
-          "once": 11, "doce": 12, "trece": 13, "catorce": 14, "quince": 15,
-          "dieciseis": 16, "diecisiete": 17, "dieciocho": 18, "diecinueve": 19,
-          "veinte": 20, "veintiuno": 21, "veintidos": 22, "veintitres": 23,
-          "veinticuatro": 24, "veinticinco": 25, "treinta": 30, "cuarenta": 40,
-          "cincuenta": 50, "sesenta": 60, "setenta": 70, "ochenta": 80, "noventa": 90,
-          "cien": 100, "ciento": 100, "doscientos": 200, "trescientos": 300,
-          "cuatrocientos": 400, "quinientos": 500, "mil": 1000,
-        };
 
-        // First try digit match
-        const digitMatch = transcript.match(/(\d[\d.,]*)/);
-        if (digitMatch) {
-          amount = parseFloat(digitMatch[1].replace(",", "."));
-        } else {
-          // Try word numbers
-          for (const [word, val] of Object.entries(wordNums)) {
-            if (transcript.includes(word)) {
-              amount = val;
-              break;
-            }
-          }
-        }
+        const amount = parseAmount(transcript);
 
-        // Handle "mil" multiplier
-        if (/\bmil\b/.test(transcript)) {
-          const beforeMil = transcript.match(/(\d+)\s*mil/);
-          if (beforeMil) {
-            amount = parseFloat(beforeMil[1]) * 1000;
-          } else if (amount > 0 && amount < 1000) {
-            amount = amount * 1000;
-          } else if (amount === 0) {
-            amount = 1000;
-          }
-        }
-
-        // Extract description
+        // Extract description: remove digits, currency words, and matched word numbers
+        const wordNumPattern = Object.keys(wordNums).join("|");
         let desc = transcript
           .replace(/(\d[\d.,]*)/g, "")
-          .replace(/\b(soles?|dolares?|pesos?|mil|cien|ciento|con|por|de|y)\b/gi, "")
+          .replace(new RegExp(`\\b(${wordNumPattern}|soles?|dolares?|pesos?|mil|con|por|de|y)\\b`, "gi"), "")
           .replace(/\s+/g, " ")
           .trim();
-        // Capitalize first letter
         if (desc) desc = desc.charAt(0).toUpperCase() + desc.slice(1);
 
         if (amount > 0) {
           addExpense(amount, desc || "Gasto por voz");
         } else {
-          showToast("No entendi el monto. Dijiste: \"" + transcript + "\"");
+          showToast(`No entendi el monto. Dijiste: "${transcript}"`);
         }
         setRecording(false);
       };
 
       recognition.onerror = (event) => {
+        gotError = true;
         if (event.error === "no-speech") {
           showToast("No se detecto voz, intenta de nuevo");
         } else if (event.error === "not-allowed") {
-          showToast("Permiso de microfono denegado. Activa el microfono en ajustes de Safari.");
+          showToast("Permiso de microfono denegado. Activa el microfono en ajustes.");
         } else {
-          showToast("Error: " + event.error);
+          showToast("Error de grabacion: " + event.error);
         }
         setRecording(false);
       };
 
       recognition.onend = () => {
-        if (!gotResult) {
+        // Only show "no voice" if neither a result nor an error was already handled
+        if (!gotResult && !gotError) {
           showToast("No se detecto voz, intenta de nuevo");
         }
         setRecording(false);
@@ -432,9 +459,12 @@ export default function App() {
         setRecording(false);
       }
     } else {
+      // User manually stopped — silence the onend handler to avoid spurious toast
       if (recognitionRef.current) {
+        recognitionRef.current.onend = () => { setRecording(false); };
         try { recognitionRef.current.stop(); } catch(e) {}
       }
+      setRecording(false);
     }
   };
   const handleManual = () => { addExpense(Number(manAmt), manDesc); setManAmt(""); setManDesc(""); setShowManual(false); };
