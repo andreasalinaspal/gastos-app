@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Qori — Preview Onboarding & Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Syne', system-ui, sans-serif; background: #1a1a2e; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  ::-webkit-scrollbar { width: 0; }
+  input:focus { outline: none; border-color: #6C5CE7 !important; }
+
+  /* Phone frame */
+  .frame { width: 390px; height: 844px; border-radius: 48px; overflow: hidden; position: relative; box-shadow: 0 40px 120px rgba(0,0,0,0.6); border: 8px solid #2a2a3e; }
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; transition: opacity 0.25s; }
+  .screen.hidden { opacity: 0; pointer-events: none; display: none; }
+
+  /* Nav pills */
+  .nav-pills { display: flex; gap: 10px; position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); z-index: 99; }
+  .nav-pill { padding: 9px 20px; border-radius: 50px; border: none; cursor: pointer; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; transition: all 0.2s; }
+  .nav-pill.active { background: #6C5CE7; color: #fff; box-shadow: 0 4px 14px rgba(108,92,231,0.5); }
+  .nav-pill:not(.active) { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.6); }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes slideUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+  @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+  @keyframes ripple { 0%{opacity:0.6;transform:scale(0.85)} 100%{opacity:0;transform:scale(1.15)} }
+  @keyframes growUp { from{transform:scaleY(0);transform-origin:bottom} to{transform:scaleY(1);transform-origin:bottom} }
+
+  /* ─── LOADING ─── */
+  .s-loading { background: #6C5CE7; align-items: center; justify-content: center; gap: 24px; }
+  .s-loading .logo { font-size: 52px; font-weight: 900; color: #fff; letter-spacing: -2px; }
+  .s-loading .logo span { color: rgba(255,255,255,0.4); }
+  .spinner { width: 32px; height: 32px; border: 3px solid rgba(255,255,255,0.25); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+
+  /* ─── ONBOARDING ─── */
+  .s-onboarding { transition: background 0.4s ease; }
+  .ob-top { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 72px 40px 20px; gap: 28px; }
+  .ob-brand { font-size: 28px; font-weight: 900; color: rgba(255,255,255,0.5); letter-spacing: -1px; align-self: flex-start; }
+  .ob-icon { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .ob-text { text-align: center; }
+  .ob-title { font-size: 36px; font-weight: 900; color: #fff; margin-bottom: 14px; line-height: 1.15; }
+  .ob-desc { font-size: 16px; color: rgba(255,255,255,0.72); line-height: 1.65; }
+  .ob-bottom { padding: 0 32px 56px; display: flex; flex-direction: column; gap: 14px; }
+  .ob-dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 4px; }
+  .ob-dot { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.35); transition: all 0.3s; }
+  .ob-dot.active { background: #fff; width: 24px !important; }
+  .btn-next { width: 100%; padding: 18px; border-radius: 16px; background: rgba(255,255,255,0.18); border: 2px solid rgba(255,255,255,0.38); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; font-family: 'Syne', sans-serif; transition: all 0.2s; }
+  .btn-next:hover { background: rgba(255,255,255,0.25); }
+  .btn-start { width: 100%; padding: 18px; border-radius: 16px; background: #fff; border: none; font-size: 16px; font-weight: 900; cursor: pointer; font-family: 'Syne', sans-serif; transition: all 0.2s; }
+  .btn-start:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
+  .btn-skip { padding: 10px 0; background: transparent; border: none; color: rgba(255,255,255,0.5); font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'Syne', sans-serif; text-align: center; }
+
+  /* ─── AUTH ─── */
+  .s-auth { background: #F5F2EC; overflow-y: auto; }
+  .auth-top { padding: 72px 32px 28px; text-align: center; }
+  .auth-logo { font-size: 58px; font-weight: 900; color: #6C5CE7; letter-spacing: -3px; margin-bottom: 8px; }
+  .auth-logo span { color: #E8561E; }
+  .auth-tagline { font-size: 15px; color: #8A8A8E; }
+  .auth-body { padding: 0 28px 40px; display: flex; flex-direction: column; gap: 0; }
+  .tab-bar { display: flex; background: #E8E4DA; border-radius: 12px; padding: 4px; margin-bottom: 24px; }
+  .tab-btn { flex: 1; padding: 10px 0; border-radius: 9px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; font-family: 'Syne', sans-serif; transition: all 0.2s; }
+  .tab-btn.active { background: #fff; color: #141218; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .tab-btn:not(.active) { background: transparent; color: #8A8A8E; }
+  .inputs { display: flex; flex-direction: column; gap: 12px; }
+  .auth-input { width: 100%; padding: 14px 16px; border-radius: 12px; border: 1.5px solid #D4D0C8; font-size: 15px; font-family: 'Syne', sans-serif; background: #FAFAF5; color: #141218; }
+  .btn-auth { width: 100%; padding: 17px; border-radius: 14px; background: #6C5CE7; color: #fff; border: none; font-size: 16px; font-weight: 700; cursor: pointer; font-family: 'Syne', sans-serif; margin-top: 4px; transition: all 0.2s; }
+  .btn-auth:hover { background: #5a4bd1; transform: translateY(-1px); }
+  .divider { display: flex; align-items: center; gap: 12px; margin: 4px 0; }
+  .divider-line { flex: 1; height: 1px; background: #D4D0C8; }
+  .divider-text { font-size: 12px; color: #8A8A8E; font-weight: 600; }
+  .btn-google { width: 100%; padding: 15px; border-radius: 14px; background: #fff; border: 2px solid #D4D0C8; font-size: 15px; font-weight: 700; cursor: pointer; font-family: 'Syne', sans-serif; display: flex; align-items: center; justify-content: center; gap: 10px; color: #141218; transition: all 0.2s; }
+  .btn-google:hover { border-color: #bbb; transform: translateY(-1px); }
+
+  /* ─── PIN SETUP ─── */
+  .s-pin { background: #F5F2EC; align-items: center; }
+  .pin-top { padding: 72px 32px 32px; text-align: center; width: 100%; }
+  .pin-title { font-size: 28px; font-weight: 900; color: #141218; margin-bottom: 8px; }
+  .pin-sub { font-size: 15px; color: #8A8A8E; }
+  .pin-digits-toggle { display: flex; gap: 10px; margin-bottom: 32px; }
+  .pin-digit-btn { padding: 9px 24px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: 'Syne', sans-serif; transition: all 0.2s; }
+  .pin-digit-btn.active { border: 2px solid #6C5CE7; background: #E0DBFF; color: #6C5CE7; }
+  .pin-digit-btn:not(.active) { border: 2px solid #D4D0C8; background: #fff; color: #8A8A8E; }
+  .pin-dots { display: flex; gap: 14px; margin-bottom: 40px; }
+  .pin-dot { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid #C8C4BC; background: transparent; transition: all 0.15s; }
+  .pin-dot.filled { background: #6C5CE7; border-color: #6C5CE7; }
+  .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; max-width: 300px; padding: 0 20px; }
+  .num-btn { aspect-ratio: 1; border-radius: 16px; background: #fff; border: 2px solid #E0DCD4; font-size: 22px; font-weight: 700; cursor: pointer; font-family: 'Syne', sans-serif; color: #141218; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .num-btn:hover { background: #f0ecf8; border-color: #c0bce8; }
+  .num-btn.del { background: transparent; border: none; font-size: 26px; }
+  .num-btn.empty { pointer-events: none; background: transparent; border: none; }
+  .btn-skip-pin { margin-top: 24px; padding: 10px 24px; background: transparent; border: none; color: #8A8A8E; font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'Syne', sans-serif; }
+</style>
+</head>
+<body>
+
+<div class="frame">
+
+  <!-- LOADING -->
+  <div class="screen s-loading" id="s-loading">
+    <div class="logo">Qori<span>.</span></div>
+    <div class="spinner"></div>
+  </div>
+
+  <!-- ONBOARDING -->
+  <div class="screen s-onboarding hidden" id="s-onboarding" style="background:#6C5CE7">
+    <div class="ob-top">
+      <div class="ob-brand">Qori.</div>
+      <div class="ob-icon" id="ob-icon">
+        <!-- SVG mic -->
+        <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="animation:pulse 2.5s ease-in-out infinite">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </div>
+      <div class="ob-text">
+        <div class="ob-title" id="ob-title">Registra al instante</div>
+        <div class="ob-desc" id="ob-desc">Di el monto y listo. Qori entiende tu voz y registra tus gastos en segundos.</div>
+      </div>
+    </div>
+    <div class="ob-bottom">
+      <div class="ob-dots">
+        <div class="ob-dot active" style="width:24px" id="dot0"></div>
+        <div class="ob-dot" style="width:8px" id="dot1"></div>
+        <div class="ob-dot" style="width:8px" id="dot2"></div>
+      </div>
+      <button class="btn-next" id="ob-btn" onclick="obNext()">Siguiente</button>
+      <button class="btn-skip" onclick="goAuth()">Omitir</button>
+    </div>
+  </div>
+
+  <!-- AUTH -->
+  <div class="screen s-auth hidden" id="s-auth">
+    <div class="auth-top">
+      <div class="auth-logo">Qori<span>.</span></div>
+      <div class="auth-tagline">Controla tus gastos, sin complicaciones.</div>
+    </div>
+    <div class="auth-body">
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tab-login" onclick="switchTab('login')">Iniciar sesión</button>
+        <button class="tab-btn" id="tab-register" onclick="switchTab('register')">Registrarme</button>
+      </div>
+      <div class="inputs">
+        <input class="auth-input" type="email" placeholder="Correo electrónico" />
+        <input class="auth-input" type="password" placeholder="Contraseña" />
+        <input class="auth-input" type="tel" placeholder="Celular (opcional)" id="phone-field" style="display:none" />
+        <button class="btn-auth" id="btn-auth-main" onclick="goPin()">Entrar</button>
+        <div class="divider">
+          <div class="divider-line"></div>
+          <span class="divider-text">o</span>
+          <div class="divider-line"></div>
+        </div>
+        <button class="btn-google">
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Continuar con Google
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PIN SETUP -->
+  <div class="screen s-pin hidden" id="s-pin">
+    <div class="pin-top">
+      <div class="pin-title">Crea tu clave rápida</div>
+      <div class="pin-sub">Elige tu PIN de acceso rápido</div>
+    </div>
+    <div class="pin-digits-toggle">
+      <button class="pin-digit-btn active" onclick="setPinDigits(4,this)">4 dígitos</button>
+      <button class="pin-digit-btn" onclick="setPinDigits(6,this)">6 dígitos</button>
+    </div>
+    <div class="pin-dots" id="pin-dots">
+      <div class="pin-dot"></div>
+      <div class="pin-dot"></div>
+      <div class="pin-dot"></div>
+      <div class="pin-dot"></div>
+    </div>
+    <div class="numpad">
+      <button class="num-btn" onclick="pinInput(1)">1</button>
+      <button class="num-btn" onclick="pinInput(2)">2</button>
+      <button class="num-btn" onclick="pinInput(3)">3</button>
+      <button class="num-btn" onclick="pinInput(4)">4</button>
+      <button class="num-btn" onclick="pinInput(5)">5</button>
+      <button class="num-btn" onclick="pinInput(6)">6</button>
+      <button class="num-btn" onclick="pinInput(7)">7</button>
+      <button class="num-btn" onclick="pinInput(8)">8</button>
+      <button class="num-btn" onclick="pinInput(9)">9</button>
+      <div class="num-btn empty"></div>
+      <button class="num-btn" onclick="pinInput(0)">0</button>
+      <button class="num-btn del" onclick="pinDel()">⌫</button>
+    </div>
+    <button class="btn-skip-pin">Omitir por ahora</button>
+  </div>
+
+</div>
+
+<!-- Nav pills -->
+<div class="nav-pills">
+  <button class="nav-pill active" onclick="showScreen('s-loading')">Loading</button>
+  <button class="nav-pill" onclick="showScreen('s-onboarding')">Onboarding</button>
+  <button class="nav-pill" onclick="showScreen('s-auth')">Login</button>
+  <button class="nav-pill" onclick="showScreen('s-pin')">PIN</button>
+</div>
+
+<script>
+  const slides = [
+    {
+      bg: '#6C5CE7',
+      btnColor: '#6C5CE7',
+      title: 'Registra al instante',
+      desc: 'Di el monto y listo. Qori entiende tu voz y registra tus gastos en segundos.',
+      icon: `
+        <div style="position:relative;width:260px;height:220px;display:flex;align-items:center;justify-content:center">
+          <!-- Círculos decorativos de fondo -->
+          <div style="position:absolute;width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,0.07);top:10px;left:30px"></div>
+          <div style="position:absolute;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,0.07);top:40px;left:60px"></div>
+          <!-- Ondas de sonido animadas -->
+          <div style="position:absolute;width:220px;height:220px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);animation:ripple 2s ease-out infinite"></div>
+          <div style="position:absolute;width:180px;height:180px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);animation:ripple 2s ease-out infinite 0.5s"></div>
+          <div style="position:absolute;width:140px;height:140px;border-radius:50%;border:2px solid rgba(255,255,255,0.28);animation:ripple 2s ease-out infinite 1s"></div>
+          <!-- Burbuja central con mic -->
+          <div style="width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);position:relative;z-index:2">
+            <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </div>
+          <!-- Chips flotantes de gastos -->
+          <div style="position:absolute;top:10px;right:10px;background:rgba(255,255,255,0.2);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:700;color:#fff;backdrop-filter:blur(6px);animation:float 3s ease-in-out infinite">🍽️ S/ 25</div>
+          <div style="position:absolute;bottom:20px;left:5px;background:rgba(255,255,255,0.2);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:700;color:#fff;backdrop-filter:blur(6px);animation:float 3s ease-in-out infinite 1s">🚌 S/ 4.50</div>
+          <div style="position:absolute;top:55px;right:-5px;background:rgba(255,255,255,0.15);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);backdrop-filter:blur(6px);animation:float 3s ease-in-out infinite 0.5s">✅ Guardado</div>
+        </div>`
+    },
+    {
+      bg: '#1B6B3A',
+      btnColor: '#1B6B3A',
+      title: 'Controla tu mes',
+      desc: 'Ve tus gastos fijos, ingresos y balance de un vistazo. Sin complicaciones.',
+      icon: `
+        <div style="position:relative;width:260px;height:220px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px">
+          <!-- Fondo decorativo -->
+          <div style="position:absolute;inset:0;border-radius:24px;background:rgba(255,255,255,0.07)"></div>
+          <!-- Barras del gráfico -->
+          <div style="position:relative;z-index:2;display:flex;align-items:flex-end;gap:14px;padding:16px 20px 0">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+              <div style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:700">S/320</div>
+              <div style="width:36px;height:110px;background:rgba(255,255,255,0.25);border-radius:8px 8px 0 0;animation:growUp 1s ease-out"></div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.6)">🍽️</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+              <div style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:700">S/180</div>
+              <div style="width:36px;height:70px;background:rgba(255,255,255,0.35);border-radius:8px 8px 0 0;animation:growUp 1s ease-out 0.1s"></div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.6)">🚌</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+              <div style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:700">S/240</div>
+              <div style="width:36px;height:90px;background:#fff;border-radius:8px 8px 0 0;animation:growUp 1s ease-out 0.2s"></div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.6)">🏠</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+              <div style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:700">S/90</div>
+              <div style="width:36px;height:40px;background:rgba(255,255,255,0.25);border-radius:8px 8px 0 0;animation:growUp 1s ease-out 0.3s"></div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.6)">💊</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+              <div style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:700">S/60</div>
+              <div style="width:36px;height:28px;background:rgba(255,255,255,0.2);border-radius:8px 8px 0 0;animation:growUp 1s ease-out 0.4s"></div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.6)">🎉</div>
+            </div>
+          </div>
+          <!-- Balance card flotante -->
+          <div style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.18);border-radius:14px;padding:10px 14px;backdrop-filter:blur(6px);animation:float 3s ease-in-out infinite">
+            <div style="font-size:10px;color:rgba(255,255,255,0.7);font-weight:600">Balance</div>
+            <div style="font-size:16px;font-weight:900;color:#fff">S/ 1,240</div>
+          </div>
+        </div>`
+    },
+    {
+      bg: '#E8561E',
+      btnColor: '#E8561E',
+      title: 'Tu data, segura',
+      desc: 'Sincronización automática en la nube. Cambia de dispositivo sin perder nada.',
+      icon: `
+        <div style="position:relative;width:260px;height:220px;display:flex;align-items:center;justify-content:center">
+          <!-- Fondo circular -->
+          <div style="position:absolute;width:190px;height:190px;border-radius:50%;background:rgba(255,255,255,0.08)"></div>
+          <!-- Nube central -->
+          <div style="position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:12px">
+            <div style="width:88px;height:88px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;animation:pulse 2.5s ease-in-out infinite">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+              </svg>
+            </div>
+          </div>
+          <!-- Dispositivos flotantes -->
+          <div style="position:absolute;left:8px;top:30px;background:rgba(255,255,255,0.18);border-radius:14px;padding:10px 12px;backdrop-filter:blur(6px);animation:float 3s ease-in-out infinite">
+            <div style="font-size:22px">📱</div>
+            <div style="font-size:10px;color:#fff;font-weight:700;margin-top:4px">iPhone</div>
+          </div>
+          <div style="position:absolute;right:8px;top:30px;background:rgba(255,255,255,0.18);border-radius:14px;padding:10px 12px;backdrop-filter:blur(6px);animation:float 3s ease-in-out infinite 1s">
+            <div style="font-size:22px">💻</div>
+            <div style="font-size:10px;color:#fff;font-weight:700;margin-top:4px">Mac</div>
+          </div>
+          <div style="position:absolute;bottom:15px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,0.18);border-radius:20px;padding:8px 16px;backdrop-filter:blur(6px);animation:float 3s ease-in-out infinite 0.5s;white-space:nowrap">
+            <span style="font-size:12px;color:#fff;font-weight:700">🔒 Cifrado seguro</span>
+          </div>
+          <!-- Líneas de conexión -->
+          <svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none" viewBox="0 0 260 220">
+            <line x1="80" y1="80" x2="130" y2="110" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" stroke-dasharray="4,4"/>
+            <line x1="180" y1="80" x2="130" y2="110" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" stroke-dasharray="4,4"/>
+          </svg>
+        </div>`
+    }
+  ];
+
+  let obIdx = 0;
+  let pinDigitCount = 4;
+  let pinVal = '';
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+    document.getElementById(id).classList.remove('hidden');
+    document.querySelectorAll('.nav-pill').forEach((p, i) => {
+      const ids = ['s-loading','s-onboarding','s-auth','s-pin'];
+      p.classList.toggle('active', ids[i] === id);
+    });
+    if (id === 's-onboarding') { obIdx = 0; renderSlide(); }
+    if (id === 's-pin') { pinVal = ''; renderPin(); }
+  }
+
+  function renderSlide() {
+    const s = slides[obIdx];
+    const ob = document.getElementById('s-onboarding');
+    ob.style.background = s.bg;
+    document.getElementById('ob-icon').innerHTML = s.icon;
+    document.getElementById('ob-title').textContent = s.title;
+    document.getElementById('ob-desc').textContent = s.desc;
+    // dots
+    [0,1,2].forEach(i => {
+      const d = document.getElementById('dot'+i);
+      d.style.width = i === obIdx ? '24px' : '8px';
+      d.style.background = i === obIdx ? '#fff' : 'rgba(255,255,255,0.35)';
+    });
+    // button
+    const btn = document.getElementById('ob-btn');
+    if (obIdx < 2) {
+      btn.className = 'btn-next';
+      btn.textContent = 'Siguiente';
+    } else {
+      btn.className = 'btn-start';
+      btn.style.color = s.bg;
+      btn.textContent = 'Comenzar →';
+    }
+  }
+
+  function obNext() {
+    if (obIdx < 2) { obIdx++; renderSlide(); }
+    else goAuth();
+  }
+
+  function goAuth() { showScreen('s-auth'); }
+
+  function switchTab(tab) {
+    document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+    document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+    document.getElementById('phone-field').style.display = tab === 'register' ? 'block' : 'none';
+    document.getElementById('btn-auth-main').textContent = tab === 'login' ? 'Entrar' : 'Crear cuenta';
+  }
+
+  function goPin() { showScreen('s-pin'); }
+
+  function setPinDigits(n, btn) {
+    pinDigitCount = n;
+    pinVal = '';
+    document.querySelectorAll('.pin-digit-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderPin();
+  }
+
+  function renderPin() {
+    const container = document.getElementById('pin-dots');
+    container.innerHTML = '';
+    for (let i = 0; i < pinDigitCount; i++) {
+      const d = document.createElement('div');
+      d.className = 'pin-dot' + (i < pinVal.length ? ' filled' : '');
+      container.appendChild(d);
+    }
+  }
+
+  function pinInput(n) {
+    if (pinVal.length < pinDigitCount) {
+      pinVal += String(n);
+      renderPin();
+      if (pinVal.length === pinDigitCount) {
+        setTimeout(() => { pinVal = ''; renderPin(); }, 600);
+      }
+    }
+  }
+
+  function pinDel() { pinVal = pinVal.slice(0,-1); renderPin(); }
+
+  // Auto-advance from loading after 1.5s for demo
+  setTimeout(() => {
+    if (document.getElementById('s-loading') && !document.getElementById('s-loading').classList.contains('hidden')) {
+      showScreen('s-onboarding');
+    }
+  }, 1500);
+</script>
+</body>
+</html>
