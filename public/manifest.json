@@ -1,11 +1,11 @@
 {
-  "name": "Gastos Andrea",
-  "short_name": "Gastos",
-  "description": "Control de gastos personales",
+  "name": "Qori",
+  "short_name": "Qori",
+  "description": "Controla tus gastos, sin complicaciones.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#E8461E",
-  "theme_color": "#E8461E",
+  "background_color": "#6C5CE7",
+  "theme_color": "#6C5CE7",
   "orientation": "portrait",
   "icons": [
     {
