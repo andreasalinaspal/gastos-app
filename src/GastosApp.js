@@ -361,9 +361,7 @@ export default function App() {
     if (!hasSignificantData(data)) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      supabase.from('app_data').upsert({ user_id: authUser.id, data, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
-        .then(({ error }) => { if (!error) setCloudStatus("synced"); else setCloudStatus("offline"); })
-        .catch(() => setCloudStatus("offline"));
+      forceUploadToSupabase(authUser.id, data);
     }, 1500);
     return () => clearTimeout(syncTimer.current);
   }, [data, authUser]);
