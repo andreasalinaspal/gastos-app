@@ -47,6 +47,15 @@ const DEFAULT_CATS_INGRESOS = [
   { emoji: "🏠", name: "Alquiler" }, { emoji: "🎯", name: "Bono" }, { emoji: "🛒", name: "Ventas" },
 ];
 
+const LOCAL_BACKUP_KEY = 'qori-backup';
+function hasSignificantData(d) {
+  if (!d) return false;
+  return (d.expenses?.length > 0) || (d.fixed?.some(f => f.amount > 0)) ||
+    (d.incomeFixed?.some(i => i.amount > 0)) || (d.incomeExtra?.length > 0);
+}
+function saveLocalBackup(d) { try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(d)); } catch(e) {} }
+function loadLocalBackup() { try { const b = localStorage.getItem(LOCAL_BACKUP_KEY); return b ? JSON.parse(b) : null; } catch(e) { return null; } }
+
 function initData() {
   return {
     expenses: [],
@@ -203,9 +212,10 @@ export default function App() {
     return () => clearInterval(timerRef.current);
   }, [recording]);
 
-  // Save data to localStorage on every change
+  // Save data to localStorage on every change; maintain separate backup for recovery
   useEffect(() => {
     try { localStorage.setItem('gastos-data', JSON.stringify(data)); } catch (e) {}
+    if (hasSignificantData(data)) saveLocalBackup(data);
   }, [data]);
 
   // Cloud sync state
@@ -216,14 +226,26 @@ export default function App() {
     try {
       const { data: row } = await supabase.from('app_data').select('data').eq('user_id', userId).maybeSingle();
       if (row?.data) {
-        skipNextSync.current = true;
-        const loaded = row.data;
+        let loaded = row.data;
         if (!loaded.categories) {
           loaded.categories = {
             gastos: DEFAULT_CATS_GASTOS.map(c => ({ id: genId(), ...c })),
             ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
           };
         }
+        // If Supabase has empty data, check local backup before using it
+        if (!hasSignificantData(loaded)) {
+          const backup = loadLocalBackup();
+          if (hasSignificantData(backup)) {
+            loaded = backup;
+            // Restore backup to Supabase to fix overwritten data
+            await supabase.from('app_data').upsert({ user_id: userId, data: backup, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+            showToast("✅ Datos restaurados desde respaldo local");
+          }
+        } else {
+          saveLocalBackup(loaded);
+        }
+        skipNextSync.current = true;
         setData(loaded);
         setCloudStatus("synced");
         return;
@@ -240,9 +262,18 @@ export default function App() {
             ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
           };
         }
+        if (hasSignificantData(loaded)) saveLocalBackup(loaded);
         setData(loaded);
         setCloudStatus("synced");
         return;
+      }
+      // No cloud data — check local backup
+      const backup = loadLocalBackup();
+      if (hasSignificantData(backup)) {
+        await supabase.from('app_data').upsert({ user_id: userId, data: backup, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+        skipNextSync.current = true;
+        setData(backup);
+        showToast("✅ Datos restaurados desde respaldo local");
       }
       setCloudStatus("synced");
     } catch (e) {
