@@ -237,11 +237,18 @@ export default function App() {
 
   const forceUploadToSupabase = async (userId, dataToUpload) => {
     try {
-      const { error } = await supabase.from('app_data')
-        .update({ data: dataToUpload, updated_at: new Date().toISOString() })
-        .eq('user_id', userId);
-      if (error) {
-        // Row might not exist yet — insert
+      // Find exact row id first to avoid silent failures
+      const { data: rows } = await supabase.from('app_data')
+        .select('id')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      const rowId = rows?.[0]?.id;
+      if (rowId) {
+        await supabase.from('app_data')
+          .update({ data: dataToUpload, updated_at: new Date().toISOString() })
+          .eq('id', rowId);
+      } else {
         await supabase.from('app_data')
           .insert({ user_id: userId, data: dataToUpload, updated_at: new Date().toISOString() });
       }
@@ -251,7 +258,14 @@ export default function App() {
 
   const loadUserData = async (userId) => {
     try {
-      const { data: row } = await supabase.from('app_data').select('data').eq('user_id', userId).maybeSingle();
+      // Use array query + limit to handle possible duplicate rows gracefully
+      const { data: rows } = await supabase.from('app_data')
+        .select('data')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      const row = rows?.[0];
+
       if (row?.data) {
         let loaded = row.data;
         if (!loaded.categories) {
@@ -276,7 +290,8 @@ export default function App() {
         return;
       }
       // Migration: claim unclaimed legacy row (id=1, user_id IS NULL)
-      const { data: legacy } = await supabase.from('app_data').select('data').eq('id', 1).is('user_id', null).maybeSingle();
+      const { data: legacyRows } = await supabase.from('app_data').select('data').eq('id', 1).is('user_id', null).limit(1);
+      const legacy = legacyRows?.[0];
       if (legacy?.data) {
         await supabase.from('app_data').update({ user_id: userId }).eq('id', 1);
         skipNextSync.current = true;
