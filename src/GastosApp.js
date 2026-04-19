@@ -147,9 +147,12 @@ export default function App() {
   const [newCatEmoji, setNewCatEmoji] = useState("");
   const [newCatName, setNewCatName] = useState("");
 
-  // Auth state
+  // Auth state — start immediately in the right screen, no loading screen delay
   const [authUser, setAuthUser] = useState(null);
-  const [authPhase, setAuthPhase] = useState("loading"); // loading | onboarding | auth | pin-setup | app
+  const [authPhase, setAuthPhase] = useState(() => {
+    if (typeof window === 'undefined') return "loading";
+    return localStorage.getItem('qori-onboarding') ? "auth" : "onboarding";
+  }); // loading | onboarding | auth | pin-setup | app
   const [authTab, setAuthTab] = useState("login");
   const [authEmail, setAuthEmail] = useState("");
   const [authPass, setAuthPass] = useState("");
@@ -283,37 +286,27 @@ export default function App() {
 
   // Auth: single listener handles initial session + changes
   useEffect(() => {
-    // Safety timeout — if onAuthStateChange never fires, escape loading after 8s
-    const safetyTimer = setTimeout(() => {
-      setAuthPhase(p => {
-        if (p !== "loading") return p;
-        const seen = localStorage.getItem('qori-onboarding');
-        return seen ? "auth" : "onboarding";
-      });
-    }, 8000);
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
         if (session?.user) {
-          // Block sync BEFORE setAuthUser to prevent race condition where
-          // the sync effect fires with empty initData and overwrites real data
+          // Block sync BEFORE setAuthUser to prevent race condition
           skipNextSync.current = true;
           setAuthUser(session.user);
           await loadUserData(session.user.id);
           setAuthPhase("app");
-        } else {
-          // Any event without a session → leave loading state
+        } else if (event === 'SIGNED_OUT') {
           setAuthUser(null);
-          if (event === 'SIGNED_OUT') setData(initData());
+          setData(initData());
           const seen = localStorage.getItem('qori-onboarding');
-          setAuthPhase(p => p === "app" && event !== 'SIGNED_OUT' ? "app" : (seen ? "auth" : "onboarding"));
+          setAuthPhase(seen ? "auth" : "onboarding");
         }
+        // Other no-session events (TOKEN_REFRESHED, etc.) — ignore, stay in current phase
       } catch (e) {
         const seen = localStorage.getItem('qori-onboarding');
         setAuthPhase(seen ? "auth" : "onboarding");
       }
     });
-    return () => { subscription.unsubscribe(); clearTimeout(safetyTimer); };
+    return () => subscription.unsubscribe();
   }, []);
 
   // Sync data to Supabase on every change (debounced)
