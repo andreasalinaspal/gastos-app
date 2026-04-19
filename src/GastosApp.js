@@ -36,6 +36,17 @@ const FIXED_DEFAULTS = [
   { name: "Alquiler", type: "manual" },
 ];
 
+const DEFAULT_CATS_GASTOS = [
+  { emoji: "🍽️", name: "Comida" }, { emoji: "🚌", name: "Transporte" }, { emoji: "🏠", name: "Hogar" },
+  { emoji: "💊", name: "Salud" }, { emoji: "🏋️", name: "Deporte" }, { emoji: "🎉", name: "Ocio" },
+  { emoji: "🛍️", name: "Compras" }, { emoji: "💄", name: "Estética" }, { emoji: "📚", name: "Educación" },
+  { emoji: "📱", name: "Suscripciones" }, { emoji: "✈️", name: "Viajes" }, { emoji: "⚡", name: "Imprevistos" },
+];
+const DEFAULT_CATS_INGRESOS = [
+  { emoji: "💼", name: "Sueldo" }, { emoji: "💻", name: "Freelance" }, { emoji: "📈", name: "Inversión" },
+  { emoji: "🏠", name: "Alquiler" }, { emoji: "🎯", name: "Bono" }, { emoji: "🛒", name: "Ventas" },
+];
+
 function initData() {
   return {
     expenses: [],
@@ -45,6 +56,10 @@ function initData() {
       { id: genId(), name: "Sueldo de Facultad", amount: 0, month: getCurrentMonthLabel() },
     ],
     incomeExtra: [],
+    categories: {
+      gastos: DEFAULT_CATS_GASTOS.map(c => ({ id: genId(), ...c })),
+      ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
+    },
     userName: "Andrea",
     currency: "PEN",
   };
@@ -60,7 +75,16 @@ export default function App() {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('gastos-data');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (!parsed.categories) {
+            parsed.categories = {
+              gastos: DEFAULT_CATS_GASTOS.map(c => ({ id: genId(), ...c })),
+              ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
+            };
+          }
+          return parsed;
+        }
       } catch (e) {}
     }
     return initData();
@@ -106,6 +130,13 @@ export default function App() {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const backupInputRef = useRef(null);
+  const [subScreen, setSubScreen] = useState(null); // 'fijos' | 'cats-gasto' | 'cats-ingreso'
+  const [catEditId, setCatEditId] = useState(null);
+  const [catEditEmoji, setCatEditEmoji] = useState("");
+  const [catEditName, setCatEditName] = useState("");
+  const [showAddCat, setShowAddCat] = useState(null); // 'gasto' | 'ingreso'
+  const [newCatEmoji, setNewCatEmoji] = useState("");
+  const [newCatName, setNewCatName] = useState("");
 
   const exportData = () => {
     const json = JSON.stringify(data, null, 2);
@@ -163,7 +194,14 @@ export default function App() {
       .then(({ data: row, error }) => {
         if (!error && row?.data) {
           skipNextSync.current = true;
-          setData(row.data);
+          const loaded = row.data;
+          if (!loaded.categories) {
+            loaded.categories = {
+              gastos: DEFAULT_CATS_GASTOS.map(c => ({ id: genId(), ...c })),
+              ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
+            };
+          }
+          setData(loaded);
           setCloudStatus("synced");
         } else if (error?.code === 'PGRST116') {
           // No row yet — insert current data
@@ -261,6 +299,25 @@ export default function App() {
   const saveExtraEdit = (id) => {
     setData(p => ({ ...p, incomeExtra: p.incomeExtra.map(i => i.id === id ? { ...i, name: editExtraName || i.name, amount: Number(editExtraAmt) || i.amount } : i) }));
     setEditExtraId(null); setEditExtraName(""); setEditExtraAmt("");
+  };
+  const saveCatEdit = (type) => {
+    if (!catEditName.trim()) return;
+    setData(p => ({ ...p, categories: { ...p.categories, [type]: p.categories[type].map(c => c.id === catEditId ? { ...c, emoji: catEditEmoji, name: catEditName.trim() } : c) } }));
+    setCatEditId(null); setCatEditEmoji(""); setCatEditName("");
+  };
+  const deleteCat = (type, id) => {
+    setConfirm({ message: "Eliminar esta categoría?", onConfirm: () => {
+      setData(p => ({ ...p, categories: { ...p.categories, [type]: p.categories[type].filter(c => c.id !== id) } }));
+      showToast("Categoría eliminada");
+    }});
+  };
+  const addCat = (type) => {
+    if (!newCatName.trim()) return;
+    const emoji = newCatEmoji.trim() || "📌";
+    const name = newCatName.trim();
+    setData(p => ({ ...p, categories: { ...p.categories, [type]: [...p.categories[type], { id: genId(), emoji, name }] } }));
+    setNewCatEmoji(""); setNewCatName(""); setShowAddCat(null);
+    showToast("Categoría agregada");
   };
   const handleScanImage = async (e) => {
     const file = e.target.files?.[0];
@@ -646,9 +703,12 @@ export default function App() {
     const totalPaid = fixedCur.filter(f => f.paid).reduce((s, f) => s + f.amount, 0);
     return (
       <div style={{ flex: 1, background: C.beige, minHeight: "100vh", paddingBottom: 80 }}>
-        <div style={{ padding: "32px 24px 0" }}>
-          <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic" }}>Fijos</h1>
-          <div style={{ borderBottom: "3px solid " + C.purple, marginTop: 6, width: 50, marginBottom: 4 }} />
+        <div style={{ padding: "52px 24px 0", display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+            <button onClick={() => setSubScreen(null)} style={{ width: 38, height: 38, borderRadius: "50%", background: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 6px rgba(0,0,0,0.1)", fontSize: 22, color: C.black, flexShrink: 0 }}>‹</button>
+            <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic" }}>Fijos</h1>
+          </div>
+          <div style={{ borderBottom: "3px solid " + C.purple, marginTop: 0, width: 50, marginBottom: 4 }} />
           <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, marginBottom: 8 }}>Mensual</div>
           <div style={{ fontSize: 38, fontWeight: 900, color: C.black }}>{fmt(totalAll)}</div>
           <div style={{ display: "flex", gap: 8, marginTop: 6, marginBottom: 20, fontSize: 12, color: C.muted }}><span>Pagado: {fmt(totalPaid)}</span><span>|</span><span>Pendiente: {fmt(totalAll - totalPaid)}</span></div>
@@ -834,65 +894,152 @@ export default function App() {
     );
   })();
 
+  const cfgRowStyle = { display: "flex", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #F0EDE4", cursor: "pointer", gap: 14 };
   const configScreen = (
     <div style={{ flex: 1, background: C.beige, minHeight: "100vh", paddingBottom: 80 }}>
       <div style={{ padding: "32px 24px 0" }}>
         <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic" }}>Config</h1>
         <div style={{ borderBottom: "3px solid " + C.purple, marginTop: 6, width: 60, marginBottom: 20 }} />
       </div>
-      <div style={{ padding: "0 24px" }}>
-        <div style={{ ...cardStyle, padding: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 10, textTransform: "uppercase" }}>Nombre</div>
-          <input style={{ ...inputStyle, color: C.black }} value={data.userName} onChange={e => setData(p => ({ ...p, userName: e.target.value }))} />
+      <div style={{ padding: "0 20px" }}>
+        {/* Perfil */}
+        <div style={{ ...cardStyle, padding: "0 0 0", marginBottom: 12, overflow: "hidden" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "14px 20px 8px" }}>Perfil</div>
+          <div style={{ padding: "0 20px 16px" }}>
+            <input style={{ ...inputStyle, color: C.black }} value={data.userName} onChange={e => setData(p => ({ ...p, userName: e.target.value }))} />
+          </div>
         </div>
-        <div style={{ ...cardStyle, padding: 20, marginTop: 12 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 12, textTransform: "uppercase" }}>Moneda</div>
+        {/* Organización — 3 arrow rows */}
+        <div style={{ ...cardStyle, marginBottom: 12, overflow: "hidden", padding: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "14px 20px 4px" }}>Organización</div>
+          <div onClick={() => setSubScreen("fijos")} style={cfgRowStyle}>
+            <span style={{ fontSize: 22 }}>📌</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>Gastos Fijos</div>
+              <div style={{ fontSize: 12, color: C.muted }}>{fmt(data.fixed.filter(f => f.month === curMonth).reduce((s, f) => s + f.amount, 0))} · {data.fixed.filter(f => f.month === curMonth).length} gastos fijos</div>
+            </div>
+            <span style={{ fontSize: 20, color: C.muted }}>›</span>
+          </div>
+          <div onClick={() => setSubScreen("cats-gasto")} style={cfgRowStyle}>
+            <span style={{ fontSize: 22 }}>🏷️</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>Categorías de gastos</div>
+              <div style={{ fontSize: 12, color: C.muted }}>{(data.categories?.gastos?.length || 0)} categorías</div>
+            </div>
+            <span style={{ fontSize: 20, color: C.muted }}>›</span>
+          </div>
+          <div onClick={() => setSubScreen("cats-ingreso")} style={{ ...cfgRowStyle, borderBottom: "none" }}>
+            <span style={{ fontSize: 22 }}>💰</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>Categorías de ingresos</div>
+              <div style={{ fontSize: 12, color: C.muted }}>{(data.categories?.ingresos?.length || 0)} categorías</div>
+            </div>
+            <span style={{ fontSize: 20, color: C.muted }}>›</span>
+          </div>
+        </div>
+        {/* Moneda */}
+        <div style={{ ...cardStyle, padding: 20, marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Moneda</div>
           <div style={{ display: "flex", gap: 10 }}>
-            {[{ val: "PEN", label: "S/ Soles", flag: "PEN" }, { val: "USD", label: "US$ Dolares", flag: "USD" }].map(c => (
+            {[{ val: "PEN" }, { val: "USD" }].map(c => (
               <button key={c.val} onClick={() => setData(p => ({ ...p, currency: c.val }))} style={{
                 flex: 1, padding: "14px 12px", borderRadius: 12, border: "2.5px solid",
                 borderColor: data.currency === c.val ? C.green : "#D4D0C8",
                 background: data.currency === c.val ? C.green + "12" : "#fff",
-                cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s",
+                cursor: "pointer", fontFamily: "inherit",
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
               }}>
-                <span style={{ fontSize: 22, fontWeight: 800, color: data.currency === c.val ? C.green : C.muted }}>
-                  {c.val === "PEN" ? "S/" : "US$"}
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: data.currency === c.val ? C.green : C.muted }}>
-                  {c.val === "PEN" ? "Soles" : "Dolares"}
-                </span>
+                <span style={{ fontSize: 22, fontWeight: 800, color: data.currency === c.val ? C.green : C.muted }}>{c.val === "PEN" ? "S/" : "US$"}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: data.currency === c.val ? C.green : C.muted }}>{c.val === "PEN" ? "Soles" : "Dolares"}</span>
               </button>
             ))}
           </div>
         </div>
-        <div style={{ ...cardStyle, padding: 20, marginTop: 12 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 10, textTransform: "uppercase" }}>Datos</div>
-          <div style={{ fontSize: 14, color: "#666", lineHeight: 2 }}>Gastos diarios: {data.expenses.length}<br/>Gastos fijos: {data.fixed.length}<br/>Ingresos: {data.incomeFixed.length + data.incomeExtra.length}</div>
-        </div>
-        <div style={{ ...cardStyle, padding: 20, marginTop: 12 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 12, textTransform: "uppercase" }}>Backup</div>
+        {/* Backup */}
+        <div style={{ ...cardStyle, padding: 20, marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Backup</div>
           <button onClick={exportData} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.green, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 }}>Exportar datos</button>
           <input ref={backupInputRef} type="file" accept=".json" onChange={importData} style={{ display: "none" }} />
           <button onClick={() => backupInputRef.current?.click()} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#fff", color: C.black, border: "2px solid #D4D0C8", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Importar backup</button>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Exporta tus datos para tener un respaldo. Si pierdes tus datos, podes restaurarlos importando el archivo.</div>
         </div>
-        <div style={{ ...cardStyle, padding: 20, marginTop: 12 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, marginBottom: 12, textTransform: "uppercase" }}>Nube</div>
+        {/* Nube */}
+        <div style={{ ...cardStyle, padding: 20, marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Nube</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 10, height: 10, borderRadius: "50%", background: cloudStatus === "synced" ? C.green : cloudStatus === "loading" ? C.orange : C.orange }} />
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: cloudStatus === "synced" ? C.green : C.orange }} />
             <span style={{ fontSize: 14, color: C.black, fontWeight: 600 }}>
               {cloudStatus === "synced" ? "Sincronizado con la nube" : cloudStatus === "loading" ? "Conectando..." : "Sin conexion a la nube"}
             </span>
           </div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Tus datos se guardan automaticamente en la nube. Aunque borres el historial del navegador, tus datos estan seguros.</div>
         </div>
-        <button onClick={() => setConfirm({ message: "Resetear todos los datos? Esta accion no se puede deshacer.", onConfirm: () => { setData(initData()); showToast("Datos reseteados"); }})} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.orange, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 16 }}>Resetear datos</button>
+        <button onClick={() => setConfirm({ message: "Resetear todos los datos? Esta accion no se puede deshacer.", onConfirm: () => { setData(initData()); showToast("Datos reseteados"); }})} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.orange, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 24 }}>Resetear datos</button>
       </div>
     </div>
   );
 
-  const TABS = [{ id: "home", label: "Inicio", Icon: HomeIcon }, { id: "month", label: "Mi Mes", Icon: CalIcon }, { id: "fixed", label: "Fijos", Icon: PinIcon }, { id: "income", label: "Ingresos", Icon: WalletIcon }, { id: "config", label: "Config", Icon: GearIcon }];
+  const TABS = [{ id: "home", label: "Inicio", Icon: HomeIcon }, { id: "month", label: "Mi Mes", Icon: CalIcon }, { id: "income", label: "Ingresos", Icon: WalletIcon }, { id: "config", label: "Config", Icon: GearIcon }];
+
+  const subStyle = (id) => ({
+    position: "fixed", inset: 0, zIndex: 200,
+    background: C.beige, display: "flex", flexDirection: "column",
+    overflowY: "auto", overflowX: "hidden",
+    transform: subScreen === id ? "translateX(0)" : "translateX(100%)",
+    transition: "transform 0.32s cubic-bezier(0.4,0,0.2,1)",
+  });
+  const subHeader = (title, onBack) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "52px 20px 12px", position: "sticky", top: 0, background: C.beige, zIndex: 10 }}>
+      <button onClick={onBack} style={{ width: 38, height: 38, borderRadius: "50%", background: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 6px rgba(0,0,0,0.1)", fontSize: 22, color: C.black, flexShrink: 0 }}>‹</button>
+      <div style={{ fontSize: 26, fontWeight: 900, color: C.black, fontStyle: "italic" }}>{title}</div>
+    </div>
+  );
+
+  const catRowStyle = { display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid #F0EDE4", gap: 12 };
+
+  const CatsSubScreen = ({ type, title }) => {
+    const cats = data.categories?.[type] || [];
+    return (
+      <div style={subStyle(`cats-${type === "gastos" ? "gasto" : "ingreso"}`)}>
+        {subHeader(title, () => { setSubScreen(null); setCatEditId(null); setShowAddCat(null); })}
+        <div style={{ fontSize: 13, color: C.muted, padding: "0 20px 12px" }}>Toca el nombre o emoji para editar.</div>
+        <div style={{ ...cardStyle, margin: "0 16px", overflow: "hidden", padding: 0 }}>
+          {cats.map(c => (
+            <div key={c.id} style={catRowStyle}>
+              {catEditId === c.id ? (
+                <>
+                  <input value={catEditEmoji} onChange={e => setCatEditEmoji(e.target.value)} placeholder="🏷️" style={{ ...inputStyle, width: 52, textAlign: "center", padding: "8px 6px", fontSize: 20, color: C.black, flex: "none" }} />
+                  <input value={catEditName} onChange={e => setCatEditName(e.target.value)} autoFocus style={{ ...inputStyle, flex: 1, padding: "8px 12px", fontSize: 14, color: C.black }} onKeyDown={e => e.key === "Enter" && saveCatEdit(type)} />
+                  <button onClick={() => saveCatEdit(type)} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>OK</button>
+                  <button onClick={() => { setCatEditId(null); }} style={{ background: "#E0DCD4", color: "#666", border: "none", borderRadius: 8, padding: "8px 10px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕</button>
+                </>
+              ) : (
+                <>
+                  <div onClick={() => { setCatEditId(c.id); setCatEditEmoji(c.emoji); setCatEditName(c.name); }} style={{ width: 44, height: 44, borderRadius: 12, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, cursor: "pointer", flexShrink: 0 }}>{c.emoji}</div>
+                  <div onClick={() => { setCatEditId(c.id); setCatEditEmoji(c.emoji); setCatEditName(c.name); }} style={{ flex: 1, fontSize: 15, fontWeight: 700, color: C.black, cursor: "pointer" }}>{c.name}</div>
+                  <button onClick={() => deleteCat(type, c.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#bbb", fontSize: 18 }}>✕</button>
+                </>
+              )}
+            </div>
+          ))}
+          {/* Add row */}
+          {showAddCat === type ? (
+            <div style={{ ...catRowStyle, borderBottom: "none" }}>
+              <input value={newCatEmoji} onChange={e => setNewCatEmoji(e.target.value)} placeholder="🏷️" style={{ ...inputStyle, width: 52, textAlign: "center", padding: "8px 6px", fontSize: 20, color: C.black, flex: "none" }} />
+              <input value={newCatName} onChange={e => setNewCatName(e.target.value)} autoFocus placeholder="Nombre" style={{ ...inputStyle, flex: 1, padding: "8px 12px", fontSize: 14, color: C.black }} onKeyDown={e => e.key === "Enter" && addCat(type)} />
+              <button onClick={() => addCat(type)} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>OK</button>
+              <button onClick={() => setShowAddCat(null)} style={{ background: "#E0DCD4", color: "#666", border: "none", borderRadius: 8, padding: "8px 10px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>✕</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowAddCat(type)} style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", borderTop: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, color: C.purple, fontFamily: "inherit", textAlign: "left", display: "flex", alignItems: "center", gap: 8 }}>
+              <PlusIcon size={16} color={C.purple} /> Agregar categoría
+            </button>
+          )}
+        </div>
+        <div style={{ height: 40 }} />
+      </div>
+    );
+  };
 
   return (
     <div style={{ fontFamily: "'Syne', system-ui, sans-serif", maxWidth: 430, margin: "0 auto", position: "relative", background: tab === "home" ? "#6C5CE7" : C.beige }}>
@@ -906,7 +1053,7 @@ export default function App() {
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; margin: 0; }
         ::-webkit-scrollbar { width: 0; }
       `}</style>
-      {toast && <div style={{ position: "fixed", top: 60, left: "50%", transform: "translateX(-50%)", zIndex: 300, background: C.black, color: "#fff", padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600, animation: "slideUp 0.3s ease", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}>{toast}</div>}
+      {toast && <div style={{ position: "fixed", top: 60, left: "50%", transform: "translateX(-50%)", zIndex: 500, background: C.black, color: "#fff", padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600, animation: "slideUp 0.3s ease", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}>{toast}</div>}
       {scanResults && (
         <div style={{ position: "fixed", inset: 0, zIndex: 400, display: "flex", flexDirection: "column", background: C.beige, overflow: "auto" }}>
           <div style={{ padding: "48px 24px 16px" }}>
@@ -945,9 +1092,12 @@ export default function App() {
       )}
       {tab === "home" && homeScreen}
       {tab === "month" && MiMesScreen}
-      {tab === "fixed" && FijosScreen}
       {tab === "income" && IngresosScreen}
       {tab === "config" && configScreen}
+      {/* Sub-screens (slide over tabs) */}
+      <div style={subStyle("fijos")}>{FijosScreen}</div>
+      <CatsSubScreen type="gastos" title="Cats. Gastos" />
+      <CatsSubScreen type="ingresos" title="Cats. Ingresos" />
       <nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: tab === "home" ? "rgba(90,75,209,0.95)" : "#fff", borderTop: tab === "home" ? "1px solid rgba(255,255,255,0.12)" : "1px solid #E0DCD4", display: "flex", justifyContent: "space-around", padding: "8px 0 14px", zIndex: 100, backdropFilter: "blur(12px)" }}>
         {TABS.map(t => { const active = tab === t.id; const color = tab === "home" ? (active ? "#fff" : "rgba(255,255,255,0.45)") : (active ? C.purple : C.muted); return (
           <button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "none", border: "none", cursor: "pointer", padding: "4px 10px", color, fontSize: 10, fontWeight: active ? 700 : 500, fontFamily: "inherit", letterSpacing: 0.3 }}>
