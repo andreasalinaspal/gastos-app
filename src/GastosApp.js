@@ -224,6 +224,7 @@ export default function App() {
   // Cloud sync state
   const [cloudStatus, setCloudStatus] = useState("loading");
   const skipNextSync = useRef(false);
+  const isLoadingUserData = useRef(false);
 
   const loadUserData = async (userId) => {
     try {
@@ -289,11 +290,11 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
         if (session?.user) {
-          // Block sync BEFORE setAuthUser to prevent race condition
           skipNextSync.current = true;
+          isLoadingUserData.current = true;
           setAuthUser(session.user);
-          await loadUserData(session.user.id);
-          setAuthPhase("app");
+          setAuthPhase("app"); // Show app immediately, don't wait for data
+          loadUserData(session.user.id).finally(() => { isLoadingUserData.current = false; });
         } else if (event === 'SIGNED_OUT') {
           setAuthUser(null);
           setData(initData());
@@ -314,7 +315,7 @@ export default function App() {
   useEffect(() => {
     if (!authUser) return;
     if (skipNextSync.current) { skipNextSync.current = false; return; }
-    // Never overwrite Supabase with empty data — local backup may have real data
+    if (isLoadingUserData.current) return; // Don't sync while cloud data is loading
     if (!hasSignificantData(data)) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
