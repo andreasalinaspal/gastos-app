@@ -337,6 +337,11 @@ export default function App() {
             loadUserData(uid).finally(() => {
               isLoadingUserData.current = false;
             });
+            // Detect email confirmation redirect
+            if (typeof window !== 'undefined' && window.location.hash.includes('type=signup')) {
+              setTimeout(() => showToast("✅ ¡Cuenta confirmada! Bienvenido a Qori"), 800);
+              window.history.replaceState(null, '', window.location.pathname);
+            }
           }
         } else if (event === 'SIGNED_OUT') {
           loadedThisSession.current = false;
