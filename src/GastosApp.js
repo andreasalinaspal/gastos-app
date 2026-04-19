@@ -138,6 +138,21 @@ export default function App() {
   const [newCatEmoji, setNewCatEmoji] = useState("");
   const [newCatName, setNewCatName] = useState("");
 
+  // Auth state
+  const [authUser, setAuthUser] = useState(null);
+  const [authPhase, setAuthPhase] = useState("loading"); // loading | onboarding | auth | pin-setup | app
+  const [authTab, setAuthTab] = useState("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPass, setAuthPass] = useState("");
+  const [authPhone, setAuthPhone] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [obSlide, setObSlide] = useState(0);
+  const [pinDigits, setPinDigits] = useState(4);
+  const [pinVal, setPinVal] = useState("");
+  const [pinFirst, setPinFirst] = useState("");
+  const [pinPhase, setPinPhase] = useState("enter");
+
   const exportData = () => {
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: "application/json" });
@@ -186,45 +201,87 @@ export default function App() {
     try { localStorage.setItem('gastos-data', JSON.stringify(data)); } catch (e) {}
   }, [data]);
 
-  // Load data from Supabase on mount (cloud is the source of truth)
-  const [cloudStatus, setCloudStatus] = useState("loading"); // loading, synced, offline
+  // Cloud sync state
+  const [cloudStatus, setCloudStatus] = useState("loading");
   const skipNextSync = useRef(false);
-  useEffect(() => {
-    supabase.from('app_data').select('data').eq('id', 1).single()
-      .then(({ data: row, error }) => {
-        if (!error && row?.data) {
-          skipNextSync.current = true;
-          const loaded = row.data;
-          if (!loaded.categories) {
-            loaded.categories = {
-              gastos: DEFAULT_CATS_GASTOS.map(c => ({ id: genId(), ...c })),
-              ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
-            };
-          }
-          setData(loaded);
-          setCloudStatus("synced");
-        } else if (error?.code === 'PGRST116') {
-          // No row yet — insert current data
-          supabase.from('app_data').insert({ id: 1, data }).then(() => setCloudStatus("synced"));
-        } else {
-          setCloudStatus("offline");
+
+  const loadUserData = async (userId) => {
+    try {
+      const { data: row } = await supabase.from('app_data').select('data').eq('user_id', userId).maybeSingle();
+      if (row?.data) {
+        skipNextSync.current = true;
+        const loaded = row.data;
+        if (!loaded.categories) {
+          loaded.categories = {
+            gastos: DEFAULT_CATS_GASTOS.map(c => ({ id: genId(), ...c })),
+            ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
+          };
         }
-      })
-      .catch(() => setCloudStatus("offline"));
+        setData(loaded);
+        setCloudStatus("synced");
+        return;
+      }
+      // Migration: claim unclaimed legacy row (id=1, user_id IS NULL)
+      const { data: legacy } = await supabase.from('app_data').select('data').eq('id', 1).is('user_id', null).maybeSingle();
+      if (legacy?.data) {
+        await supabase.from('app_data').update({ user_id: userId }).eq('id', 1);
+        skipNextSync.current = true;
+        const loaded = legacy.data;
+        if (!loaded.categories) {
+          loaded.categories = {
+            gastos: DEFAULT_CATS_GASTOS.map(c => ({ id: genId(), ...c })),
+            ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
+          };
+        }
+        setData(loaded);
+        setCloudStatus("synced");
+        return;
+      }
+      setCloudStatus("synced");
+    } catch (e) {
+      setCloudStatus("offline");
+    }
+  };
+
+  // Auth: check session on mount
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        setAuthUser(session.user);
+        await loadUserData(session.user.id);
+        setAuthPhase("app");
+      } else {
+        const seen = localStorage.getItem('qori-onboarding');
+        setAuthPhase(seen ? "auth" : "onboarding");
+      }
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        setAuthUser(session.user);
+        await loadUserData(session.user.id);
+        setAuthPhase("app");
+      } else if (event === 'SIGNED_OUT') {
+        setAuthUser(null);
+        setData(initData());
+        setAuthPhase("auth");
+      }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   // Sync data to Supabase on every change (debounced)
   const syncTimer = useRef(null);
   useEffect(() => {
+    if (!authUser) return;
     if (skipNextSync.current) { skipNextSync.current = false; return; }
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      supabase.from('app_data').upsert({ id: 1, data, updated_at: new Date().toISOString() })
+      supabase.from('app_data').upsert({ user_id: authUser.id, data, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
         .then(({ error }) => { if (!error) setCloudStatus("synced"); else setCloudStatus("offline"); })
         .catch(() => setCloudStatus("offline"));
     }, 1500);
     return () => clearTimeout(syncTimer.current);
-  }, [data]);
+  }, [data, authUser]);
 
   // Register service worker
   useEffect(() => {
@@ -525,6 +582,54 @@ export default function App() {
     }
   };
   const handleManual = () => { addExpense(Number(manAmt), manDesc); setManAmt(""); setManDesc(""); setShowManual(false); };
+
+  const signIn = async () => {
+    if (!authEmail || !authPass) { setAuthError("Completa todos los campos"); return; }
+    setAuthLoading(true); setAuthError("");
+    const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPass });
+    if (error) setAuthError(error.message === "Invalid login credentials" ? "Correo o contraseña incorrectos" : error.message);
+    setAuthLoading(false);
+  };
+  const signUp = async () => {
+    if (!authEmail || !authPass) { setAuthError("Completa todos los campos"); return; }
+    if (authPass.length < 6) { setAuthError("La contraseña debe tener al menos 6 caracteres"); return; }
+    setAuthLoading(true); setAuthError("");
+    const { data: signUpData, error } = await supabase.auth.signUp({ email: authEmail, password: authPass, options: { data: { phone: authPhone } } });
+    if (error) {
+      setAuthError(error.message);
+    } else if (signUpData?.session) {
+      setAuthUser(signUpData.session.user);
+      await loadUserData(signUpData.session.user.id);
+      setAuthPhase("pin-setup");
+    } else {
+      setAuthError("✓ Revisa tu correo para confirmar tu cuenta");
+      setAuthTab("login");
+    }
+    setAuthLoading(false);
+  };
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+  };
+  const signOut = async () => {
+    setConfirm({ message: "¿Cerrar sesión?", onConfirm: async () => {
+      await supabase.auth.signOut();
+    }});
+  };
+  const savePinSetup = () => {
+    if (pinPhase === "enter") {
+      if (pinVal.length !== pinDigits) return;
+      setPinFirst(pinVal); setPinVal(""); setPinPhase("confirm");
+    } else {
+      if (pinVal !== pinFirst) {
+        setAuthError("Las claves no coinciden, intenta de nuevo");
+        setPinVal(""); setPinPhase("enter");
+        return;
+      }
+      localStorage.setItem('qori-pin', pinVal);
+      setAuthPhase("app");
+    }
+  };
+
   const typeLabel = (t) => t === "manual" ? "Lo pago yo" : t === "debito" ? "Debito automatico" : "Descuento sueldo";
   const typeBg = (t) => t === "manual" ? C.orange : t === "debito" ? C.purple : C.green;
 
@@ -974,6 +1079,12 @@ export default function App() {
           </div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Tus datos se guardan automáticamente en la nube. Aunque borres el historial del navegador, tus datos están seguros.</div>
         </div>
+        {/* Cuenta */}
+        <div style={{ ...cardStyle, padding: 20, marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Cuenta</div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>{authUser?.email}</div>
+          <button onClick={signOut} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#fff", color: C.orange, border: "2px solid " + C.orange, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cerrar sesión</button>
+        </div>
         <button onClick={() => setConfirm({ message: "¿Resetear todos los datos? Esta acción no se puede deshacer.", onConfirm: () => { setData(initData()); showToast("Datos reseteados"); }})} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.orange, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 24 }}>Resetear datos</button>
       </div>
     </div>
@@ -1041,19 +1152,125 @@ export default function App() {
     );
   };
 
+  const obSlides = [
+    { bg: C.purple, icon: <MicIcon size={80} color="rgba(255,255,255,0.9)" />, title: "Registra al instante", desc: "Di el monto y listo. Qori entiende tu voz y registra tus gastos en segundos." },
+    { bg: C.green, icon: <WalletIcon size={80} color="rgba(255,255,255,0.9)" />, title: "Controla tu mes", desc: "Ve tus gastos fijos, ingresos y balance de un vistazo. Sin complicaciones." },
+    { bg: C.orange, icon: <span style={{ fontSize: 80 }}>☁️</span>, title: "Tu data, segura", desc: "Sincronización automática en la nube. Cambia de dispositivo sin perder nada." },
+  ];
+  const slide = obSlides[obSlide];
+
+  const sharedStyle = `
+    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap');
+    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+    @keyframes slideUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    input:focus { border-color: #6C5CE7 !important; outline: none; }
+    input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    input[type="number"] { -moz-appearance: textfield; }
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; margin: 0; }
+    ::-webkit-scrollbar { width: 0; }
+  `;
+
+  if (authPhase === "loading") return (
+    <div style={{ fontFamily: "'Syne', system-ui, sans-serif", position: "fixed", inset: 0, background: C.purple, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 20 }}>
+      <style>{sharedStyle}</style>
+      <div style={{ fontSize: 48, fontWeight: 900, color: "#fff", letterSpacing: -2 }}>Qori<span style={{ color: "rgba(255,255,255,0.45)" }}>.</span></div>
+      <div style={{ width: 28, height: 28, border: "3px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+    </div>
+  );
+
+  if (authPhase === "onboarding") return (
+    <div style={{ fontFamily: "'Syne', system-ui, sans-serif", position: "fixed", inset: 0, background: slide.bg, display: "flex", flexDirection: "column", transition: "background 0.4s ease" }}>
+      <style>{sharedStyle}</style>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 40px 20px", gap: 24 }}>
+        <div style={{ fontSize: 32, fontWeight: 900, color: "rgba(255,255,255,0.55)", letterSpacing: -1, alignSelf: "flex-start" }}>Qori.</div>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>{slide.icon}</div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 34, fontWeight: 900, color: "#fff", marginBottom: 12, lineHeight: 1.2 }}>{slide.title}</div>
+          <div style={{ fontSize: 16, color: "rgba(255,255,255,0.75)", lineHeight: 1.6 }}>{slide.desc}</div>
+        </div>
+      </div>
+      <div style={{ padding: "0 32px 52px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 4 }}>
+          {[0,1,2].map(i => <div key={i} style={{ width: i === obSlide ? 24 : 8, height: 8, borderRadius: 4, background: i === obSlide ? "#fff" : "rgba(255,255,255,0.35)", transition: "all 0.3s" }} />)}
+        </div>
+        {obSlide < 2 ? (
+          <button onClick={() => setObSlide(obSlide + 1)} style={{ width: "100%", padding: 18, borderRadius: 16, background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.4)", color: "#fff", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Siguiente</button>
+        ) : (
+          <button onClick={() => { localStorage.setItem('qori-onboarding','1'); setAuthPhase("auth"); }} style={{ width: "100%", padding: 18, borderRadius: 16, background: "#fff", border: "none", color: C.purple, fontSize: 16, fontWeight: 900, cursor: "pointer", fontFamily: "inherit" }}>Comenzar →</button>
+        )}
+        <button onClick={() => { localStorage.setItem('qori-onboarding','1'); setAuthPhase("auth"); }} style={{ padding: "10px 0", background: "transparent", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Omitir</button>
+      </div>
+    </div>
+  );
+
+  if (authPhase === "auth") return (
+    <div style={{ fontFamily: "'Syne', system-ui, sans-serif", position: "fixed", inset: 0, background: C.beige, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+      <style>{sharedStyle}</style>
+      <div style={{ padding: "72px 32px 24px", textAlign: "center" }}>
+        <div style={{ fontSize: 54, fontWeight: 900, color: C.purple, letterSpacing: -2, marginBottom: 6 }}>Qori<span style={{ color: C.orange }}>.</span></div>
+        <div style={{ fontSize: 15, color: C.muted }}>Controla tus gastos, sin complicaciones.</div>
+      </div>
+      <div style={{ padding: "0 28px", flex: 1 }}>
+        <div style={{ display: "flex", background: "#E8E4DA", borderRadius: 12, padding: 4, marginBottom: 24 }}>
+          {["login","register"].map(t => (
+            <button key={t} onClick={() => { setAuthTab(t); setAuthError(""); }} style={{ flex: 1, padding: "10px 0", borderRadius: 9, background: authTab === t ? "#fff" : "transparent", border: "none", fontSize: 14, fontWeight: 700, color: authTab === t ? C.black : C.muted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s" }}>{t === "login" ? "Iniciar sesión" : "Registrarme"}</button>
+          ))}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <input type="email" placeholder="Correo electrónico" value={authEmail} onChange={e => { setAuthEmail(e.target.value); setAuthError(""); }} style={{ ...inputStyle, color: C.black }} />
+          <input type="password" placeholder="Contraseña" value={authPass} onChange={e => { setAuthPass(e.target.value); setAuthError(""); }} onKeyDown={e => e.key === "Enter" && (authTab === "login" ? signIn() : signUp())} style={{ ...inputStyle, color: C.black }} />
+          {authTab === "register" && <input type="tel" placeholder="Celular (opcional)" value={authPhone} onChange={e => setAuthPhone(e.target.value)} style={{ ...inputStyle, color: C.black }} />}
+          {authError && <div style={{ fontSize: 13, fontWeight: 600, textAlign: "center", color: authError.startsWith("✓") ? C.green : C.orange }}>{authError}</div>}
+          <button onClick={authTab === "login" ? signIn : signUp} disabled={authLoading} style={{ width: "100%", padding: 16, borderRadius: 14, background: C.purple, color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: authLoading ? 0.7 : 1, marginTop: 4 }}>
+            {authLoading ? "Cargando..." : authTab === "login" ? "Entrar" : "Crear cuenta"}
+          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "2px 0" }}>
+            <div style={{ flex: 1, height: 1, background: "#D4D0C8" }} /><span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>o</span><div style={{ flex: 1, height: 1, background: "#D4D0C8" }} />
+          </div>
+          <button onClick={signInWithGoogle} disabled={authLoading} style={{ width: "100%", padding: 15, borderRadius: 14, background: "#fff", color: C.black, border: "2px solid #D4D0C8", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            Continuar con Google
+          </button>
+        </div>
+      </div>
+      <div style={{ height: 40 }} />
+    </div>
+  );
+
+  if (authPhase === "pin-setup") return (
+    <div style={{ fontFamily: "'Syne', system-ui, sans-serif", position: "fixed", inset: 0, background: C.beige, display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <style>{sharedStyle}</style>
+      <div style={{ padding: "72px 32px 32px", textAlign: "center", width: "100%" }}>
+        <div style={{ fontSize: 28, fontWeight: 900, color: C.black, marginBottom: 8 }}>{pinPhase === "enter" ? "Crea tu clave rápida" : "Confirma tu clave"}</div>
+        <div style={{ fontSize: 15, color: C.muted }}>{pinPhase === "enter" ? "Elige tu PIN de acceso rápido" : "Vuelve a ingresar el PIN"}</div>
+      </div>
+      {pinPhase === "enter" && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 32 }}>
+          {[4,6].map(n => <button key={n} onClick={() => { setPinDigits(n); setPinVal(""); }} style={{ padding: "8px 22px", borderRadius: 10, border: "2px solid", borderColor: pinDigits === n ? C.purple : "#D4D0C8", background: pinDigits === n ? C.purpleSoft : "#fff", color: pinDigits === n ? C.purple : C.muted, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{n} dígitos</button>)}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 14, marginBottom: 32 }}>
+        {Array.from({ length: pinDigits }).map((_, i) => <div key={i} style={{ width: 18, height: 18, borderRadius: "50%", background: i < pinVal.length ? C.purple : "transparent", border: "2.5px solid", borderColor: i < pinVal.length ? C.purple : "#C8C4BC", transition: "all 0.15s" }} />)}
+      </div>
+      {authError && <div style={{ fontSize: 13, color: C.orange, fontWeight: 600, marginBottom: 16 }}>{authError}</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, width: "100%", maxWidth: 300, padding: "0 20px" }}>
+        {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k, i) => k === "" ? <div key={i} /> : (
+          <button key={i} onClick={() => {
+            if (k === "⌫") { setPinVal(v => v.slice(0,-1)); return; }
+            const next = pinVal + String(k);
+            if (next.length <= pinDigits) { setPinVal(next); if (next.length === pinDigits) setTimeout(() => savePinSetup(), 200); }
+          }} style={{ aspectRatio: "1", borderRadius: 16, background: k === "⌫" ? "transparent" : "#fff", border: k === "⌫" ? "none" : "2px solid #E0DCD4", fontSize: k === "⌫" ? 26 : 22, fontWeight: 700, color: C.black, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>{k}</button>
+        ))}
+      </div>
+      <button onClick={() => setAuthPhase("app")} style={{ marginTop: 28, padding: "10px 24px", background: "transparent", border: "none", color: C.muted, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Omitir por ahora</button>
+    </div>
+  );
+
   return (
     <div style={{ fontFamily: "'Syne', system-ui, sans-serif", maxWidth: 430, margin: "0 auto", position: "relative", background: tab === "home" ? "#6C5CE7" : C.beige }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap');
-        @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-        @keyframes slideUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-        input:focus { border-color: #6C5CE7 !important; outline: none; }
-        input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
-        input[type="number"] { -moz-appearance: textfield; }
-        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; margin: 0; }
-        ::-webkit-scrollbar { width: 0; }
-      `}</style>
-      {toast && <div style={{ position: "fixed", top: 60, left: "50%", transform: "translateX(-50%)", zIndex: 500, background: C.black, color: "#fff", padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600, animation: "slideUp 0.3s ease", boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}>{toast}</div>}
+      <style>{sharedStyle}</style>
+      {toast && <div style={{ position: "fixed", top: 60, left: "50%", transform: "translateX(-50%)", zIndex: 500, background: C.black, color: "#fff", padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600, animation: "slideUp 0.3s ease", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>{toast}</div>}
       {scanResults && (
         <div style={{ position: "fixed", inset: 0, zIndex: 400, display: "flex", flexDirection: "column", background: C.beige, overflow: "auto" }}>
           <div style={{ padding: "48px 24px 16px" }}>
