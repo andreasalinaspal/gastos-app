@@ -50,7 +50,7 @@ function initData() {
   };
 }
 
-const C = { green: "#1B6B3A", greenLight: "#2D9F5B", orange: "#E8561E", orangeLight: "#FF7A45", purple: "#7B2FBE", purpleLight: "#9B5DD6", purpleSoft: "#E8DEFF", beige: "#F5F2EC", black: "#141218", muted: "#8A8A8E" };
+const C = { green: "#1B6B3A", greenLight: "#2D9F5B", orange: "#E8561E", orangeLight: "#FF7A45", purple: "#6C5CE7", purpleLight: "#8B7FF0", purpleSoft: "#E0DBFF", beige: "#F5F2EC", black: "#141218", muted: "#8A8A8E" };
 const inputStyle = { width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #D4D0C8", fontSize: 15, fontFamily: "inherit", background: "#FAFAF5", boxSizing: "border-box" };
 const cardStyle = { background: "#fff", borderRadius: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" };
 
@@ -472,7 +472,7 @@ export default function App() {
   const typeBg = (t) => t === "manual" ? C.orange : t === "debito" ? C.purple : C.green;
 
   const homeScreen = (
-    <div style={{ flex: 1, background: "linear-gradient(160deg, #7B2FBE 0%, #5A1E96 100%)", minHeight: "100vh", display: "flex", flexDirection: "column", paddingBottom: 80 }}>
+    <div style={{ flex: 1, background: "linear-gradient(160deg, #6C5CE7 0%, #5A4BD1 100%)", minHeight: "100vh", display: "flex", flexDirection: "column", paddingBottom: 80 }}>
       <div style={{ padding: "48px 28px 0" }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, marginBottom: 6 }}>{getToday()}</div>
         <h1 style={{ fontSize: 42, fontWeight: 900, color: "#fff", margin: "0 0 4px", fontStyle: "italic", letterSpacing: -1 }}>Hola, {data.userName}.</h1>
@@ -895,12 +895,12 @@ export default function App() {
   const TABS = [{ id: "home", label: "Inicio", Icon: HomeIcon }, { id: "month", label: "Mi Mes", Icon: CalIcon }, { id: "fixed", label: "Fijos", Icon: PinIcon }, { id: "income", label: "Ingresos", Icon: WalletIcon }, { id: "config", label: "Config", Icon: GearIcon }];
 
   return (
-    <div style={{ fontFamily: "'Syne', system-ui, sans-serif", maxWidth: 430, margin: "0 auto", position: "relative", background: tab === "home" ? "#7B2FBE" : C.beige }}>
+    <div style={{ fontFamily: "'Syne', system-ui, sans-serif", maxWidth: 430, margin: "0 auto", position: "relative", background: tab === "home" ? "#6C5CE7" : C.beige }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap');
         @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
         @keyframes slideUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-        input:focus { border-color: #7B2FBE !important; outline: none; }
+        input:focus { border-color: #6C5CE7 !important; outline: none; }
         input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
         input[type="number"] { -moz-appearance: textfield; }
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; margin: 0; }
@@ -948,7 +948,7 @@ export default function App() {
       {tab === "fixed" && FijosScreen}
       {tab === "income" && IngresosScreen}
       {tab === "config" && configScreen}
-      <nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: tab === "home" ? "rgba(90,30,150,0.95)" : "#fff", borderTop: tab === "home" ? "1px solid rgba(255,255,255,0.12)" : "1px solid #E0DCD4", display: "flex", justifyContent: "space-around", padding: "8px 0 14px", zIndex: 100, backdropFilter: "blur(12px)" }}>
+      <nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: tab === "home" ? "rgba(90,75,209,0.95)" : "#fff", borderTop: tab === "home" ? "1px solid rgba(255,255,255,0.12)" : "1px solid #E0DCD4", display: "flex", justifyContent: "space-around", padding: "8px 0 14px", zIndex: 100, backdropFilter: "blur(12px)" }}>
         {TABS.map(t => { const active = tab === t.id; const color = tab === "home" ? (active ? "#fff" : "rgba(255,255,255,0.45)") : (active ? C.purple : C.muted); return (
           <button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "none", border: "none", cursor: "pointer", padding: "4px 10px", color, fontSize: 10, fontWeight: active ? 700 : 500, fontFamily: "inherit", letterSpacing: 0.3 }}>
             <t.Icon size={22} color={color} />{t.label}
