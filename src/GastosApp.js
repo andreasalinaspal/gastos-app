@@ -158,12 +158,12 @@ export default function App() {
       try {
         const imported = JSON.parse(ev.target.result);
         if (imported && imported.expenses) {
-          setConfirm({ message: "Restaurar backup? Esto reemplaza todos tus datos actuales.", onConfirm: () => {
+          setConfirm({ message: "¿Restaurar backup? Esto reemplaza todos tus datos actuales.", onConfirm: () => {
             setData(imported);
             showToast("Datos restaurados");
           }});
         } else {
-          showToast("Archivo invalido");
+          showToast("Archivo inválido");
         }
       } catch (err) {
         showToast("Error al leer el archivo");
@@ -254,12 +254,12 @@ export default function App() {
   const addExpense = (amt, desc) => {
     if (!amt || amt <= 0) return;
     const a = Number(amt); const d = desc || "Gasto diario";
-    setConfirm({ message: `Registrar: ${d} ${fmt(a)}?`, onConfirm: () => {
+    setConfirm({ message: `¿Registrar: ${d} ${fmt(a)}?`, onConfirm: () => {
       setData(p => ({ ...p, expenses: [...p.expenses, { id: genId(), amount: a, description: d, date: new Date().toISOString(), month: curMonth }] }));
       showToast(d + " " + fmt(a) + " registrado");
     }});
   };
-  const deleteExpense = (id) => setConfirm({ message: "Eliminar este gasto?", onConfirm: () => { setData(p => ({ ...p, expenses: p.expenses.filter(e => e.id !== id) })); showToast("Gasto eliminado"); }});
+  const deleteExpense = (id) => setConfirm({ message: "¿Eliminar este gasto?", onConfirm: () => { setData(p => ({ ...p, expenses: p.expenses.filter(e => e.id !== id) })); showToast("Gasto eliminado"); }});
   const saveExpenseEdit = (id) => {
     setData(p => ({ ...p, expenses: p.expenses.map(e => {
       if (e.id !== id) return e;
@@ -275,22 +275,22 @@ export default function App() {
   const addExtra = () => {
     if (!newExtraAmt || !newExtraName) return;
     const n = newExtraName; const a = Number(newExtraAmt);
-    setConfirm({ message: `Agregar ingreso "${n}" por ${fmt(a)}?`, onConfirm: () => {
+    setConfirm({ message: `¿Agregar ingreso "${n}" por ${fmt(a)}?`, onConfirm: () => {
       setData(p => ({ ...p, incomeExtra: [...p.incomeExtra, { id: genId(), name: n, amount: a, month: curMonth }] }));
       setNewExtraName(""); setNewExtraAmt(""); setShowAddExtra(false);
       showToast("Ingreso extra agregado");
     }});
   };
-  const deleteExtra = (id) => setConfirm({ message: "Eliminar este ingreso?", onConfirm: () => { setData(p => ({ ...p, incomeExtra: p.incomeExtra.filter(i => i.id !== id) })); showToast("Ingreso eliminado"); }});
-  const deleteFixed = (id) => setConfirm({ message: "Eliminar este gasto fijo?", onConfirm: () => { setData(p => ({ ...p, fixed: p.fixed.filter(f => f.id !== id) })); showToast("Gasto fijo eliminado"); }});
+  const deleteExtra = (id) => setConfirm({ message: "¿Eliminar este ingreso?", onConfirm: () => { setData(p => ({ ...p, incomeExtra: p.incomeExtra.filter(i => i.id !== id) })); showToast("Ingreso eliminado"); }});
+  const deleteFixed = (id) => setConfirm({ message: "¿Eliminar este gasto fijo?", onConfirm: () => { setData(p => ({ ...p, fixed: p.fixed.filter(f => f.id !== id) })); showToast("Gasto fijo eliminado"); }});
   const saveFixedExpName = (id) => { setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, name: editFixedExpNameVal } : f) })); setEditFixedExpName(null); setEditFixedExpNameVal(""); };
   const saveFixedExpType = (id, type) => { setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, type } : f) })); setEditFixedExpType(null); };
-  const deleteFixedIncome = (id) => setConfirm({ message: "Eliminar este ingreso fijo?", onConfirm: () => { setData(p => ({ ...p, incomeFixed: p.incomeFixed.filter(i => i.id !== id) })); showToast("Ingreso fijo eliminado"); }});
+  const deleteFixedIncome = (id) => setConfirm({ message: "¿Eliminar este ingreso fijo?", onConfirm: () => { setData(p => ({ ...p, incomeFixed: p.incomeFixed.filter(i => i.id !== id) })); showToast("Ingreso fijo eliminado"); }});
   const saveFixedIncomeName = (id) => { setData(p => ({ ...p, incomeFixed: p.incomeFixed.map(i => i.id === id ? { ...i, name: editFixedIncomeNameVal } : i) })); setEditFixedIncomeName(null); setEditFixedIncomeNameVal(""); };
   const addFixedIncome = () => {
     if (!newFixedIncomeName.trim()) return;
     const n = newFixedIncomeName.trim();
-    setConfirm({ message: `Agregar "${n}" como ingreso fijo?`, onConfirm: () => {
+    setConfirm({ message: `¿Agregar "${n}" como ingreso fijo?`, onConfirm: () => {
       setData(p => ({ ...p, incomeFixed: [...p.incomeFixed, { id: genId(), name: n, amount: 0, month: curMonth }] }));
       setNewFixedIncomeName(""); setShowAddFixedIncome(false);
       showToast("Ingreso fijo agregado");
@@ -306,7 +306,7 @@ export default function App() {
     setCatEditId(null); setCatEditEmoji(""); setCatEditName("");
   };
   const deleteCat = (type, id) => {
-    setConfirm({ message: "Eliminar esta categoría?", onConfirm: () => {
+    setConfirm({ message: "¿Eliminar esta categoría?", onConfirm: () => {
       setData(p => ({ ...p, categories: { ...p.categories, [type]: p.categories[type].filter(c => c.id !== id) } }));
       showToast("Categoría eliminada");
     }});
@@ -390,7 +390,7 @@ export default function App() {
     if (!recording) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-        showToast("Tu navegador no soporta grabacion de voz. Usa el ingreso manual.");
+        showToast("Tu navegador no soporta grabación de voz. Usa el ingreso manual.");
         return;
       }
       setRecording(true);
@@ -484,7 +484,7 @@ export default function App() {
         if (amount > 0) {
           addExpense(amount, desc || "Gasto por voz");
         } else {
-          showToast(`No entendi el monto. Dijiste: "${transcript}"`);
+          showToast(`No entendí el monto. Dijiste: "${transcript}"`);
         }
         setRecording(false);
       };
@@ -492,11 +492,11 @@ export default function App() {
       recognition.onerror = (event) => {
         gotError = true;
         if (event.error === "no-speech") {
-          showToast("No se detecto voz, intenta de nuevo");
+          showToast("No se detectó voz, intenta de nuevo");
         } else if (event.error === "not-allowed") {
-          showToast("Permiso de microfono denegado. Activa el microfono en ajustes.");
+          showToast("Permiso de micrófono denegado. Activa el micrófono en ajustes.");
         } else {
-          showToast("Error de grabacion: " + event.error);
+          showToast("Error de grabación: " + event.error);
         }
         setRecording(false);
       };
@@ -504,7 +504,7 @@ export default function App() {
       recognition.onend = () => {
         // Only show "no voice" if neither a result nor an error was already handled
         if (!gotResult && !gotError) {
-          showToast("No se detecto voz, intenta de nuevo");
+          showToast("No se detectó voz, intenta de nuevo");
         }
         setRecording(false);
       };
@@ -512,7 +512,7 @@ export default function App() {
       try {
         recognition.start();
       } catch (e) {
-        showToast("Error al iniciar grabacion");
+        showToast("Error al iniciar grabación");
         setRecording(false);
       }
     } else {
@@ -533,7 +533,7 @@ export default function App() {
       <div style={{ padding: "48px 28px 0" }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, marginBottom: 6 }}>{getToday()}</div>
         <h1 style={{ fontSize: 42, fontWeight: 900, color: "#fff", margin: "0 0 4px", fontStyle: "italic", letterSpacing: -1 }}>Hola, {data.userName}.</h1>
-        <div style={{ fontSize: 20, color: "rgba(255,255,255,0.8)", fontWeight: 400 }}>Que compraste ahora?</div>
+        <div style={{ fontSize: 20, color: "rgba(255,255,255,0.8)", fontWeight: 400 }}>¿Qué compraste hoy?</div>
       </div>
       <div style={{ textAlign: "center", padding: "24px 0 8px" }}>
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 1.5, marginBottom: 4 }}>HOY GASTASTE</div>
@@ -593,7 +593,7 @@ export default function App() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); setEditExpDate(new Date(e.date).toISOString().split("T")[0]); }}>
                     <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>{e.description}</div>
-                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Toca para editar</div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Toca para editar · eliminar</div>
                   </div>
                   <span style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginRight: 10 }}>-{fmt(e.amount)}</span>
                   <button onClick={() => deleteExpense(e.id)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: 8, cursor: "pointer" }}><TrashIcon size={16} color="rgba(255,255,255,0.7)" /></button>
@@ -642,7 +642,7 @@ export default function App() {
               <div style={{ background: isNeg ? C.orange : "linear-gradient(135deg, #1B6B3A 0%, #2D9F5B 100%)", borderRadius: 20, padding: "28px 24px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Balance del mes</div>
                 <div style={{ fontSize: 46, fontWeight: 900, color: "#fff", letterSpacing: -1 }}>{fmt(Math.abs(d.balance))}</div>
-                {isNeg && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.65)", marginTop: 4 }}>estas en rojo</div>}
+                {isNeg && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.65)", marginTop: 4 }}>estás en rojo</div>}
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, padding: "0 24px", marginBottom: 20 }}>
@@ -782,7 +782,7 @@ export default function App() {
                 <button onClick={() => {
                   if (!newFixedName.trim()) return;
                   const n = newFixedName.trim(); const t = newFixedType;
-                  setConfirm({ message: `Agregar "${n}" como gasto fijo?`, onConfirm: () => {
+                  setConfirm({ message: `¿Agregar "${n}" como gasto fijo?`, onConfirm: () => {
                     setData(p => ({ ...p, fixed: [...p.fixed, { id: genId(), name: n, type: t, amount: 0, paid: false, month: curMonth }] }));
                     setNewFixedName(""); setNewFixedType("manual"); setShowAddFixed(false);
                     showToast("Gasto fijo agregado");
@@ -833,7 +833,7 @@ export default function App() {
                   ) : (
                     <div onClick={() => { setEditFixedIncomeName(i.id); setEditFixedIncomeNameVal(i.name); }} style={{ cursor: "pointer" }}>
                       <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{i.name}</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>Mensual fijo - toca para editar nombre</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>Mensual fijo · toca para editar</div>
                     </div>
                   )}
                 </div>
@@ -880,7 +880,7 @@ export default function App() {
                   <div style={{ width: 38, height: 38, borderRadius: 10, background: "#FFE8D6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: C.orange, marginRight: 14, flexShrink: 0 }}>{i.name.charAt(0).toUpperCase()}</div>
                   <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExtraId(i.id); setEditExtraName(i.name); setEditExtraAmt(String(i.amount)); }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{i.name}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>Extra - toca para editar</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>Extra · toca para editar</div>
                   </div>
                   <span style={{ fontSize: 17, fontWeight: 800, color: C.green, marginRight: 8 }}>{fmt(i.amount)}</span>
                   <button onClick={() => deleteExtra(i.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><TrashIcon /></button>
@@ -961,7 +961,7 @@ export default function App() {
           <button onClick={exportData} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.green, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 }}>Exportar datos</button>
           <input ref={backupInputRef} type="file" accept=".json" onChange={importData} style={{ display: "none" }} />
           <button onClick={() => backupInputRef.current?.click()} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#fff", color: C.black, border: "2px solid #D4D0C8", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Importar backup</button>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Exporta tus datos para tener un respaldo. Si pierdes tus datos, podes restaurarlos importando el archivo.</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Exporta tus datos para tener un respaldo. Si pierdes tus datos, puedes restaurarlos importando el archivo.</div>
         </div>
         {/* Nube */}
         <div style={{ ...cardStyle, padding: 20, marginBottom: 12 }}>
@@ -969,12 +969,12 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 10, height: 10, borderRadius: "50%", background: cloudStatus === "synced" ? C.green : C.orange }} />
             <span style={{ fontSize: 14, color: C.black, fontWeight: 600 }}>
-              {cloudStatus === "synced" ? "Sincronizado con la nube" : cloudStatus === "loading" ? "Conectando..." : "Sin conexion a la nube"}
+              {cloudStatus === "synced" ? "Sincronizado con la nube" : cloudStatus === "loading" ? "Conectando..." : "Sin conexión a la nube"}
             </span>
           </div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Tus datos se guardan automaticamente en la nube. Aunque borres el historial del navegador, tus datos estan seguros.</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Tus datos se guardan automáticamente en la nube. Aunque borres el historial del navegador, tus datos están seguros.</div>
         </div>
-        <button onClick={() => setConfirm({ message: "Resetear todos los datos? Esta accion no se puede deshacer.", onConfirm: () => { setData(initData()); showToast("Datos reseteados"); }})} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.orange, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 24 }}>Resetear datos</button>
+        <button onClick={() => setConfirm({ message: "¿Resetear todos los datos? Esta acción no se puede deshacer.", onConfirm: () => { setData(initData()); showToast("Datos reseteados"); }})} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.orange, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 24 }}>Resetear datos</button>
       </div>
     </div>
   );
