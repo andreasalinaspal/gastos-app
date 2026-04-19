@@ -153,6 +153,13 @@ export default function App() {
   const [pinFirst, setPinFirst] = useState("");
   const [pinPhase, setPinPhase] = useState("enter");
 
+  // Add expense UI state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showCatPicker, setShowCatPicker] = useState(false);
+  const [pendingExpAmt, setPendingExpAmt] = useState("");
+  const [pendingExpDesc, setPendingExpDesc] = useState("");
+  const [pendingExpCat, setPendingExpCat] = useState(null);
+
   const exportData = () => {
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: "application/json" });
@@ -539,7 +546,7 @@ export default function App() {
         if (desc) desc = desc.charAt(0).toUpperCase() + desc.slice(1);
 
         if (amount > 0) {
-          addExpense(amount, desc || "Gasto por voz");
+          openCatPicker(amount, desc || "Gasto por voz");
         } else {
           showToast(`No entendí el monto. Dijiste: "${transcript}"`);
         }
@@ -630,86 +637,111 @@ export default function App() {
     }
   };
 
+  const registerExpense = (amt, desc, cat) => {
+    const a = Number(amt); if (!a || a <= 0) return;
+    const d = desc || "Gasto";
+    setData(p => ({ ...p, expenses: [...p.expenses, { id: genId(), amount: a, description: d, date: new Date().toISOString(), month: curMonth, category: cat || null }] }));
+    showToast((cat ? cat.emoji + " " : "") + d + " " + fmtWith(a, data.currency) + " registrado");
+    setShowCatPicker(false); setShowAddModal(false);
+    setPendingExpAmt(""); setPendingExpDesc(""); setPendingExpCat(null);
+    setManAmt(""); setManDesc("");
+  };
+
+  const openCatPicker = (amt, desc) => {
+    setPendingExpAmt(String(amt)); setPendingExpDesc(desc || "Gasto");
+    setPendingExpCat(null); setShowAddModal(false); setShowCatPicker(true);
+  };
+
   const typeLabel = (t) => t === "manual" ? "Lo pago yo" : t === "debito" ? "Debito automatico" : "Descuento sueldo";
   const typeBg = (t) => t === "manual" ? C.orange : t === "debito" ? C.purple : C.green;
 
-  const homeScreen = (
-    <div style={{ flex: 1, background: "linear-gradient(160deg, #6C5CE7 0%, #5A4BD1 100%)", minHeight: "100vh", display: "flex", flexDirection: "column", paddingBottom: 80 }}>
-      <div style={{ padding: "48px 28px 0" }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, marginBottom: 6 }}>{getToday()}</div>
-        <h1 style={{ fontSize: 42, fontWeight: 900, color: "#fff", margin: "0 0 4px", fontStyle: "italic", letterSpacing: -1 }}>Hola, {data.userName}.</h1>
-        <div style={{ fontSize: 20, color: "rgba(255,255,255,0.8)", fontWeight: 400 }}>¿Qué compraste hoy?</div>
-      </div>
-      <div style={{ textAlign: "center", padding: "24px 0 8px" }}>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 1.5, marginBottom: 4 }}>HOY GASTASTE</div>
-        <div style={{ fontSize: 44, fontWeight: 900, color: "#fff" }}>{fmt(todayTotal)}</div>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "16px 0 20px", gap: 14 }}>
-        <button onClick={handleRecord} style={{ width: 140, height: 140, borderRadius: "50%", background: "rgba(255,255,255,0.12)", border: "2px solid rgba(255,255,255,0.25)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.3s", animation: recording ? "pulse 1.4s ease-in-out infinite" : "none" }}>
-          {recording ? <StopIcon size={44} /> : <MicIcon size={52} />}
-        </button>
-        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.65)", fontWeight: 500 }}>{recording ? "Grabando... " + recTime + "s" : "Toca para grabar"}</div>
-      </div>
-      <div style={{ padding: "0 28px 14px" }}>
-        <button onClick={() => setShowManual(!showManual)} style={{ width: "100%", padding: "14px", borderRadius: 28, background: "rgba(255,255,255,0.12)", border: "1.5px solid rgba(255,255,255,0.28)", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{showManual ? "Cancelar" : "Ingresar manualmente"}</button>
-      </div>
-      <div style={{ padding: "0 28px 14px" }}>
-        <input ref={fileInputRef} type="file" accept=".jpg,.jpeg,.png,.heic,.webp" onChange={(e) => { handleScanImage(e); setShowScanOptions(false); }} style={{ display: "none" }} />
-        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => { handleScanImage(e); setShowScanOptions(false); }} style={{ display: "none" }} />
-        <button onClick={() => setShowScanOptions(!showScanOptions)} disabled={scanLoading} style={{ width: "100%", padding: "14px", borderRadius: 28, background: "rgba(255,255,255,0.22)", border: "1.5px solid rgba(255,255,255,0.35)", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: scanLoading ? 0.6 : 1 }}>
-          <CameraIcon size={20} color="#fff" />
-          {scanLoading ? "Analizando imagen..." : "Subir captura de movimientos"}
-        </button>
-        {showScanOptions && !scanLoading && (
-          <div style={{ marginTop: 8, borderRadius: 16, overflow: "hidden", animation: "slideUp 0.2s ease" }}>
-            <button onClick={() => { cameraInputRef.current?.click(); }} style={{ width: "100%", padding: "14px 20px", background: "rgba(255,255,255,0.95)", border: "none", borderBottom: "1px solid #E0DCD4", fontSize: 15, fontWeight: 600, color: "#1A1A1A", cursor: "pointer", fontFamily: "inherit", textAlign: "left", display: "flex", alignItems: "center", gap: 12 }}>Tomar foto</button>
-            <button onClick={() => { fileInputRef.current?.click(); }} style={{ width: "100%", padding: "14px 20px", background: "rgba(255,255,255,0.95)", border: "none", fontSize: 15, fontWeight: 600, color: "#1A1A1A", cursor: "pointer", fontFamily: "inherit", textAlign: "left", display: "flex", alignItems: "center", gap: 12 }}>Elegir de galeria</button>
+  const homeScreen = (() => {
+    // Bar chart: top 5 categories this month
+    const monthExps = data.expenses.filter(e => e.month === curMonth);
+    const catMap = {};
+    monthExps.forEach(e => {
+      const key = e.category?.name || "Otros";
+      const emoji = e.category?.emoji || "📦";
+      if (!catMap[key]) catMap[key] = { name: key, emoji, amount: 0 };
+      catMap[key].amount += e.amount;
+    });
+    const topCats = Object.values(catMap).sort((a, b) => b.amount - a.amount).slice(0, 5);
+    const maxCat = topCats[0]?.amount || 1;
+
+    return (
+      <div style={{ flex: 1, background: "linear-gradient(160deg, #6C5CE7 0%, #5A4BD1 100%)", minHeight: "100vh", display: "flex", flexDirection: "column", paddingBottom: 88 }}>
+        {/* Header */}
+        <div style={{ padding: "52px 28px 0" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: 1.5, marginBottom: 6 }}>{getToday()}</div>
+          <h1 style={{ fontSize: 36, fontWeight: 900, color: "#fff", margin: 0, fontStyle: "italic", letterSpacing: -1 }}>Hola, {data.userName}.</h1>
+        </div>
+        {/* Today total */}
+        <div style={{ textAlign: "center", padding: "20px 0 8px" }}>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", fontWeight: 700, letterSpacing: 1.5, marginBottom: 4 }}>HOY GASTASTE</div>
+          <div style={{ fontSize: 48, fontWeight: 900, color: "#fff", letterSpacing: -2 }}>{fmt(todayTotal)}</div>
+        </div>
+        {/* Bar chart */}
+        {topCats.length > 0 ? (
+          <div style={{ padding: "8px 20px 0" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 150, padding: "0 4px" }}>
+              {topCats.map((cat, i) => {
+                const h = Math.max(Math.round((cat.amount / maxCat) * 120), 8);
+                return (
+                  <div key={cat.name} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.7)", whiteSpace: "nowrap" }}>{fmt(cat.amount)}</div>
+                    <div style={{ width: "100%", maxWidth: 44, height: h, background: i === 0 ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.25)", borderRadius: "8px 8px 4px 4px", transition: "height 0.4s ease" }} />
+                    <div style={{ fontSize: 20 }}>{cat.emoji}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: "24px 28px 0" }}>
+            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>Toca <strong style={{ color: "#fff" }}>+</strong> para registrar tu primer gasto</div>
           </div>
         )}
+        {/* Today's expenses */}
+        <div style={{ padding: "16px 20px 0", flex: 1 }}>
+          {todayExp.length > 0 && (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 1.5, marginBottom: 10 }}>HOY · {fmt(todayTotal)}</div>
+              {todayExp.map(e => (
+                <div key={e.id} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 14, padding: "12px 16px", marginBottom: 8 }}>
+                  {editExpId === e.id ? (
+                    <div>
+                      <input type="text" value={editExpDesc} onChange={ev => setEditExpDesc(ev.target.value)} placeholder="Descripción" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
+                      <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Fecha</div>
+                        <input type="date" value={editExpDate} onChange={ev => setEditExpDate(ev.target.value)} style={{ ...inputStyle, color: C.black, fontSize: 14, padding: "8px 12px" }} />
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => saveExpenseEdit(e.id)} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#fff", color: C.green, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
+                        <button onClick={() => { setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); setEditExpDate(""); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); setEditExpDate(new Date(e.date).toISOString().split("T")[0]); }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{e.description}</div>
+                        {e.category && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>{e.category.emoji} {e.category.name}</div>}
+                      </div>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginRight: 10 }}>-{fmt(e.amount)}</span>
+                      <button onClick={() => deleteExpense(e.id)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: 8, cursor: "pointer" }}><TrashIcon size={16} color="rgba(255,255,255,0.7)" /></button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+        {/* Hidden file inputs for scan */}
+        <input ref={fileInputRef} type="file" accept=".jpg,.jpeg,.png,.heic,.webp" onChange={(e) => { handleScanImage(e); }} style={{ display: "none" }} />
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => { handleScanImage(e); }} style={{ display: "none" }} />
       </div>
-      {showManual && (
-        <div style={{ padding: "0 28px 14px", animation: "slideUp 0.25s ease" }}>
-          <div style={{ background: "rgba(255,255,255,0.95)", borderRadius: 16, padding: 20 }}>
-            <input type="number" placeholder="Monto" value={manAmt} onChange={e => setManAmt(e.target.value)} inputMode="decimal" style={{ ...inputStyle, color: C.black, marginBottom: 10 }} />
-            <input type="text" placeholder="Descripcion (opcional)" value={manDesc} onChange={e => setManDesc(e.target.value)} style={{ ...inputStyle, color: C.black, marginBottom: 14 }} />
-            <button onClick={handleManual} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.black, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Registrar</button>
-          </div>
-        </div>
-      )}
-
-      {todayExp.length > 0 && (
-        <div style={{ padding: "0 20px 24px" }}>
-          {todayExp.map(e => (
-            <div key={e.id} style={{ background: "rgba(255,255,255,0.12)", borderRadius: 12, padding: "12px 16px", marginBottom: 8 }}>
-              {editExpId === e.id ? (
-                <div>
-                  <input type="text" value={editExpDesc} onChange={ev => setEditExpDesc(ev.target.value)} placeholder="Descripcion" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
-                  <input type="number" value={editExpAmt} onChange={ev => setEditExpAmt(ev.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, color: C.black, marginBottom: 8, fontSize: 14, padding: "8px 12px" }} />
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>Fecha</div>
-                    <input type="date" value={editExpDate} onChange={ev => setEditExpDate(ev.target.value)} style={{ ...inputStyle, color: C.black, fontSize: 14, padding: "8px 12px" }} />
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => saveExpenseEdit(e.id)} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#fff", color: C.green, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
-                    <button onClick={() => { setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); setEditExpDate(""); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); setEditExpDate(new Date(e.date).toISOString().split("T")[0]); }}>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>{e.description}</div>
-                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Toca para editar · eliminar</div>
-                  </div>
-                  <span style={{ fontSize: 17, fontWeight: 800, color: "#fff", marginRight: 10 }}>-{fmt(e.amount)}</span>
-                  <button onClick={() => deleteExpense(e.id)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: 8, cursor: "pointer" }}><TrashIcon size={16} color="rgba(255,255,255,0.7)" /></button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+    );
+  })();
 
   const MiMesScreen = (() => {
     const mtabs = [{ label: "Este mes", val: 0 }, { label: getMonthShort(-1), val: -1 }, { label: getMonthShort(-2), val: -2 }, { label: "Historico", val: "hist" }];
@@ -1315,8 +1347,105 @@ export default function App() {
       <div style={subStyle("fijos")}>{FijosScreen}</div>
       <CatsSubScreen type="gastos" title="Cats. Gastos" />
       <CatsSubScreen type="ingresos" title="Cats. Ingresos" />
-      <nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: tab === "home" ? "rgba(90,75,209,0.95)" : "#fff", borderTop: tab === "home" ? "1px solid rgba(255,255,255,0.12)" : "1px solid #E0DCD4", display: "flex", justifyContent: "space-around", padding: "8px 0 14px", zIndex: 100, backdropFilter: "blur(12px)" }}>
-        {TABS.map(t => { const active = tab === t.id; const color = tab === "home" ? (active ? "#fff" : "rgba(255,255,255,0.45)") : (active ? C.purple : C.muted); return (
+      {/* Add expense modal (bottom sheet) */}
+      {showAddModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300 }} onClick={() => setShowAddModal(false)}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
+          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", padding: "16px 24px 40px", animation: "slideUp 0.3s cubic-bezier(0.34,1.2,0.64,1)" }}>
+            <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.black, marginBottom: 4 }}>¿Cómo registras?</div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Elige una opción para agregar un gasto</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* Voz */}
+              <button onClick={() => { setShowAddModal(false); handleRecord(); }} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 18px", borderRadius: 16, background: C.beige, border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                <div style={{ width: 46, height: 46, borderRadius: 13, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🎙️</div>
+                <div><div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>Grabar por voz</div><div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Di el monto y descripción</div></div>
+              </button>
+              {/* Manual */}
+              <button onClick={() => { setShowAddModal(false); setShowManual(true); }} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 18px", borderRadius: 16, background: C.beige, border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                <div style={{ width: 46, height: 46, borderRadius: 13, background: "#E8F5E9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>⌨️</div>
+                <div><div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>Escribir manualmente</div><div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Ingresa monto y descripción</div></div>
+              </button>
+              {/* Cámara */}
+              <button onClick={() => { setShowAddModal(false); setShowScanOptions(true); }} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 18px", borderRadius: 16, background: C.beige, border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                <div style={{ width: 46, height: 46, borderRadius: 13, background: "#FFF3E0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📷</div>
+                <div><div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>Subir captura</div><div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{scanLoading ? "Analizando imagen..." : "Escanea un comprobante con IA"}</div></div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Scan file inputs (triggered from add modal) */}
+      {showScanOptions && !showAddModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300 }} onClick={() => setShowScanOptions(false)}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
+          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", padding: "16px 24px 40px", animation: "slideUp 0.3s ease" }}>
+            <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.black, marginBottom: 16 }}>Seleccionar imagen</div>
+            <button onClick={() => { cameraInputRef.current?.click(); setShowScanOptions(false); }} style={{ width: "100%", padding: "15px 20px", background: C.beige, border: "none", borderRadius: 14, fontSize: 15, fontWeight: 600, color: C.black, cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginBottom: 10 }}>📸 Tomar foto</button>
+            <button onClick={() => { fileInputRef.current?.click(); setShowScanOptions(false); }} style={{ width: "100%", padding: "15px 20px", background: C.beige, border: "none", borderRadius: 14, fontSize: 15, fontWeight: 600, color: C.black, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>🖼️ Elegir de galería</button>
+          </div>
+        </div>
+      )}
+      {/* Manual entry modal */}
+      {showManual && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300 }} onClick={() => setShowManual(false)}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
+          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", padding: "16px 24px 40px", animation: "slideUp 0.3s ease" }}>
+            <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.black, marginBottom: 20 }}>Nuevo gasto</div>
+            <input type="number" placeholder="0.00" value={manAmt} onChange={e => setManAmt(e.target.value)} inputMode="decimal" autoFocus style={{ ...inputStyle, color: C.black, fontSize: 28, fontWeight: 800, textAlign: "center", marginBottom: 12, padding: "16px" }} />
+            <input type="text" placeholder="Descripción (ej: Almuerzo)" value={manDesc} onChange={e => setManDesc(e.target.value)} style={{ ...inputStyle, color: C.black, marginBottom: 16 }} />
+            <button onClick={() => { if (!manAmt || Number(manAmt) <= 0) return; openCatPicker(Number(manAmt), manDesc || "Gasto"); setShowManual(false); }} style={{ width: "100%", padding: 16, borderRadius: 14, background: C.purple, color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 }}>Elegir categoría →</button>
+            <button onClick={() => setShowManual(false)} style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+      {/* Voice recording indicator */}
+      {recording && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} onClick={() => { if (recognitionRef.current) { recognitionRef.current.onend = () => setRecording(false); try { recognitionRef.current.stop(); } catch(e) {} } setRecording(false); }} />
+          <div style={{ position: "relative", background: "#fff", borderRadius: 24, padding: "32px 28px", textAlign: "center", width: 280, animation: "slideUp 0.25s ease" }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.black, marginBottom: 4 }}>Grabando...</div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Ej: "Almuerzo cuarenta soles"</div>
+            <div style={{ width: 80, height: 80, borderRadius: "50%", background: C.purpleSoft, border: "3px solid " + C.purple, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34, margin: "0 auto 16px", animation: "pulse 1.4s ease-in-out infinite" }}>🎙️</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: C.purple, marginBottom: 20 }}>{recTime}s</div>
+            <button onClick={() => { if (recognitionRef.current) { recognitionRef.current.onend = () => setRecording(false); try { recognitionRef.current.stop(); } catch(e) {} } setRecording(false); }} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+      {/* Category picker modal */}
+      {showCatPicker && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 310 }} onClick={() => setShowCatPicker(false)}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
+          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", padding: "16px 24px 40px", maxHeight: "80vh", overflowY: "auto", animation: "slideUp 0.3s ease" }}>
+            <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.black, marginBottom: 4 }}>¿En qué categoría?</div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>{pendingExpDesc} · {fmtWith(pendingExpAmt, data.currency)}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
+              {(data.categories?.gastos || []).map(cat => (
+                <button key={cat.id} onClick={() => setPendingExpCat(pendingExpCat?.id === cat.id ? null : cat)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, border: "2px solid", borderColor: pendingExpCat?.id === cat.id ? C.purple : "#E0DCD4", background: pendingExpCat?.id === cat.id ? C.purpleSoft : "#fff", color: pendingExpCat?.id === cat.id ? C.purple : C.black, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+                  {cat.emoji} {cat.name}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, pendingExpCat)} disabled={!pendingExpCat} style={{ width: "100%", padding: 16, borderRadius: 14, background: pendingExpCat ? C.purple : "#D4D0C8", color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: pendingExpCat ? "pointer" : "default", fontFamily: "inherit", marginBottom: 10, transition: "background 0.2s" }}>Confirmar gasto</button>
+            <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, null)} style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Sin categoría</button>
+          </div>
+        </div>
+      )}
+      <nav style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: tab === "home" ? "rgba(90,75,209,0.96)" : "#fff", borderTop: tab === "home" ? "1px solid rgba(255,255,255,0.12)" : "1px solid #E0DCD4", display: "flex", justifyContent: "space-around", alignItems: "center", padding: "0 8px 14px", zIndex: 100, backdropFilter: "blur(12px)", height: 80 }}>
+        {[TABS[0], TABS[1]].map(t => { const active = tab === t.id; const color = tab === "home" ? (active ? "#fff" : "rgba(255,255,255,0.45)") : (active ? C.purple : C.muted); return (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "none", border: "none", cursor: "pointer", padding: "4px 10px", color, fontSize: 10, fontWeight: active ? 700 : 500, fontFamily: "inherit", letterSpacing: 0.3 }}>
+            <t.Icon size={22} color={color} />{t.label}
+          </button>
+        ); })}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: -20 }}>
+          <button onClick={() => setShowAddModal(true)} style={{ width: 58, height: 58, borderRadius: "50%", background: C.orange, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 24px rgba(232,86,30,0.45)", transition: "transform 0.15s" }}>
+            <PlusIcon size={26} color="#fff" />
+          </button>
+        </div>
+        {[TABS[2], TABS[3]].map(t => { const active = tab === t.id; const color = tab === "home" ? (active ? "#fff" : "rgba(255,255,255,0.45)") : (active ? C.purple : C.muted); return (
           <button key={t.id} onClick={() => setTab(t.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "none", border: "none", cursor: "pointer", padding: "4px 10px", color, fontSize: 10, fontWeight: active ? 700 : 500, fontFamily: "inherit", letterSpacing: 0.3 }}>
             <t.Icon size={22} color={color} />{t.label}
           </button>
