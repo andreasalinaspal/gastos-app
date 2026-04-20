@@ -116,6 +116,7 @@ export default function App() {
   const [newFixedName, setNewFixedName] = useState("");
   const [newFixedType, setNewFixedType] = useState("manual");
   const [editExtraId, setEditExtraId] = useState(null);
+  const [editExtraCategory, setEditExtraCategory] = useState(null);
   const [editExtraName, setEditExtraName] = useState("");
   const [editExtraAmt, setEditExtraAmt] = useState("");
   const [editFixedIncomeName, setEditFixedIncomeName] = useState(null);
@@ -437,8 +438,8 @@ export default function App() {
     }});
   };
   const saveExtraEdit = (id) => {
-    setData(p => ({ ...p, incomeExtra: p.incomeExtra.map(i => i.id === id ? { ...i, name: editExtraName || i.name, amount: Number(editExtraAmt) || i.amount } : i) }));
-    setEditExtraId(null); setEditExtraName(""); setEditExtraAmt("");
+    setData(p => ({ ...p, incomeExtra: p.incomeExtra.map(i => i.id === id ? { ...i, name: editExtraName || i.name, amount: Number(editExtraAmt) || i.amount, category: editExtraCategory !== undefined ? editExtraCategory : i.category } : i) }));
+    setEditExtraId(null); setEditExtraName(""); setEditExtraAmt(""); setEditExtraCategory(undefined);
   };
   const saveCatEdit = (type) => {
     if (!catEditName.trim()) return;
@@ -914,7 +915,10 @@ export default function App() {
                       <div style={{ width: 40, height: 40, borderRadius: "50%", background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: C.purple, marginRight: 14, flexShrink: 0 }}>{dt.getDate()}</div>
                       <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); setEditExpDate(new Date(e.date).toISOString().split("T")[0]); }}>
                         <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{e.description}</div>
-                        <div style={{ fontSize: 12, color: C.muted }}>{DAYS[dt.getDay()].toLowerCase().slice(0,3)}, {dt.getDate()} {MONTHS_SHORT[dt.getMonth()].toLowerCase()}.</div>
+                        <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+                          <span>{DAYS[dt.getDay()].toLowerCase().slice(0,3)}, {dt.getDate()} {MONTHS_SHORT[dt.getMonth()].toLowerCase()}.</span>
+                          {e.category && <span style={{ background: C.purpleSoft, color: C.purple, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>{e.category.emoji} {e.category.name}</span>}
+                        </div>
                       </div>
                       <div style={{ fontSize: 16, fontWeight: 700, color: C.orange, marginRight: 8 }}>-{fmt(e.amount)}</div>
                       <button onClick={() => deleteExpense(e.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><TrashIcon /></button>
@@ -1102,17 +1106,27 @@ export default function App() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <input type="text" value={editExtraName} onChange={e => setEditExtraName(e.target.value)} placeholder="Nombre" style={{ ...inputStyle, padding: "8px 12px", fontSize: 14, color: C.black }} />
                   <input type="number" value={editExtraAmt} onChange={e => setEditExtraAmt(e.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, padding: "8px 12px", fontSize: 14, color: C.black }} />
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Categoría</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {(data.categories?.ingresos || []).map(cat => { const cur = editExtraCategory !== undefined ? editExtraCategory : i.category; const sel = cur?.id === cat.id; return (
+                        <button key={cat.id} onClick={() => setEditExtraCategory(sel ? null : cat)} style={{ padding: "5px 10px", borderRadius: 20, border: `2px solid ${sel ? C.green : "#D4D0C8"}`, background: sel ? "#E8F5EE" : "#fff", color: sel ? C.green : C.muted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
+                      );})}
+                    </div>
+                  </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => saveExtraEdit(i.id)} style={{ flex: 1, padding: 10, borderRadius: 10, background: C.green, color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
-                    <button onClick={() => { setEditExtraId(null); setEditExtraName(""); setEditExtraAmt(""); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#E0DCD4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                    <button onClick={() => { setEditExtraId(null); setEditExtraName(""); setEditExtraAmt(""); setEditExtraCategory(undefined); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#E0DCD4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
                   </div>
                 </div>
               ) : (
                 <div style={{ display: "flex", alignItems: "center" }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: "#FFE8D6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: C.orange, marginRight: 14, flexShrink: 0 }}>{i.name.charAt(0).toUpperCase()}</div>
-                  <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExtraId(i.id); setEditExtraName(i.name); setEditExtraAmt(String(i.amount)); }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: "#E8F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, marginRight: 14, flexShrink: 0 }}>{i.category?.emoji || i.name.charAt(0).toUpperCase()}</div>
+                  <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExtraId(i.id); setEditExtraName(i.name); setEditExtraAmt(String(i.amount)); setEditExtraCategory(undefined); }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{i.name}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>Extra · toca para editar</div>
+                    <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                      {i.category ? <span style={{ background: "#E8F5EE", color: C.green, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>{i.category.emoji} {i.category.name}</span> : <span>Toca para editar</span>}
+                    </div>
                   </div>
                   <span style={{ fontSize: 17, fontWeight: 800, color: C.green, marginRight: 8 }}>{fmt(i.amount)}</span>
                   <button onClick={() => deleteExtra(i.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><TrashIcon /></button>
