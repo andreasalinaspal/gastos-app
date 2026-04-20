@@ -70,7 +70,7 @@ function initData() {
       gastos: DEFAULT_CATS_GASTOS.map(c => ({ id: genId(), ...c })),
       ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
     },
-    userName: "Andrea",
+    userName: "",
     currency: "PEN",
   };
 }
@@ -176,6 +176,8 @@ export default function App() {
   // AI categorization state
   const [editExpCat, setEditExpCat] = useState(undefined); // category in edit modal
   const [showExpCatPicker, setShowExpCatPicker] = useState(false);
+  const [showNameSetup, setShowNameSetup] = useState(false);
+  const [nameSetupValue, setNameSetupValue] = useState("");
 
   const exportData = () => {
     const json = JSON.stringify(data, null, 2);
@@ -320,10 +322,10 @@ export default function App() {
             loadUserData(uid).finally(() => {
               isLoadingUserData.current = false;
             });
-            // Detect email confirmation redirect
+            // Detect email confirmation redirect → ask for name
             if (typeof window !== 'undefined' && window.location.hash.includes('type=signup')) {
-              setTimeout(() => showToast("✅ ¡Cuenta confirmada! Bienvenido a Qori"), 800);
               window.history.replaceState(null, '', window.location.pathname);
+              setTimeout(() => setShowNameSetup(true), 600);
             }
           }
         } else if (event === 'SIGNED_OUT') {
@@ -356,6 +358,13 @@ export default function App() {
     }, 1500);
     return () => clearTimeout(syncTimer.current);
   }, [data, authUser]);
+
+  // Show name setup if logged in and no name set
+  useEffect(() => {
+    if (authUser && authPhase === "app" && !isLoadingUserData.current && !data.userName) {
+      setShowNameSetup(true);
+    }
+  }, [authUser, authPhase, data.userName]);
 
   // Register service worker
   useEffect(() => {
@@ -741,7 +750,7 @@ export default function App() {
         {/* Header */}
         <div style={{ padding: "52px 28px 0" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: 1.5, marginBottom: 6 }}>{getToday()}</div>
-          <h1 style={{ fontSize: 36, fontWeight: 900, color: "#fff", margin: 0, fontStyle: "italic", letterSpacing: -1 }}>Hola, {data.userName}.</h1>
+          <h1 style={{ fontSize: 36, fontWeight: 900, color: "#fff", margin: 0, fontStyle: "italic", letterSpacing: -1 }}>Hola, {data.userName || "👋"}.</h1>
         </div>
         {/* Today total */}
         <div style={{ textAlign: "center", padding: "20px 0 8px" }}>
@@ -1129,7 +1138,8 @@ export default function App() {
         <div style={{ ...cardStyle, padding: "0 0 0", marginBottom: 12, overflow: "hidden" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "14px 20px 8px" }}>Perfil</div>
           <div style={{ padding: "0 20px 16px" }}>
-            <input style={{ ...inputStyle, color: C.black }} value={data.userName} onChange={e => setData(p => ({ ...p, userName: e.target.value }))} />
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Tu nombre</div>
+            <input placeholder="¿Cómo te llamas?" style={{ ...inputStyle, color: C.black }} value={data.userName} onChange={e => setData(p => ({ ...p, userName: e.target.value }))} />
           </div>
         </div>
         {/* Organización — 3 arrow rows */}
@@ -1573,6 +1583,30 @@ export default function App() {
             <div style={{ fontSize: 24, fontWeight: 800, color: C.purple, marginBottom: 20 }}>{recTime}s</div>
             <button onClick={() => { if (recognitionRef.current) { recognitionRef.current.onend = () => setRecording(false); try { recognitionRef.current.stop(); } catch(e) {} } setRecording(false); }} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
           </div>
+        </div>
+      )}
+
+      {/* Name setup screen */}
+      {showNameSetup && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 450, background: C.beige, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 32px" }}>
+          <div style={{ fontSize: 56, marginBottom: 24 }}>👋</div>
+          <div style={{ fontSize: 30, fontWeight: 900, color: C.black, fontStyle: "italic", marginBottom: 8, textAlign: "center" }}>¿Cómo te llamas?</div>
+          <div style={{ fontSize: 15, color: C.muted, marginBottom: 36, textAlign: "center", lineHeight: 1.5 }}>Tu nombre aparecerá en el inicio del app.</div>
+          <input
+            autoFocus
+            value={nameSetupValue}
+            onChange={e => setNameSetupValue(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && nameSetupValue.trim()) { setData(p => ({ ...p, userName: nameSetupValue.trim() })); setShowNameSetup(false); } }}
+            placeholder="Tu nombre"
+            style={{ ...inputStyle, width: "100%", maxWidth: 320, fontSize: 20, padding: "16px 20px", textAlign: "center", color: C.black, marginBottom: 20, borderRadius: 16 }}
+          />
+          <button
+            onClick={() => { if (nameSetupValue.trim()) { setData(p => ({ ...p, userName: nameSetupValue.trim() })); setShowNameSetup(false); } }}
+            disabled={!nameSetupValue.trim()}
+            style={{ width: "100%", maxWidth: 320, padding: 16, borderRadius: 16, background: nameSetupValue.trim() ? C.purple : "#D4D0C8", color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: nameSetupValue.trim() ? "pointer" : "default", fontFamily: "inherit" }}
+          >
+            Continuar →
+          </button>
         </div>
       )}
 
