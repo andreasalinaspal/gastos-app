@@ -179,6 +179,7 @@ export default function App() {
   const [showExpCatPicker, setShowExpCatPicker] = useState(false);
   const [showNameSetup, setShowNameSetup] = useState(false);
   const [nameSetupValue, setNameSetupValue] = useState("");
+  const [selectedCatDetail, setSelectedCatDetail] = useState(null); // {name,emoji,expenses[]}
 
   const exportData = () => {
     const json = JSON.stringify(data, null, 2);
@@ -733,17 +734,21 @@ export default function App() {
   const typeLabel = (t) => t === "manual" ? "Lo pago yo" : t === "debito" ? "Debito automatico" : "Descuento sueldo";
   const typeBg = (t) => t === "manual" ? C.orange : t === "debito" ? C.purple : C.green;
 
-  const homeScreen = (() => {
-    // Bar chart: top 5 categories this month
-    const monthExps = data.expenses.filter(e => e.month === curMonth);
-    const catMap = {};
-    monthExps.forEach(e => {
+  const buildCatMap = (exps) => {
+    const m = {};
+    exps.forEach(e => {
       const key = e.category?.name || "Otros";
       const emoji = e.category?.emoji || "📦";
-      if (!catMap[key]) catMap[key] = { name: key, emoji, amount: 0 };
-      catMap[key].amount += e.amount;
+      if (!m[key]) m[key] = { name: key, emoji, amount: 0, expenses: [] };
+      m[key].amount += e.amount;
+      m[key].expenses.push(e);
     });
-    const topCats = Object.values(catMap).sort((a, b) => b.amount - a.amount).slice(0, 5);
+    return Object.values(m).sort((a, b) => b.amount - a.amount);
+  };
+
+  const homeScreen = (() => {
+    const monthExps = data.expenses.filter(e => e.month === curMonth);
+    const topCats = buildCatMap(monthExps).slice(0, 5);
     const maxCat = topCats[0]?.amount || 1;
 
     return (
@@ -765,13 +770,16 @@ export default function App() {
               {topCats.map((cat, i) => {
                 const h = Math.max(Math.round((cat.amount / maxCat) * 120), 8);
                 return (
-                  <div key={cat.name} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                  <div key={cat.name} onClick={() => setSelectedCatDetail(cat)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: "pointer" }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.7)", whiteSpace: "nowrap" }}>{fmt(cat.amount)}</div>
                     <div style={{ width: "100%", maxWidth: 44, height: h, background: i === 0 ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.25)", borderRadius: "8px 8px 4px 4px", transition: "height 0.4s ease" }} />
                     <div style={{ fontSize: 20 }}>{cat.emoji}</div>
                   </div>
                 );
               })}
+            </div>
+            <div style={{ textAlign: "center", marginTop: 10 }}>
+              <button onClick={() => setSubScreen("all-cats")} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", fontSize: 12, fontWeight: 700, padding: "6px 16px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", letterSpacing: 0.3 }}>Ver todas las categorías →</button>
             </div>
           </div>
         ) : (
@@ -1532,6 +1540,65 @@ export default function App() {
       <div style={subStyle("fijos")}>{FijosScreen}</div>
       <CatsSubScreen type="gastos" title="Cats. Gastos" />
       <CatsSubScreen type="ingresos" title="Cats. Ingresos" />
+      {/* All categories subscreen */}
+      <div style={subStyle("all-cats")}>
+        {subHeader("Categorías", () => setSubScreen(null))}
+        <div style={{ padding: "0 16px" }}>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Total histórico por categoría</div>
+          {buildCatMap(data.expenses).map((cat, i) => {
+            const max = buildCatMap(data.expenses)[0]?.amount || 1;
+            const pct = Math.round((cat.amount / max) * 100);
+            return (
+              <div key={cat.name} onClick={() => setSelectedCatDetail(cat)} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 12, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{cat.emoji}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{cat.name}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{cat.expenses.length} registro{cat.expenses.length !== 1 ? "s" : ""}</div>
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: C.orange }}>-{fmt(cat.amount)}</div>
+                </div>
+                <div style={{ height: 6, background: "#F0EDE4", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${pct}%`, background: i === 0 ? C.purple : C.orange, borderRadius: 3, transition: "width 0.4s ease" }} />
+                </div>
+              </div>
+            );
+          })}
+          {buildCatMap(data.expenses).length === 0 && <div style={{ textAlign: "center", color: C.muted, fontSize: 14, padding: 40 }}>Sin registros aún</div>}
+          <div style={{ height: "calc(40px + env(safe-area-inset-bottom, 20px))" }} />
+        </div>
+      </div>
+      {/* Category detail bottom sheet */}
+      {selectedCatDetail && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 350 }} onClick={() => setSelectedCatDetail(null)}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
+          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: C.beige, borderRadius: "24px 24px 0 0", maxHeight: "80vh", overflowY: "auto", animation: "slideUp 0.3s ease" }}>
+            <div style={{ width: 40, height: 4, background: "#D4D0C8", borderRadius: 2, margin: "12px auto 0" }} />
+            <div style={{ padding: "16px 20px 8px", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>{selectedCatDetail.emoji}</div>
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: C.black }}>{selectedCatDetail.name}</div>
+                <div style={{ fontSize: 13, color: C.muted }}>{selectedCatDetail.expenses.length} registros · {fmt(selectedCatDetail.amount)}</div>
+              </div>
+            </div>
+            <div style={{ padding: "8px 16px 32px" }}>
+              {[...selectedCatDetail.expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).map(e => {
+                const dt = new Date(e.date);
+                return (
+                  <div key={e.id} style={{ ...cardStyle, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: C.purple, flexShrink: 0 }}>{dt.getDate()}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.black }}>{e.description}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{DAYS[dt.getDay()].toLowerCase().slice(0,3)}, {dt.getDate()} {MONTHS_SHORT[dt.getMonth()].toLowerCase()}. {dt.getFullYear()}</div>
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: C.orange }}>-{fmt(e.amount)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Add expense modal (bottom sheet) */}
       {showAddModal && (
         <div style={{ position: "fixed", inset: 0, zIndex: 300 }} onClick={() => setShowAddModal(false)}>
