@@ -76,7 +76,10 @@ function initData() {
 }
 
 const C = { green: "#1B6B3A", greenLight: "#2D9F5B", orange: "#E8561E", orangeLight: "#FF7A45", purple: "#6C5CE7", purpleLight: "#8B7FF0", purpleSoft: "#E0DBFF", beige: "#F5F2EC", black: "#141218", muted: "#8A8A8E" };
-const inputStyle = { width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #D4D0C8", fontSize: 15, fontFamily: "inherit", background: "#FAFAF5", boxSizing: "border-box" };
+// Font constants — Syne for headings/numbers, ClashGrotesk (body default) for everything else
+const FONT_TITLE = "'Syne', system-ui, sans-serif";
+const FONT_BODY  = "'ClashGrotesk', system-ui, sans-serif";
+const inputStyle = { width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #D4D0C8", fontSize: 15, fontFamily: FONT_BODY, background: "#FAFAF5", boxSizing: "border-box" };
 const cardStyle = { background: "#fff", borderRadius: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" };
 
 export default function App() {
@@ -757,12 +760,12 @@ export default function App() {
         {/* Header */}
         <div style={{ padding: "52px 28px 0" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: 1.5, marginBottom: 6 }}>{getToday()}</div>
-          <h1 style={{ fontSize: 36, fontWeight: 900, color: "#fff", margin: 0, fontStyle: "italic", letterSpacing: -1 }}>Hola, {data.userName || "👋"}.</h1>
+          <h1 style={{ fontSize: 36, fontWeight: 900, color: "#fff", margin: 0, fontStyle: "italic", letterSpacing: -1, fontFamily: FONT_TITLE }}>Hola, {data.userName || "👋"}.</h1>
         </div>
         {/* Today total */}
         <div style={{ textAlign: "center", padding: "20px 0 8px" }}>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", fontWeight: 700, letterSpacing: 1.5, marginBottom: 4 }}>HOY GASTASTE</div>
-          <div style={{ fontSize: 48, fontWeight: 900, color: "#fff", letterSpacing: -2 }}>{fmt(todayTotal)}</div>
+          <div style={{ fontSize: 48, fontWeight: 900, color: "#fff", letterSpacing: -2, fontFamily: FONT_TITLE }}>{fmt(todayTotal)}</div>
         </div>
         {/* Bar chart */}
         {topCats.length > 0 ? (
@@ -851,7 +854,7 @@ export default function App() {
       <div style={{ flex: 1, background: C.beige, minHeight: "100vh", paddingBottom: 80 }}>
         <div style={{ padding: "32px 24px 12px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic" }}>Mi Mes</h1>
+            <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic", fontFamily: FONT_TITLE }}>Mi Mes</h1>
           </div>
           <div style={{ borderBottom: "3px solid " + C.purple, marginTop: 6, width: 70, marginBottom: 16 }} />
         </div>
@@ -880,22 +883,22 @@ export default function App() {
             <div style={{ padding: "0 24px", marginBottom: 16 }}>
               <div style={{ background: isNeg ? C.orange : "linear-gradient(135deg, #1B6B3A 0%, #2D9F5B 100%)", borderRadius: 20, padding: "28px 24px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Balance del mes</div>
-                <div style={{ fontSize: "clamp(22px, 9vw, 46px)", fontWeight: 900, color: "#fff", letterSpacing: -1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmt(Math.abs(d.balance))}</div>
+                <div style={{ fontSize: "clamp(22px, 9vw, 46px)", fontWeight: 900, color: "#fff", letterSpacing: -1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: FONT_TITLE }}>{fmt(Math.abs(d.balance))}</div>
                 {isNeg && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.65)", marginTop: 4 }}>estás en rojo</div>}
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, padding: "0 24px", marginBottom: 20, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
               <div style={{ minWidth: 110, background: C.green, borderRadius: 14, padding: "14px 12px", color: "#fff", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8 }}>Ingresos</div>
-                <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap" }}>{fmt(d.totalInc)}</div>
+                <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap", fontFamily: FONT_TITLE }}>{fmt(d.totalInc)}</div>
               </div>
               <div style={{ minWidth: 110, background: C.orange, borderRadius: 14, padding: "14px 12px", color: "#fff", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8 }}>Gastos Fijos</div>
-                <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap" }}>{fmt(d.totalFijosAll)}</div>
+                <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap", fontFamily: FONT_TITLE }}>{fmt(d.totalFijosAll)}</div>
               </div>
               <div style={{ minWidth: 110, background: C.purple, borderRadius: 14, padding: "14px 12px", color: "#fff", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8 }}>Diarios</div>
-                <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap" }}>{fmt(d.totalDiarios)}</div>
+                <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap", fontFamily: FONT_TITLE }}>{fmt(d.totalDiarios)}</div>
               </div>
             </div>
             <div style={{ padding: "0 24px" }}>
@@ -956,11 +959,11 @@ export default function App() {
         <div style={{ padding: "52px 24px 0", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
             <button onClick={() => setSubScreen(null)} style={{ width: 38, height: 38, borderRadius: "50%", background: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 6px rgba(0,0,0,0.1)", fontSize: 22, color: C.black, flexShrink: 0 }}>‹</button>
-            <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic" }}>Fijos</h1>
+            <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic", fontFamily: FONT_TITLE }}>Fijos</h1>
           </div>
           <div style={{ borderBottom: "3px solid " + C.purple, marginTop: 0, width: 50, marginBottom: 4 }} />
           <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, marginBottom: 8 }}>Mensual</div>
-          <div style={{ fontSize: 38, fontWeight: 900, color: C.black }}>{fmt(totalAll)}</div>
+          <div style={{ fontSize: 38, fontWeight: 900, color: C.black, fontFamily: FONT_TITLE }}>{fmt(totalAll)}</div>
           <div style={{ display: "flex", gap: 8, marginTop: 6, marginBottom: 20, fontSize: 12, color: C.muted }}><span>Pagado: {fmt(totalPaid)}</span><span>|</span><span>Pendiente: {fmt(totalAll - totalPaid)}</span></div>
         </div>
         <div style={{ padding: "0 20px" }}>
@@ -1052,10 +1055,10 @@ export default function App() {
     return (
       <div style={{ flex: 1, background: C.beige, minHeight: "100vh", paddingBottom: 80 }}>
         <div style={{ padding: "32px 24px 0" }}>
-          <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic" }}>Ingresos</h1>
+          <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic", fontFamily: FONT_TITLE }}>Ingresos</h1>
           <div style={{ borderBottom: "3px solid " + C.purple, marginTop: 6, width: 80, marginBottom: 4 }} />
           <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, marginBottom: 4 }}>Total mensual</div>
-          <div style={{ fontSize: 40, fontWeight: 900, color: C.green }}>{fmt(totalInc)}</div>
+          <div style={{ fontSize: 40, fontWeight: 900, color: C.green, fontFamily: FONT_TITLE }}>{fmt(totalInc)}</div>
         </div>
         <div style={{ padding: "24px 24px 8px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -1158,7 +1161,7 @@ export default function App() {
   const configScreen = (
     <div style={{ flex: 1, background: C.beige, minHeight: "100vh", paddingBottom: 80 }}>
       <div style={{ padding: "32px 24px 0" }}>
-        <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic" }}>Config</h1>
+        <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic", fontFamily: FONT_TITLE }}>Config</h1>
         <div style={{ borderBottom: "3px solid " + C.purple, marginTop: 6, width: 60, marginBottom: 20 }} />
       </div>
       <div style={{ padding: "0 20px" }}>
@@ -1261,7 +1264,7 @@ export default function App() {
   const subHeader = (title, onBack) => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "52px 20px 12px", position: "sticky", top: 0, background: C.beige, zIndex: 10 }}>
       <button onClick={onBack} style={{ width: 38, height: 38, borderRadius: "50%", background: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 6px rgba(0,0,0,0.1)", fontSize: 22, color: C.black, flexShrink: 0 }}>‹</button>
-      <div style={{ fontSize: 26, fontWeight: 900, color: C.black, fontStyle: "italic" }}>{title}</div>
+      <div style={{ fontSize: 26, fontWeight: 900, color: C.black, fontStyle: "italic", fontFamily: FONT_TITLE }}>{title}</div>
     </div>
   );
 
@@ -1403,21 +1406,21 @@ export default function App() {
   `;
 
   if (authPhase === "loading") return (
-    <div style={{ fontFamily: "'Syne', system-ui, sans-serif", position: "fixed", inset: 0, background: C.purple, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 20 }}>
+    <div style={{ fontFamily: FONT_BODY, position: "fixed", inset: 0, background: C.purple, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 20 }}>
       <style>{sharedStyle}</style>
-      <div style={{ fontSize: 48, fontWeight: 900, color: "#fff", letterSpacing: -2 }}>Qori<span style={{ color: "rgba(255,255,255,0.45)" }}>.</span></div>
+      <div style={{ fontSize: 48, fontWeight: 900, color: "#fff", letterSpacing: -2, fontFamily: FONT_TITLE }}>Qori<span style={{ color: "rgba(255,255,255,0.45)" }}>.</span></div>
       <div style={{ width: 28, height: 28, border: "3px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
     </div>
   );
 
   if (authPhase === "onboarding") return (
-    <div style={{ fontFamily: "'Syne', system-ui, sans-serif", position: "fixed", inset: 0, background: slide.bg, display: "flex", flexDirection: "column", transition: "background 0.4s ease" }}>
+    <div style={{ fontFamily: FONT_BODY, position: "fixed", inset: 0, background: slide.bg, display: "flex", flexDirection: "column", transition: "background 0.4s ease" }}>
       <style>{sharedStyle}</style>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 40px 20px", gap: 24 }}>
-        <div style={{ fontSize: 32, fontWeight: 900, color: "rgba(255,255,255,0.55)", letterSpacing: -1, alignSelf: "flex-start" }}>Qori.</div>
+        <div style={{ fontSize: 32, fontWeight: 900, color: "rgba(255,255,255,0.55)", letterSpacing: -1, alignSelf: "flex-start", fontFamily: FONT_TITLE }}>Qori.</div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>{slide.icon}</div>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 34, fontWeight: 900, color: "#fff", marginBottom: 12, lineHeight: 1.2 }}>{slide.title}</div>
+          <div style={{ fontSize: 34, fontWeight: 900, color: "#fff", marginBottom: 12, lineHeight: 1.2, fontFamily: FONT_TITLE }}>{slide.title}</div>
           <div style={{ fontSize: 16, color: "rgba(255,255,255,0.75)", lineHeight: 1.6 }}>{slide.desc}</div>
         </div>
       </div>
@@ -1436,10 +1439,10 @@ export default function App() {
   );
 
   if (authPhase === "auth") return (
-    <div style={{ fontFamily: "'Syne', system-ui, sans-serif", position: "fixed", inset: 0, background: C.beige, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+    <div style={{ fontFamily: FONT_BODY, position: "fixed", inset: 0, background: C.beige, display: "flex", flexDirection: "column", overflowY: "auto" }}>
       <style>{sharedStyle}</style>
       <div style={{ padding: "72px 32px 24px", textAlign: "center" }}>
-        <div style={{ fontSize: 54, fontWeight: 900, color: C.purple, letterSpacing: -2, marginBottom: 6 }}>Qori<span style={{ color: C.orange }}>.</span></div>
+        <div style={{ fontSize: 54, fontWeight: 900, color: C.purple, letterSpacing: -2, marginBottom: 6, fontFamily: FONT_TITLE }}>Qori<span style={{ color: C.orange }}>.</span></div>
         <div style={{ fontSize: 15, color: C.muted }}>Controla tus gastos, sin complicaciones.</div>
       </div>
       <div style={{ padding: "0 28px", flex: 1 }}>
@@ -1470,10 +1473,10 @@ export default function App() {
   );
 
   if (authPhase === "pin-setup") return (
-    <div style={{ fontFamily: "'Syne', system-ui, sans-serif", position: "fixed", inset: 0, background: C.beige, display: "flex", flexDirection: "column", alignItems: "center" }}>
+    <div style={{ fontFamily: FONT_BODY, position: "fixed", inset: 0, background: C.beige, display: "flex", flexDirection: "column", alignItems: "center" }}>
       <style>{sharedStyle}</style>
       <div style={{ padding: "72px 32px 32px", textAlign: "center", width: "100%" }}>
-        <div style={{ fontSize: 28, fontWeight: 900, color: C.black, marginBottom: 8 }}>{pinPhase === "enter" ? "Crea tu clave rápida" : "Confirma tu clave"}</div>
+        <div style={{ fontSize: 28, fontWeight: 900, color: C.black, marginBottom: 8, fontFamily: FONT_TITLE }}>{pinPhase === "enter" ? "Crea tu clave rápida" : "Confirma tu clave"}</div>
         <div style={{ fontSize: 15, color: C.muted }}>{pinPhase === "enter" ? "Elige tu PIN de acceso rápido" : "Vuelve a ingresar el PIN"}</div>
       </div>
       {pinPhase === "enter" && (
@@ -1499,7 +1502,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ fontFamily: "'Syne', system-ui, sans-serif", maxWidth: 430, margin: "0 auto", position: "relative", background: tab === "home" ? "#6C5CE7" : C.beige }}>
+    <div style={{ fontFamily: FONT_BODY, maxWidth: 430, margin: "0 auto", position: "relative", background: tab === "home" ? "#6C5CE7" : C.beige }}>
       <style>{sharedStyle}</style>
       {toast && <div style={{ position: "fixed", top: 60, left: "50%", transform: "translateX(-50%)", zIndex: 500, background: C.black, color: "#fff", padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600, animation: "slideUp 0.3s ease", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>{toast}</div>}
       {scanResults && (
@@ -1583,7 +1586,7 @@ export default function App() {
             <div style={{ padding: "16px 20px 8px", display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ width: 48, height: 48, borderRadius: 14, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>{selectedCatDetail.emoji}</div>
               <div>
-                <div style={{ fontSize: 20, fontWeight: 900, color: C.black }}>{selectedCatDetail.name}</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: C.black, fontFamily: FONT_TITLE }}>{selectedCatDetail.name}</div>
                 <div style={{ fontSize: 13, color: C.muted }}>{selectedCatDetail.expenses.length} registros · {fmt(selectedCatDetail.amount)}</div>
               </div>
             </div>
@@ -1677,7 +1680,7 @@ export default function App() {
       {showNameSetup && (
         <div style={{ position: "fixed", inset: 0, zIndex: 450, background: C.beige, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 32px" }}>
           <div style={{ fontSize: 56, marginBottom: 24 }}>👋</div>
-          <div style={{ fontSize: 30, fontWeight: 900, color: C.black, fontStyle: "italic", marginBottom: 8, textAlign: "center" }}>¿Cómo te llamas?</div>
+          <div style={{ fontSize: 30, fontWeight: 900, color: C.black, fontStyle: "italic", marginBottom: 8, textAlign: "center", fontFamily: FONT_TITLE }}>¿Cómo te llamas?</div>
           <div style={{ fontSize: 15, color: C.muted, marginBottom: 36, textAlign: "center", lineHeight: 1.5 }}>Tu nombre aparecerá en el inicio del app.</div>
           <input
             autoFocus
