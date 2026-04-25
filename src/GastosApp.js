@@ -931,7 +931,7 @@ export default function App() {
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <div style={{ width: 40, height: 40, borderRadius: "50%", background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: C.purple, marginRight: 14, flexShrink: 0 }}>{dt.getDate()}</div>
                       <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); setEditExpDate(new Date(e.date).toISOString().split("T")[0]); }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{e.description}</div>
+                        <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>{e.description}</div>
                         <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
                           <span>{DAYS[dt.getDay()].toLowerCase().slice(0,3)}, {dt.getDate()} {MONTHS_SHORT[dt.getMonth()].toLowerCase()}.</span>
                           {e.category && <span style={{ background: C.purpleSoft, color: C.purple, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>{e.category.emoji} {e.category.name}</span>}
@@ -978,7 +978,7 @@ export default function App() {
                       <button onClick={() => saveFixedExpName(f.id)} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>OK</button>
                     </div>
                   ) : (
-                    <div onClick={() => { setEditFixedExpName(f.id); setEditFixedExpNameVal(f.name); }} style={{ fontSize: 15, fontWeight: 700, color: C.black, textDecoration: f.paid ? "line-through" : "none", textDecorationColor: C.muted, cursor: "pointer" }}>{f.name}</div>
+                    <div onClick={() => { setEditFixedExpName(f.id); setEditFixedExpNameVal(f.name); }} style={{ fontSize: 15, fontWeight: 500, color: C.black, textDecoration: f.paid ? "line-through" : "none", textDecorationColor: C.muted, cursor: "pointer" }}>{f.name}</div>
                   )}
                   {editFixedExpType === f.id ? (
                     <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
@@ -1002,7 +1002,7 @@ export default function App() {
                       <button onClick={() => saveFixedAmt(f.id)} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>OK</button>
                     </div>
                   ) : (
-                    <div onClick={() => { setEditFixed(f.id); setEditFixedAmt(f.amount > 0 ? String(f.amount) : ""); }} style={{ fontSize: 17, fontWeight: 800, color: f.amount > 0 ? C.black : C.muted, cursor: "pointer" }}>{f.amount > 0 ? fmt(f.amount) : "$0"}</div>
+                    <div onClick={() => { setEditFixed(f.id); setEditFixedAmt(f.amount > 0 ? String(f.amount) : ""); }} style={{ fontSize: 17, fontWeight: 600, color: f.amount > 0 ? C.black : C.muted, cursor: "pointer" }}>{f.amount > 0 ? fmt(f.amount) : "$0"}</div>
                   )}
                   <button onClick={() => deleteFixed(f.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><TrashIcon /></button>
                 </div>
@@ -1085,7 +1085,7 @@ export default function App() {
                     </div>
                   ) : (
                     <div onClick={() => { setEditFixedIncomeName(i.id); setEditFixedIncomeNameVal(i.name); }} style={{ cursor: "pointer" }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{i.name}</div>
+                      <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>{i.name}</div>
                       <div style={{ fontSize: 12, color: C.muted }}>Mensual fijo · toca para editar</div>
                     </div>
                   )}
@@ -1140,7 +1140,7 @@ export default function App() {
                 <div style={{ display: "flex", alignItems: "center" }}>
                   <div style={{ width: 38, height: 38, borderRadius: 10, background: "#E8F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, marginRight: 14, flexShrink: 0 }}>{i.category?.emoji || i.name.charAt(0).toUpperCase()}</div>
                   <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExtraId(i.id); setEditExtraName(i.name); setEditExtraAmt(String(i.amount)); setEditExtraCategory(undefined); }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{i.name}</div>
+                    <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>{i.name}</div>
                     <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
                       {i.category ? <span style={{ background: "#E8F5EE", color: C.green, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>{i.category.emoji} {i.category.name}</span> : <span>Toca para editar</span>}
                     </div>
@@ -1515,10 +1515,10 @@ export default function App() {
             {scanResults.map((r, i) => (
               <div key={i} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, display: "flex", alignItems: "center" }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{r.description}</div>
+                  <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>{r.description}</div>
                   <div style={{ fontSize: 12, color: C.muted }}>{r.date || "Sin fecha"}</div>
                 </div>
-                <span style={{ fontSize: 17, fontWeight: 800, color: C.orange, marginRight: 10 }}>{fmtWith(r.amount, data.currency)}</span>
+                <span style={{ fontSize: 17, fontWeight: 600, color: C.orange, marginRight: 10 }}>{fmtWith(r.amount, data.currency)}</span>
                 <button onClick={() => removeScanItem(i)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><TrashIcon color="#ccc" /></button>
               </div>
             ))}
@@ -1597,10 +1597,10 @@ export default function App() {
                   <div key={e.id} style={{ ...cardStyle, padding: "12px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
                     <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: C.purple, flexShrink: 0 }}>{dt.getDate()}</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.black }}>{e.description}</div>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: C.black }}>{e.description}</div>
                       <div style={{ fontSize: 11, color: C.muted }}>{DAYS[dt.getDay()].toLowerCase().slice(0,3)}, {dt.getDate()} {MONTHS_SHORT[dt.getMonth()].toLowerCase()}. {dt.getFullYear()}</div>
                     </div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: C.orange }}>-{fmt(e.amount)}</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: C.orange }}>-{fmt(e.amount)}</div>
                   </div>
                 );
               })}
