@@ -810,7 +810,7 @@ export default function App() {
                         <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>Categoría</div>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                           {(data.categories?.gastos || []).map(cat => { const sel = (editExpCat !== undefined ? editExpCat : e.category)?.id === cat.id; return (
-                            <button key={cat.id} onClick={() => setEditExpCat(sel ? null : cat)} style={{ padding: "5px 10px", borderRadius: 20, border: sel ? "2px solid #fff" : "2px solid rgba(255,255,255,0.25)", background: sel ? "rgba(255,255,255,0.25)" : "transparent", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
+                            <button key={cat.id} onClick={() => setEditExpCat(sel ? null : cat)} style={{ padding: "5px 10px", borderRadius: 20, border: sel ? "2px solid #fff" : "2px solid rgba(255,255,255,0.25)", background: sel ? "rgba(255,255,255,0.25)" : "transparent", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
                           );})}
                         </div>
                       </div>
@@ -918,7 +918,7 @@ export default function App() {
                         <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Categoría</div>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                           {(data.categories?.gastos || []).map(cat => { const sel = (editExpCat !== undefined ? editExpCat : e.category)?.id === cat.id; return (
-                            <button key={cat.id} onClick={() => setEditExpCat(sel ? null : cat)} style={{ padding: "5px 10px", borderRadius: 20, border: `2px solid ${sel ? C.purple : "#D4D0C8"}`, background: sel ? C.purpleSoft : "#fff", color: sel ? C.purple : C.muted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
+                            <button key={cat.id} onClick={() => setEditExpCat(sel ? null : cat)} style={{ padding: "5px 10px", borderRadius: 20, border: `2px solid ${sel ? C.purple : "#D4D0C8"}`, background: sel ? C.purpleSoft : "#fff", color: sel ? C.purple : C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
                           );})}
                         </div>
                       </div>
@@ -934,7 +934,7 @@ export default function App() {
                         <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>{e.description}</div>
                         <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
                           <span>{DAYS[dt.getDay()].toLowerCase().slice(0,3)}, {dt.getDate()} {MONTHS_SHORT[dt.getMonth()].toLowerCase()}.</span>
-                          {e.category && <span style={{ background: C.purpleSoft, color: C.purple, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>{e.category.emoji} {e.category.name}</span>}
+                          {e.category && <span style={{ background: C.purpleSoft, color: C.purple, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{e.category.emoji} {e.category.name}</span>}
                         </div>
                       </div>
                       <div style={{ fontSize: 16, fontWeight: 700, color: C.orange, marginRight: 8 }}>-{fmt(e.amount)}</div>
@@ -1127,7 +1127,7 @@ export default function App() {
                     <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Categoría</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                       {(data.categories?.ingresos || []).map(cat => { const cur = editExtraCategory !== undefined ? editExtraCategory : i.category; const sel = cur?.id === cat.id; return (
-                        <button key={cat.id} onClick={() => setEditExtraCategory(sel ? null : cat)} style={{ padding: "5px 10px", borderRadius: 20, border: `2px solid ${sel ? C.green : "#D4D0C8"}`, background: sel ? "#E8F5EE" : "#fff", color: sel ? C.green : C.muted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
+                        <button key={cat.id} onClick={() => setEditExtraCategory(sel ? null : cat)} style={{ padding: "5px 10px", borderRadius: 20, border: `2px solid ${sel ? C.green : "#D4D0C8"}`, background: sel ? "#E8F5EE" : "#fff", color: sel ? C.green : C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
                       );})}
                     </div>
                   </div>
@@ -1142,7 +1142,7 @@ export default function App() {
                   <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExtraId(i.id); setEditExtraName(i.name); setEditExtraAmt(String(i.amount)); setEditExtraCategory(undefined); }}>
                     <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>{i.name}</div>
                     <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                      {i.category ? <span style={{ background: "#E8F5EE", color: C.green, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>{i.category.emoji} {i.category.name}</span> : <span>Toca para editar</span>}
+                      {i.category ? <span style={{ background: "#E8F5EE", color: C.green, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{i.category.emoji} {i.category.name}</span> : <span>Toca para editar</span>}
                     </div>
                   </div>
                   <span style={{ fontSize: 17, fontWeight: 800, color: C.green, marginRight: 8 }}>{fmt(i.amount)}</span>
