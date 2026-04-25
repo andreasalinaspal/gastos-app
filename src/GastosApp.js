@@ -1325,33 +1325,18 @@ export default function App() {
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
           </div>
         </div>
-        {/* Presupuesto */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "14px 20px 8px" }}>Presupuesto mensual</div>
-        <div style={{ ...cardStyle, marginBottom: 12 }}>
-          {(data.categories?.gastos || []).map((cat, i, arr) => (
-            <div key={cat.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: i < arr.length - 1 ? "1px solid #F0EDE4" : "none" }}>
-              <div style={{ width: 38, height: 38, borderRadius: 10, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, flexShrink: 0 }}>{cat.emoji}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 500, color: C.black }}>{cat.name}</div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, background: data.budgets?.[cat.id] > 0 ? C.purpleSoft : C.beige, border: `1.5px solid ${data.budgets?.[cat.id] > 0 ? C.purple : "#D4D0C8"}`, borderRadius: 10, padding: "6px 10px", minWidth: 90 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: data.budgets?.[cat.id] > 0 ? C.purple : C.muted }}>S/</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={data.budgets?.[cat.id] || ""}
-                  placeholder="0"
-                  onChange={e => {
-                    const val = e.target.value === "" ? 0 : Number(e.target.value);
-                    setData(p => ({ ...p, budgets: { ...p.budgets, [cat.id]: val } }));
-                  }}
-                  style={{ border: "none", background: "transparent", width: 60, fontSize: 14, fontWeight: 600, color: data.budgets?.[cat.id] > 0 ? C.purple : C.black, fontFamily: "inherit", textAlign: "right", outline: "none" }}
-                />
+        {/* Presupuesto — fila de navegación */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "14px 20px 8px" }}>Presupuesto</div>
+        <div style={{ ...cardStyle, marginBottom: 12, overflow: "hidden", padding: 0 }}>
+          <div onClick={() => setSubScreen("presupuestos")} style={cfgRowStyle}>
+            <span style={{ fontSize: 22 }}>🎯</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Presupuestos</div>
+              <div style={{ fontSize: 12, color: C.muted }}>
+                {Object.values(data.budgets || {}).filter(v => v > 0).length} categorías con límite definido
               </div>
             </div>
-          ))}
-          <div style={{ padding: "10px 16px 12px", fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
-            Deja en 0 las categorías sin límite. Te avisaremos cuando llegues al 80%.
+            <span style={{ fontSize: 20, color: C.muted }}>›</span>
           </div>
         </div>
         {/* Moneda */}
@@ -1702,6 +1687,48 @@ export default function App() {
       <div style={subStyle("fijos")}>{FijosScreen}</div>
       <CatsSubScreen type="gastos" title="Cats. Gastos" />
       <CatsSubScreen type="ingresos" title="Cats. Ingresos" />
+      {/* Presupuestos sub-screen */}
+      <div style={subStyle("presupuestos")}>
+        {subHeader("Presupuestos", () => setSubScreen(null))}
+        <div style={{ padding: "0 16px 8px" }}>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+            Define cuánto querés gastar por categoría este mes. Te avisaremos cuando llegues al 80%.
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 12, overflow: "hidden", padding: 0 }}>
+            {(data.categories?.gastos || []).map((cat, i, arr) => (
+              <div key={cat.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: i < arr.length - 1 ? "1px solid #F0EDE4" : "none" }}>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{cat.emoji}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: C.black }}>{cat.name}</div>
+                  {data.budgets?.[cat.id] > 0 && (
+                    <div style={{ fontSize: 11, color: C.purple, fontWeight: 600, marginTop: 2 }}>
+                      Gastado: {fmt(catSpend[cat.id] || 0)} de {fmt(data.budgets[cat.id])}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, background: data.budgets?.[cat.id] > 0 ? C.purpleSoft : C.beige, border: `1.5px solid ${data.budgets?.[cat.id] > 0 ? C.purple : "#D4D0C8"}`, borderRadius: 10, padding: "6px 10px", minWidth: 88 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: data.budgets?.[cat.id] > 0 ? C.purple : C.muted }}>{data.currency === "USD" ? "US$" : "S/"}</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={data.budgets?.[cat.id] || ""}
+                    placeholder="0"
+                    onChange={e => {
+                      const val = e.target.value === "" ? 0 : Number(e.target.value);
+                      setData(p => ({ ...p, budgets: { ...p.budgets, [cat.id]: val } }));
+                    }}
+                    style={{ border: "none", background: "transparent", width: 58, fontSize: 14, fontWeight: 600, color: data.budgets?.[cat.id] > 0 ? C.purple : C.black, fontFamily: "inherit", textAlign: "right", outline: "none" }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, padding: "0 4px" }}>
+            Deja en 0 las categorías que no querés controlar.
+          </div>
+          <div style={{ height: "calc(32px + env(safe-area-inset-bottom, 20px))" }} />
+        </div>
+      </div>
       {/* All categories subscreen */}
       <div style={subStyle("all-cats")}>
         {subHeader("Categorías", () => setSubScreen(null))}
