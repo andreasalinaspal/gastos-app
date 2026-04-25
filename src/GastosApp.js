@@ -1179,7 +1179,7 @@ export default function App() {
           <div onClick={() => setSubScreen("fijos")} style={cfgRowStyle}>
             <span style={{ fontSize: 22 }}>📌</span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>Gastos Fijos</div>
+              <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Gastos Fijos</div>
               <div style={{ fontSize: 12, color: C.muted }}>{fmt(data.fixed.filter(f => f.month === curMonth).reduce((s, f) => s + f.amount, 0))} · {data.fixed.filter(f => f.month === curMonth).length} gastos fijos</div>
             </div>
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
@@ -1187,7 +1187,7 @@ export default function App() {
           <div onClick={() => setSubScreen("cats-gasto")} style={cfgRowStyle}>
             <span style={{ fontSize: 22 }}>🏷️</span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>Categorías de gastos</div>
+              <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Categorías de gastos</div>
               <div style={{ fontSize: 12, color: C.muted }}>{(data.categories?.gastos?.length || 0)} categorías</div>
             </div>
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
@@ -1195,7 +1195,7 @@ export default function App() {
           <div onClick={() => setSubScreen("cats-ingreso")} style={{ ...cfgRowStyle, borderBottom: "none" }}>
             <span style={{ fontSize: 22 }}>💰</span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>Categorías de ingresos</div>
+              <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Categorías de ingresos</div>
               <div style={{ fontSize: 12, color: C.muted }}>{(data.categories?.ingresos?.length || 0)} categorías</div>
             </div>
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
@@ -1213,8 +1213,8 @@ export default function App() {
                 cursor: "pointer", fontFamily: "inherit",
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
               }}>
-                <span style={{ fontSize: 22, fontWeight: 800, color: data.currency === c.val ? C.green : C.muted }}>{c.val === "PEN" ? "S/" : "US$"}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: data.currency === c.val ? C.green : C.muted }}>{c.val === "PEN" ? "Soles" : "Dolares"}</span>
+                <span style={{ fontSize: 22, fontWeight: 600, color: data.currency === c.val ? C.green : C.muted }}>{c.val === "PEN" ? "S/" : "US$"}</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: data.currency === c.val ? C.green : C.muted }}>{c.val === "PEN" ? "Soles" : "Dolares"}</span>
               </button>
             ))}
           </div>
@@ -1289,7 +1289,7 @@ export default function App() {
               ) : (
                 <>
                   <div onClick={() => { setCatEditId(c.id); setCatEditEmoji(c.emoji); setCatEditName(c.name); }} style={{ width: 44, height: 44, borderRadius: 12, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, cursor: "pointer", flexShrink: 0 }}>{c.emoji}</div>
-                  <div onClick={() => { setCatEditId(c.id); setCatEditEmoji(c.emoji); setCatEditName(c.name); }} style={{ flex: 1, fontSize: 15, fontWeight: 700, color: C.black, cursor: "pointer" }}>{c.name}</div>
+                  <div onClick={() => { setCatEditId(c.id); setCatEditEmoji(c.emoji); setCatEditName(c.name); }} style={{ flex: 1, fontSize: 15, fontWeight: 500, color: C.black, cursor: "pointer" }}>{c.name}</div>
                   <button onClick={() => deleteCat(type, c.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#bbb", fontSize: 18 }}>✕</button>
                 </>
               )}
