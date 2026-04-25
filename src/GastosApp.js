@@ -822,12 +822,12 @@ export default function App() {
                   ) : (
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); setEditExpDate(new Date(e.date).toISOString().split("T")[0]); }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{e.description}</div>
-                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>
+                        <div style={{ fontSize: 15, fontWeight: 500, color: "rgba(255,255,255,0.9)" }}>{e.description}</div>
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
                           {e.category ? `${e.category.emoji} ${e.category.name} · ` : ""}{new Date(e.date).toLocaleDateString("es-PE", { day: "numeric", month: "short" })}
                         </div>
                       </div>
-                      <span style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginRight: 10 }}>-{fmt(e.amount)}</span>
+                      <span style={{ fontSize: 16, fontWeight: 600, color: "rgba(255,255,255,0.9)", marginRight: 10 }}>-{fmt(e.amount)}</span>
                       <button onClick={() => deleteExpense(e.id)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: 8, cursor: "pointer" }}><TrashIcon size={16} color="rgba(255,255,255,0.7)" /></button>
                     </div>
                   )}
