@@ -187,7 +187,7 @@ export default function App() {
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [miMesSubTab, setMiMesSubTab] = useState("balance"); // "balance" | "presupuesto"
   const [showBudgetFeatureModal, setShowBudgetFeatureModal] = useState(() => {
-    try { return !localStorage.getItem('qori-budget-feature-seen'); } catch(e) { return false; }
+    try { return !localStorage.getItem('qori-budget-feature-seen-v2'); } catch(e) { return false; }
   });
 
   const exportData = () => {
@@ -2006,7 +2006,7 @@ export default function App() {
             {/* CTAs */}
             <div style={{ padding: "18px 20px 0", display: "flex", flexDirection: "column", gap: 10 }}>
               <button onClick={() => {
-                try { localStorage.setItem('qori-budget-feature-seen', '1'); } catch(e) {}
+                try { localStorage.setItem('qori-budget-feature-seen-v2', '1'); } catch(e) {}
                 setShowBudgetFeatureModal(false);
                 setTab("config");
                 setTimeout(() => setSubScreen("presupuestos"), 300);
@@ -2014,7 +2014,7 @@ export default function App() {
                 Configurar presupuesto →
               </button>
               <button onClick={() => {
-                try { localStorage.setItem('qori-budget-feature-seen', '1'); } catch(e) {}
+                try { localStorage.setItem('qori-budget-feature-seen-v2', '1'); } catch(e) {}
                 setShowBudgetFeatureModal(false);
               }} style={{ width: "100%", padding: 14, background: "transparent", border: "none", fontSize: 14, fontWeight: 600, color: C.muted, cursor: "pointer", fontFamily: "inherit" }}>
                 Ahora no
