@@ -1695,7 +1695,7 @@ export default function App() {
         {subHeader("Presupuestos", () => setSubScreen(null))}
         <div style={{ padding: "0 16px 8px" }}>
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
-            Define cuánto querés gastar por categoría este mes. Te avisaremos cuando llegues al 80%.
+            Define cuánto quieres gastar por categoría este mes. Te avisaremos cuando llegues al 80%.
           </div>
           <div style={{ ...cardStyle, marginBottom: 12, overflow: "hidden", padding: 0 }}>
             {(data.categories?.gastos || []).map((cat, i, arr) => (
@@ -1727,7 +1727,7 @@ export default function App() {
             ))}
           </div>
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, padding: "0 4px" }}>
-            Deja en 0 las categorías que no querés controlar.
+            Deja en 0 las categorías que no quieres controlar.
           </div>
           <div style={{ height: "calc(32px + env(safe-area-inset-bottom, 20px))" }} />
         </div>
@@ -1984,13 +1984,13 @@ export default function App() {
               <div style={{ position: "absolute", top: -30, right: -30, width: 140, height: 140, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
               <div style={{ position: "absolute", bottom: -20, left: 40, width: 100, height: 100, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
               <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 14 }}>✨ Nuevo en Qori</div>
-              <div style={{ fontFamily: FONT_TITLE, fontSize: 28, fontWeight: 900, color: "#fff", letterSpacing: -0.5, lineHeight: 1.15, marginBottom: 10 }}>Controlá tu<br/>presupuesto</div>
-              <div style={{ fontSize: 14, color: "rgba(255,255,255,0.75)", lineHeight: 1.55 }}>Definí cuánto querés gastar por categoría y Qori te avisa cuando te estás pasando.</div>
+              <div style={{ fontFamily: FONT_TITLE, fontSize: 28, fontWeight: 900, color: "#fff", letterSpacing: -0.5, lineHeight: 1.15, marginBottom: 10 }}>Controla tu<br/>presupuesto</div>
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,0.75)", lineHeight: 1.55 }}>Define cuánto quieres gastar por categoría y Qori te avisa cuando te estás pasando.</div>
             </div>
             {/* Features */}
             <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "18px 20px 0" }}>
               {[
-                { icon: "🎯", bg: C.purpleSoft, title: "Límites por categoría", desc: "Comida S/300 · Transporte S/200 · lo que vos quieras." },
+                { icon: "🎯", bg: C.purpleSoft, title: "Límites por categoría", desc: "Comida S/300 · Transporte S/200 · lo que tú quieras." },
                 { icon: "🔔", bg: "#FEE8E0", title: "Alertas antes de pasarte", desc: "Te notificamos cuando llegás al 80% y cuando superás el límite." },
                 { icon: "📊", bg: "#E8F5EE", title: "Seguimiento en tiempo real", desc: "Barras de progreso en Mi Mes para ver de un vistazo cómo vas." },
               ].map(f => (
