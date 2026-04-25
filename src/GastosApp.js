@@ -186,6 +186,9 @@ export default function App() {
   const [selectedCatDetail, setSelectedCatDetail] = useState(null); // {name,emoji,expenses[]}
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [miMesSubTab, setMiMesSubTab] = useState("balance"); // "balance" | "presupuesto"
+  const [showBudgetFeatureModal, setShowBudgetFeatureModal] = useState(() => {
+    try { return !localStorage.getItem('qori-budget-feature-seen'); } catch(e) { return false; }
+  });
 
   const exportData = () => {
     const json = JSON.stringify(data, null, 2);
@@ -1970,6 +1973,56 @@ export default function App() {
           </button>
         ); })}
       </nav>
+
+      {/* ── Budget feature announcement modal ── */}
+      {showBudgetFeatureModal && authPhase === "app" && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(40,30,120,0.55)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", paddingBottom: "calc(28px + env(safe-area-inset-bottom, 0px))", animation: "slideUp 0.35s cubic-bezier(0.4,0,0.2,1)" }}>
+            <div style={{ width: 40, height: 4, background: "#D4D0C8", borderRadius: 2, margin: "14px auto 0" }} />
+            {/* Hero banner */}
+            <div style={{ margin: "20px 20px 0", background: `linear-gradient(135deg, ${C.purple} 0%, ${C.purpleLight} 100%)`, borderRadius: 20, padding: "24px 22px 20px", position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: -30, right: -30, width: 140, height: 140, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
+              <div style={{ position: "absolute", bottom: -20, left: 40, width: 100, height: 100, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 14 }}>✨ Nuevo en Qori</div>
+              <div style={{ fontFamily: FONT_TITLE, fontSize: 28, fontWeight: 900, color: "#fff", letterSpacing: -0.5, lineHeight: 1.15, marginBottom: 10 }}>Controlá tu<br/>presupuesto</div>
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,0.75)", lineHeight: 1.55 }}>Definí cuánto querés gastar por categoría y Qori te avisa cuando te estás pasando.</div>
+            </div>
+            {/* Features */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "18px 20px 0" }}>
+              {[
+                { icon: "🎯", bg: C.purpleSoft, title: "Límites por categoría", desc: "Comida S/300 · Transporte S/200 · lo que vos quieras." },
+                { icon: "🔔", bg: "#FEE8E0", title: "Alertas antes de pasarte", desc: "Te notificamos cuando llegás al 80% y cuando superás el límite." },
+                { icon: "📊", bg: "#E8F5EE", title: "Seguimiento en tiempo real", desc: "Barras de progreso en Mi Mes para ver de un vistazo cómo vas." },
+              ].map(f => (
+                <div key={f.title} style={{ display: "flex", alignItems: "center", gap: 14, background: C.beige, borderRadius: 14, padding: "12px 14px" }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 12, background: f.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{f.icon}</div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: C.black }}>{f.title}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{f.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* CTAs */}
+            <div style={{ padding: "18px 20px 0", display: "flex", flexDirection: "column", gap: 10 }}>
+              <button onClick={() => {
+                try { localStorage.setItem('qori-budget-feature-seen', '1'); } catch(e) {}
+                setShowBudgetFeatureModal(false);
+                setTab("config");
+                setTimeout(() => setSubScreen("presupuestos"), 300);
+              }} style={{ width: "100%", padding: 16, background: `linear-gradient(135deg, ${C.purple}, ${C.purpleLight})`, border: "none", borderRadius: 16, fontSize: 16, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "inherit", boxShadow: `0 4px 20px rgba(108,92,231,0.35)` }}>
+                Configurar presupuesto →
+              </button>
+              <button onClick={() => {
+                try { localStorage.setItem('qori-budget-feature-seen', '1'); } catch(e) {}
+                setShowBudgetFeatureModal(false);
+              }} style={{ width: "100%", padding: 14, background: "transparent", border: "none", fontSize: 14, fontWeight: 600, color: C.muted, cursor: "pointer", fontFamily: "inherit" }}>
+                Ahora no
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
