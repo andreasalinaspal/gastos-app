@@ -1803,17 +1803,17 @@ export default function App() {
               {/* Voz */}
               <button onClick={() => { setShowAddModal(false); handleRecord(); }} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 18px", borderRadius: 16, background: C.beige, border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
                 <div style={{ width: 46, height: 46, borderRadius: 13, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🎙️</div>
-                <div><div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>Grabar por voz</div><div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Di el monto y descripción</div></div>
+                <div><div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Grabar por voz</div><div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Di el monto y descripción</div></div>
               </button>
               {/* Manual */}
               <button onClick={() => { setShowAddModal(false); setShowManual(true); }} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 18px", borderRadius: 16, background: C.beige, border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
                 <div style={{ width: 46, height: 46, borderRadius: 13, background: "#E8F5E9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>⌨️</div>
-                <div><div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>Escribir manualmente</div><div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Ingresa monto y descripción</div></div>
+                <div><div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Escribir manualmente</div><div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Ingresa monto y descripción</div></div>
               </button>
               {/* Cámara */}
               <button onClick={() => { setShowAddModal(false); setShowScanOptions(true); }} style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 18px", borderRadius: 16, background: C.beige, border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
                 <div style={{ width: 46, height: 46, borderRadius: 13, background: "#FFF3E0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📷</div>
-                <div><div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>Subir captura</div><div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{scanLoading ? "Analizando imagen..." : "Escanea un comprobante con IA"}</div></div>
+                <div><div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Subir captura</div><div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{scanLoading ? "Analizando imagen..." : "Escanea un comprobante con IA"}</div></div>
               </button>
             </div>
           </div>
