@@ -378,6 +378,7 @@ export default function App() {
   const curMonth = getCurrentMonthLabel();
   const todayExp = data.expenses.filter(e => new Date(e.date).toDateString() === new Date().toDateString());
   const todayTotal = todayExp.reduce((s, e) => s + e.amount, 0);
+  const recentExp = [...data.expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
 
   const getMonthData = (offset) => {
     const mk = getMonthLabel(offset);
@@ -787,12 +788,12 @@ export default function App() {
             <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>Toca <strong style={{ color: "#fff" }}>+</strong> para registrar tu primer gasto</div>
           </div>
         )}
-        {/* Today's expenses */}
-        <div style={{ padding: "16px 20px 0", flex: 1 }}>
-          {todayExp.length > 0 && (
+        {/* Recent expenses */}
+        <div style={{ padding: "20px 20px 0", flex: 1 }}>
+          {recentExp.length > 0 && (
             <>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 1.5, marginBottom: 10 }}>HOY · {fmt(todayTotal)}</div>
-              {todayExp.map(e => (
+              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 1.5, marginBottom: 10 }}>ÚLTIMOS MOVIMIENTOS</div>
+              {recentExp.map(e => (
                 <div key={e.id} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 14, padding: "12px 16px", marginBottom: 8 }}>
                   {editExpId === e.id ? (
                     <div>
@@ -819,7 +820,9 @@ export default function App() {
                     <div style={{ display: "flex", alignItems: "center" }}>
                       <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); setEditExpDate(new Date(e.date).toISOString().split("T")[0]); }}>
                         <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{e.description}</div>
-                        {e.category && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>{e.category.emoji} {e.category.name}</div>}
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>
+                          {e.category ? `${e.category.emoji} ${e.category.name} · ` : ""}{new Date(e.date).toLocaleDateString("es-PE", { day: "numeric", month: "short" })}
+                        </div>
                       </div>
                       <span style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginRight: 10 }}>-{fmt(e.amount)}</span>
                       <button onClick={() => deleteExpense(e.id)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: 8, cursor: "pointer" }}><TrashIcon size={16} color="rgba(255,255,255,0.7)" /></button>
@@ -827,6 +830,9 @@ export default function App() {
                   )}
                 </div>
               ))}
+              {data.expenses.length > 10 && (
+                <button onClick={() => setTab("month")} style={{ width: "100%", padding: "12px 0", marginTop: 4, background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 14, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: 0.2 }}>Ver más →</button>
+              )}
             </>
           )}
         </div>
