@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "./supabase";
 
 const MONTHS_SHORT = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -72,6 +72,7 @@ function initData() {
     },
     userName: "",
     currency: "PEN",
+    budgets: {},
   };
 }
 
@@ -183,6 +184,8 @@ export default function App() {
   const [showNameSetup, setShowNameSetup] = useState(false);
   const [nameSetupValue, setNameSetupValue] = useState("");
   const [selectedCatDetail, setSelectedCatDetail] = useState(null); // {name,emoji,expenses[]}
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [miMesSubTab, setMiMesSubTab] = useState("balance"); // "balance" | "presupuesto"
 
   const exportData = () => {
     const json = JSON.stringify(data, null, 2);
@@ -382,6 +385,33 @@ export default function App() {
   const todayExp = data.expenses.filter(e => new Date(e.date).toDateString() === new Date().toDateString());
   const todayTotal = todayExp.reduce((s, e) => s + e.amount, 0);
   const recentExp = [...data.expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
+
+  // Spending per category this month
+  const catSpend = useMemo(() => {
+    const m = {};
+    data.expenses
+      .filter(e => e.month === curMonth)
+      .forEach(e => {
+        if (e.category?.id) {
+          m[e.category.id] = (m[e.category.id] || 0) + e.amount;
+        }
+      });
+    return m;
+  }, [data.expenses, curMonth]);
+
+  // Budget alerts: categories at >=80% of their limit
+  const budgetAlerts = useMemo(() => {
+    return (data.categories?.gastos || [])
+      .filter(cat => data.budgets?.[cat.id] > 0)
+      .map(cat => {
+        const limit = data.budgets[cat.id];
+        const spent = catSpend[cat.id] || 0;
+        const pct = Math.round((spent / limit) * 100);
+        return { cat, limit, spent, pct };
+      })
+      .filter(a => a.pct >= 80)
+      .sort((a, b) => b.pct - a.pct);
+  }, [data.budgets, data.categories, catSpend]);
 
   const getMonthData = (offset) => {
     const mk = getMonthLabel(offset);
@@ -758,9 +788,17 @@ export default function App() {
     return (
       <div style={{ flex: 1, background: "linear-gradient(160deg, #6C5CE7 0%, #5A4BD1 100%)", minHeight: "100vh", display: "flex", flexDirection: "column", paddingBottom: 88 }}>
         {/* Header */}
-        <div style={{ padding: "52px 28px 0" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: 1.5, marginBottom: 6 }}>{getToday()}</div>
-          <h1 style={{ fontSize: 36, fontWeight: 900, color: "#fff", margin: 0, fontStyle: "italic", letterSpacing: -1, fontFamily: FONT_TITLE }}>Hola, {data.userName || "👋"}.</h1>
+        <div style={{ padding: "52px 28px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: 1.5, marginBottom: 6 }}>{getToday()}</div>
+            <h1 style={{ fontSize: 36, fontWeight: 900, color: "#fff", margin: 0, fontStyle: "italic", letterSpacing: -1, fontFamily: FONT_TITLE }}>Hola, {data.userName || "👋"}.</h1>
+          </div>
+          <button onClick={() => setShowNotifPanel(true)} style={{ position: "relative", width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.15)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 6 }}>
+            <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            {budgetAlerts.length > 0 && (
+              <div style={{ position: "absolute", top: 4, right: 4, width: 14, height: 14, borderRadius: "50%", background: C.orange, border: "2px solid #5A4BD1", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 900, color: "#fff" }}>{budgetAlerts.length}</div>
+            )}
+          </button>
         </div>
         {/* Today total */}
         <div style={{ textAlign: "center", padding: "20px 0 8px" }}>
@@ -860,9 +898,17 @@ export default function App() {
         </div>
         <div style={{ display: "flex", gap: 0, padding: "0 24px", marginBottom: 20, overflowX: "auto" }}>
           {mtabs.map(t => (
-            <button key={t.label} onClick={() => setMonthTab(t.val)} style={{ padding: "8px 14px", fontSize: 13, fontWeight: monthTab === t.val ? 700 : 500, color: monthTab === t.val ? C.purple : C.muted, background: "none", border: "none", borderBottom: monthTab === t.val ? "2.5px solid " + C.purple : "2.5px solid transparent", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>{t.label}</button>
+            <button key={t.label} onClick={() => { setMonthTab(t.val); setMiMesSubTab("balance"); }} style={{ padding: "8px 14px", fontSize: 13, fontWeight: monthTab === t.val ? 700 : 500, color: monthTab === t.val ? C.purple : C.muted, background: "none", border: "none", borderBottom: monthTab === t.val ? "2.5px solid " + C.purple : "2.5px solid transparent", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>{t.label}</button>
           ))}
         </div>
+        {/* Sub-tabs */}
+        {monthTab !== "hist" && (
+          <div style={{ display: "flex", background: "#E8E4DA", borderRadius: 12, padding: 4, margin: "0 16px 16px" }}>
+            {[{id:"balance",label:"Balance"},{id:"presupuesto",label:"Presupuesto"}].map(t => (
+              <button key={t.id} onClick={() => setMiMesSubTab(t.id)} style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: miMesSubTab === t.id ? 700 : 500, color: miMesSubTab === t.id ? C.black : C.muted, background: miMesSubTab === t.id ? "#fff" : "transparent", boxShadow: miMesSubTab === t.id ? "0 1px 4px rgba(0,0,0,0.08)" : "none", transition: "all 0.2s" }}>{t.label}</button>
+            ))}
+          </div>
+        )}
         {monthTab === "hist" ? (
           <div style={{ padding: "0 24px" }}>
             <div style={{ ...cardStyle, padding: 20 }}>
@@ -880,6 +926,8 @@ export default function App() {
           </div>
         ) : (
           <>
+            {miMesSubTab === "balance" && (
+            <>
             <div style={{ padding: "0 24px", marginBottom: 16 }}>
               <div style={{ background: isNeg ? C.orange : "linear-gradient(135deg, #1B6B3A 0%, #2D9F5B 100%)", borderRadius: 20, padding: "28px 24px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Balance del mes</div>
@@ -944,6 +992,82 @@ export default function App() {
                 </div>
               ); })}
             </div>
+            </>
+            )}
+            {miMesSubTab === "presupuesto" && (() => {
+              const budgetCats = (data.categories?.gastos || []).filter(cat => data.budgets?.[cat.id] > 0);
+              const totalBudget = budgetCats.reduce((s, cat) => s + (data.budgets[cat.id] || 0), 0);
+              const totalSpent = budgetCats.reduce((s, cat) => s + (catSpend[cat.id] || 0), 0);
+              const alertCount = budgetAlerts.length;
+              return (
+                <div>
+                  {/* Overall summary */}
+                  <div style={{ background: C.purple, borderRadius: 16, padding: "16px 18px", margin: "0 16px 14px", display: "flex", alignItems: "center", gap: 14 }}>
+                    <div style={{ fontSize: 34 }}>🎯</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>Total presupuestado</div>
+                      <div style={{ fontFamily: FONT_TITLE, fontSize: 22, fontWeight: 900, color: "#fff" }}>{fmt(totalSpent)} <span style={{ fontSize: 15, fontWeight: 600, opacity: 0.6 }}>/ {fmt(totalBudget)}</span></div>
+                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>{alertCount > 0 ? `${alertCount} categoría${alertCount > 1 ? "s" : ""} necesita${alertCount > 1 ? "n" : ""} atención` : "Todo dentro del presupuesto ✅"}</div>
+                    </div>
+                  </div>
+
+                  {budgetCats.length === 0 ? (
+                    <div style={{ ...cardStyle, margin: "0 16px", padding: 24, textAlign: "center", color: C.muted, fontSize: 14 }}>
+                      <div style={{ fontSize: 36, marginBottom: 10 }}>💰</div>
+                      Define límites en Config → Presupuesto para ver el seguimiento aquí.
+                    </div>
+                  ) : (
+                    [...budgetCats]
+                      .map(cat => ({ cat, limit: data.budgets[cat.id], spent: catSpend[cat.id] || 0 }))
+                      .map(({ cat, limit, spent }) => {
+                        const pct = Math.round((spent / limit) * 100);
+                        const isDanger = pct >= 100;
+                        const isWarn = pct >= 80 && pct < 100;
+                        const barClass = isDanger ? "linear-gradient(90deg,#C2410C,#E8561E)" : isWarn ? "linear-gradient(90deg,#D97706,#F59E0B)" : `linear-gradient(90deg,${C.green},${C.greenLight})`;
+                        const pctColor = isDanger ? C.orange : isWarn ? "#D97706" : C.greenLight;
+                        const chipBg = isDanger ? "#FEE2E2" : isWarn ? "#FEF3C7" : "#E8F5EE";
+                        const chipColor = isDanger ? "#991B1B" : isWarn ? "#92400E" : C.green;
+                        const chipLabel = isDanger ? "🚨 Te pasaste" : isWarn ? "⚠️ Casi al límite" : "✅ Vas bien";
+                        const remText = isDanger ? `Excediste ${fmt(spent - limit)}` : `Te quedan ${fmt(limit - spent)}`;
+                        const remColor = isDanger ? C.orange : isWarn ? "#D97706" : C.greenLight;
+                        return (
+                          <div key={cat.id} style={{ ...cardStyle, padding: "14px 16px", margin: "0 16px 10px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                              <div style={{ fontSize: 22 }}>{cat.emoji}</div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 14, fontWeight: 500, color: C.black }}>{cat.name}</div>
+                                <div style={{ fontSize: 12, color: C.muted, marginTop: 1 }}><strong style={{ color: isDanger ? C.orange : C.black }}>{fmt(spent)}</strong> de {fmt(limit)}</div>
+                              </div>
+                              <div style={{ fontFamily: FONT_TITLE, fontSize: 18, fontWeight: 900, color: pctColor }}>{pct}%</div>
+                            </div>
+                            <div style={{ height: 8, background: "#F0EDE4", borderRadius: 99, overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: barClass, borderRadius: 99 }} />
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 7, fontSize: 11 }}>
+                              <span style={{ background: chipBg, color: chipColor, borderRadius: 20, padding: "3px 9px", fontWeight: 600 }}>{chipLabel}</span>
+                              <span style={{ color: remColor, fontWeight: isDanger ? 700 : 600 }}>{remText}</span>
+                            </div>
+                          </div>
+                        );
+                      })
+                  )}
+
+                  {/* Categories without budget */}
+                  {(data.categories?.gastos || []).filter(cat => !(data.budgets?.[cat.id] > 0) && (catSpend[cat.id] || 0) > 0).length > 0 && (
+                    <div style={{ padding: "4px 20px 8px" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Sin límite definido</div>
+                      {(data.categories?.gastos || []).filter(cat => !(data.budgets?.[cat.id] > 0) && (catSpend[cat.id] || 0) > 0).map(cat => (
+                        <div key={cat.id} style={{ ...cardStyle, padding: "12px 16px", margin: "0 0 8px", opacity: 0.6, display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ fontSize: 20 }}>{cat.emoji}</div>
+                          <div style={{ flex: 1, fontSize: 14, fontWeight: 500, color: C.black }}>{cat.name}</div>
+                          <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>{fmt(catSpend[cat.id])}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </>
         )}
       </div>
@@ -1199,6 +1323,35 @@ export default function App() {
               <div style={{ fontSize: 12, color: C.muted }}>{(data.categories?.ingresos?.length || 0)} categorías</div>
             </div>
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
+          </div>
+        </div>
+        {/* Presupuesto */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "14px 20px 8px" }}>Presupuesto mensual</div>
+        <div style={{ ...cardStyle, marginBottom: 12 }}>
+          {(data.categories?.gastos || []).map((cat, i, arr) => (
+            <div key={cat.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: i < arr.length - 1 ? "1px solid #F0EDE4" : "none" }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, flexShrink: 0 }}>{cat.emoji}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 500, color: C.black }}>{cat.name}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, background: data.budgets?.[cat.id] > 0 ? C.purpleSoft : C.beige, border: `1.5px solid ${data.budgets?.[cat.id] > 0 ? C.purple : "#D4D0C8"}`, borderRadius: 10, padding: "6px 10px", minWidth: 90 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: data.budgets?.[cat.id] > 0 ? C.purple : C.muted }}>S/</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={data.budgets?.[cat.id] || ""}
+                  placeholder="0"
+                  onChange={e => {
+                    const val = e.target.value === "" ? 0 : Number(e.target.value);
+                    setData(p => ({ ...p, budgets: { ...p.budgets, [cat.id]: val } }));
+                  }}
+                  style={{ border: "none", background: "transparent", width: 60, fontSize: 14, fontWeight: 600, color: data.budgets?.[cat.id] > 0 ? C.purple : C.black, fontFamily: "inherit", textAlign: "right", outline: "none" }}
+                />
+              </div>
+            </div>
+          ))}
+          <div style={{ padding: "10px 16px 12px", fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+            Deja en 0 las categorías sin límite. Te avisaremos cuando llegues al 80%.
           </div>
         </div>
         {/* Moneda */}
@@ -1717,6 +1870,59 @@ export default function App() {
             </div>
             <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, pendingExpCat)} disabled={!pendingExpCat} style={{ width: "100%", padding: 16, borderRadius: 14, background: pendingExpCat ? C.purple : "#D4D0C8", color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: pendingExpCat ? "pointer" : "default", fontFamily: "inherit", marginBottom: 10, transition: "background 0.2s" }}>Confirmar gasto</button>
             <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, null)} style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Sin categoría</button>
+          </div>
+        </div>
+      )}
+      {showNotifPanel && (
+        <div onClick={() => setShowNotifPanel(false)} style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(60,45,180,0.5)", backdropFilter: "blur(4px)" }}>
+          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "24px 24px 0 0", boxShadow: "0 -8px 40px rgba(0,0,0,0.18)", animation: "slideUp 0.3s ease", paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))" }}>
+            <div style={{ width: 40, height: 4, background: "#D4D0C8", borderRadius: 2, margin: "12px auto 0" }} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px 12px", borderBottom: "1px solid #F0EDE4" }}>
+              <div style={{ fontFamily: FONT_TITLE, fontSize: 20, fontWeight: 900, color: C.black }}>Notificaciones</div>
+              {budgetAlerts.length > 0 && <button onClick={() => setShowNotifPanel(false)} style={{ fontSize: 12, fontWeight: 600, color: C.muted, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>Cerrar</button>}
+            </div>
+            <div style={{ padding: "12px 16px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {budgetAlerts.length === 0 ? (
+                <>
+                  <div style={{ background: "#F0FAF4", border: "1.5px solid rgba(27,107,58,0.25)", borderRadius: 14, padding: "13px 14px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    <span style={{ fontSize: 22 }}>✅</span>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.green }}>Todo bajo control</div>
+                      <div style={{ fontSize: 12, color: C.greenLight, marginTop: 3 }}>Tus categorías están dentro del presupuesto este mes.</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "center", padding: "20px 16px", color: C.muted, fontSize: 13 }}>
+                    <div style={{ fontSize: 36, marginBottom: 8 }}>🎯</div>
+                    Te avisaremos cuando alguna categoría supere el 80% de tu límite mensual.
+                  </div>
+                </>
+              ) : (
+                budgetAlerts.map(({ cat, limit, spent, pct }) => {
+                  const isDanger = pct >= 100;
+                  const bg = isDanger ? "#FFF1EE" : "#FFFBEB";
+                  const border = isDanger ? "rgba(232,86,30,0.3)" : "rgba(217,119,6,0.3)";
+                  const titleColor = isDanger ? "#9A3412" : "#92400E";
+                  const subColor = isDanger ? "#C2410C" : "#B45309";
+                  const barColor = isDanger ? "linear-gradient(90deg,#C2410C,#E8561E)" : "linear-gradient(90deg,#D97706,#F59E0B)";
+                  const badgeBg = isDanger ? "rgba(232,86,30,0.14)" : "rgba(217,119,6,0.14)";
+                  return (
+                    <div key={cat.id} style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: 14, padding: "13px 14px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+                      <span style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{isDanger ? "🚨" : "⚠️"}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: titleColor }}>{cat.emoji} {cat.name} — {isDanger ? "te pasaste" : "casi al límite"}</div>
+                        <div style={{ fontSize: 12, color: subColor, marginTop: 3 }}>
+                          {isDanger ? `Gastaste S/ ${spent.toLocaleString("es-PE")} de S/ ${limit.toLocaleString("es-PE")}. Excediste S/ ${(spent - limit).toLocaleString("es-PE")}.` : `S/ ${spent.toLocaleString("es-PE")} de S/ ${limit.toLocaleString("es-PE")}. Te quedan S/ ${(limit - spent).toLocaleString("es-PE")}.`}
+                        </div>
+                        <div style={{ marginTop: 8, height: 5, background: "rgba(0,0,0,0.08)", borderRadius: 99, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: barColor, borderRadius: 99 }} />
+                        </div>
+                      </div>
+                      <div style={{ flexShrink: 0, background: badgeBg, borderRadius: 8, padding: "4px 9px", fontFamily: FONT_TITLE, fontSize: 13, fontWeight: 900, color: titleColor, alignSelf: "center" }}>{pct}%</div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       )}
