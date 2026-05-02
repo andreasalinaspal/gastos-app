@@ -189,6 +189,10 @@ export default function App() {
   const [showBudgetFeatureModal, setShowBudgetFeatureModal] = useState(() => {
     try { return !localStorage.getItem('qori-budget-feature-seen-v2'); } catch(e) { return false; }
   });
+  const [showCarryoverModal, setShowCarryoverModal] = useState(() => {
+    try { return !localStorage.getItem('qori-balance-carryover-seen-v1'); } catch(e) { return false; }
+  });
+  const [carryoverSlide, setCarryoverSlide] = useState(0);
 
   const exportData = () => {
     const json = JSON.stringify(data, null, 2);
@@ -384,6 +388,23 @@ export default function App() {
     }
   }, []);
 
+  // Auto carry-over balance from previous month (runs from June 2025 onwards,
+  // May is handled manually via the one-time carryover modal)
+  useEffect(() => {
+    if (authPhase !== "app") return;
+    try { if (!localStorage.getItem('qori-balance-carryover-seen-v1')) return; } catch(e) {}
+    const storageKey = 'qori-last-carryover-month';
+    let lastMonth; try { lastMonth = localStorage.getItem(storageKey); } catch(e) {}
+    if (lastMonth === curMonth) return;
+    const alreadyAdded = data.incomeExtra.some(i => i.month === curMonth && i.name === "Saldo mes anterior");
+    if (alreadyAdded) { try { localStorage.setItem(storageKey, curMonth); } catch(e) {} return; }
+    const prevBal = getMonthData(-1).balance;
+    if (prevBal > 0) {
+      setData(p => ({ ...p, incomeExtra: [...p.incomeExtra, { id: genId(), name: "Saldo mes anterior", amount: Math.round(prevBal), month: curMonth }] }));
+    }
+    try { localStorage.setItem(storageKey, curMonth); } catch(e) {}
+  }, [authPhase, curMonth]);
+
   const curMonth = getCurrentMonthLabel();
   const todayExp = data.expenses.filter(e => new Date(e.date).toDateString() === new Date().toDateString());
   const todayTotal = todayExp.reduce((s, e) => s + e.amount, 0);
@@ -429,6 +450,11 @@ export default function App() {
     const balance = totalInc - totalFijos - totalDiarios;
     return { exps, totalDiarios, totalFijos, totalFijosAll, totalInc, balance };
   };
+
+  const prevMonthBalance = getMonthData(-1).balance;
+  const prevMonthLabel = getMonthLabel(-1); // e.g. "Abril 2025"
+  const prevMonthName = prevMonthLabel.split(" ")[0]; // e.g. "Abril"
+  const curMonthName = curMonth.split(" ")[0]; // e.g. "Mayo"
 
   const addExpense = (amt, desc) => {
     if (!amt || amt <= 0) return;
@@ -1967,8 +1993,109 @@ export default function App() {
         ); })}
       </nav>
 
+      {/* ── Balance carry-over announcement modal ── */}
+      {showCarryoverModal && authPhase === "app" && (() => {
+        const hasPrevBal = prevMonthBalance > 0;
+        const dismissCarryover = () => {
+          try {
+            localStorage.setItem('qori-balance-carryover-seen-v1', '1');
+            localStorage.setItem('qori-last-carryover-month', curMonth);
+          } catch(e) {}
+          setShowCarryoverModal(false);
+        };
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 510, background: "rgba(20,18,40,0.6)", backdropFilter: "blur(8px)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", paddingBottom: "calc(32px + env(safe-area-inset-bottom, 0px))", animation: "slideUp 0.35s cubic-bezier(0.4,0,0.2,1)" }}>
+              <div style={{ width: 40, height: 4, background: "#D4D0C8", borderRadius: 2, margin: "14px auto 0" }} />
+              {/* dots */}
+              <div style={{ display: "flex", justifyContent: "center", gap: 6, paddingTop: 14 }}>
+                {[0, 1].map(i => (
+                  <div key={i} style={{ height: 6, borderRadius: 3, background: carryoverSlide === i ? C.purple : "#D4D0C8", width: carryoverSlide === i ? 20 : 6, transition: "all 0.25s" }} />
+                ))}
+              </div>
+
+              {/* SLIDE 0 — el aviso */}
+              {carryoverSlide === 0 && (
+                <div style={{ padding: "0 24px 8px" }}>
+                  <div style={{ width: 72, height: 72, borderRadius: 20, background: `linear-gradient(135deg, ${C.purple}, ${C.purpleLight})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, margin: "20px auto 18px", boxShadow: `0 8px 24px rgba(108,92,231,0.3)` }}>🔧</div>
+                  <div style={{ textAlign: "center", marginBottom: 12 }}>
+                    <span style={{ background: C.beige, borderRadius: 20, padding: "4px 14px", fontSize: 11, fontWeight: 700, color: C.purple, letterSpacing: 0.5, textTransform: "uppercase" }}>✅ Mejora</span>
+                  </div>
+                  <div style={{ fontFamily: FONT_TITLE, fontSize: 26, fontWeight: 900, color: C.black, letterSpacing: -0.5, lineHeight: 1.2, marginBottom: 12, textAlign: "center" }}>Corregimos algo<br/>importante</div>
+                  <div style={{ fontSize: 15, color: C.muted, lineHeight: 1.65, textAlign: "center", marginBottom: 18 }}>
+                    Si cambiaste de mes y notaste que tu <strong style={{ color: C.black }}>balance quedó en cero</strong>, era un error nuestro. Ya lo corregimos.
+                  </div>
+                  <div style={{ background: "#FFF4F0", border: "1.5px solid #FFD8CC", borderRadius: 14, padding: "13px 15px", display: "flex", gap: 11, alignItems: "flex-start", marginBottom: 22 }}>
+                    <span style={{ fontSize: 17, flexShrink: 0 }}>⚠️</span>
+                    <div style={{ fontSize: 13, color: "#8A4A38", lineHeight: 1.5 }}>
+                      <strong style={{ color: "#5C2D1E" }}>Lo que pasaba:</strong> al iniciar un mes nuevo, Qori no traía tu saldo anterior — empezaba desde cero como si nada hubiera pasado.
+                    </div>
+                  </div>
+                  <button onClick={() => setCarryoverSlide(1)} style={{ width: "100%", padding: 16, background: `linear-gradient(135deg, ${C.purple}, ${C.purpleLight})`, border: "none", borderRadius: 16, fontSize: 15, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "inherit", boxShadow: `0 4px 20px rgba(108,92,231,0.3)` }}>
+                    Entendido, ¿y ahora? →
+                  </button>
+                </div>
+              )}
+
+              {/* SLIDE 1 — con balance previo positivo */}
+              {carryoverSlide === 1 && hasPrevBal && (
+                <div style={{ padding: "0 24px 8px" }}>
+                  <div style={{ fontSize: 52, textAlign: "center", margin: "16px 0 4px" }}>💰</div>
+                  <div style={{ fontFamily: FONT_TITLE, fontSize: 26, fontWeight: 900, color: C.black, letterSpacing: -0.5, lineHeight: 1.2, marginBottom: 10 }}>Tu saldo de {prevMonthName},<br/>en {curMonthName}</div>
+                  <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.6, marginBottom: 10 }}>
+                    De ahora en adelante esto ocurre automático. Pero como este mes fue el primero con la corrección, <strong style={{ color: C.black }}>¿quieres que traigamos tu saldo de {prevMonthName} a {curMonthName}?</strong> Este sería el monto:
+                  </div>
+                  {/* tarjeta balance */}
+                  <div style={{ background: `linear-gradient(135deg, ${C.green}, ${C.greenLight})`, borderRadius: 18, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📅</div>
+                    <div>
+                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginBottom: 3 }}>Tu balance de</div>
+                      <div style={{ fontFamily: FONT_TITLE, fontSize: 26, fontWeight: 900, color: "#fff", letterSpacing: -0.5 }}>{fmt(prevMonthBalance)}</div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>{prevMonthLabel}</div>
+                    </div>
+                  </div>
+                  {/* CTAs */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <button onClick={() => {
+                      setData(p => ({ ...p, incomeExtra: [...p.incomeExtra, { id: genId(), name: "Saldo mes anterior", amount: Math.round(prevMonthBalance), month: curMonth }] }));
+                      dismissCarryover();
+                      showToast("Saldo de " + prevMonthLabel + " agregado ✓");
+                    }} style={{ width: "100%", padding: 16, background: `linear-gradient(135deg, ${C.purple}, ${C.purpleLight})`, border: "none", borderRadius: 16, fontSize: 15, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "inherit", boxShadow: `0 4px 20px rgba(108,92,231,0.3)` }}>
+                      💸 Agregar mi saldo de {prevMonthName}
+                    </button>
+                    <button onClick={dismissCarryover} style={{ width: "100%", padding: 14, background: "transparent", border: "2px solid #D4D0C8", borderRadius: 16, fontSize: 14, fontWeight: 600, color: C.muted, cursor: "pointer", fontFamily: "inherit" }}>
+                      Ya lo tengo registrado
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* SLIDE 1 — sin balance previo */}
+              {carryoverSlide === 1 && !hasPrevBal && (
+                <div style={{ padding: "0 24px 8px", textAlign: "center" }}>
+                  <div style={{ fontSize: 52, margin: "16px 0 6px" }}>🎉</div>
+                  <div style={{ fontFamily: FONT_TITLE, fontSize: 26, fontWeight: 900, color: C.black, letterSpacing: -0.5, lineHeight: 1.2, marginBottom: 12 }}>Ya está corregido</div>
+                  <div style={{ fontSize: 15, color: C.muted, lineHeight: 1.65, marginBottom: 18, textAlign: "center" }}>
+                    De ahora en adelante, al iniciar un mes nuevo tu saldo se suma automáticamente. No tienes que hacer nada.
+                  </div>
+                  <div style={{ background: C.purpleSoft, borderRadius: 12, padding: "12px 14px", marginBottom: 22, textAlign: "left", display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>✨</span>
+                    <div style={{ fontSize: 12, color: "#4A3FA0", lineHeight: 1.5 }}>
+                      Desde el próximo mes verás un ingreso llamado <strong style={{ color: C.purple }}>"Saldo mes anterior"</strong> que se agrega solo al inicio de cada mes.
+                    </div>
+                  </div>
+                  <button onClick={dismissCarryover} style={{ width: "100%", padding: 16, background: `linear-gradient(135deg, ${C.purple}, ${C.purpleLight})`, border: "none", borderRadius: 16, fontSize: 15, fontWeight: 700, color: "#fff", cursor: "pointer", fontFamily: "inherit", boxShadow: `0 4px 20px rgba(108,92,231,0.3)` }}>
+                    Entendido 👍
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Budget feature announcement modal ── */}
-      {showBudgetFeatureModal && authPhase === "app" && (
+      {showBudgetFeatureModal && authPhase === "app" && !showCarryoverModal && (
         <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(40,30,120,0.55)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
           <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", paddingBottom: "calc(28px + env(safe-area-inset-bottom, 0px))", animation: "slideUp 0.35s cubic-bezier(0.4,0,0.2,1)" }}>
             <div style={{ width: 40, height: 4, background: "#D4D0C8", borderRadius: 2, margin: "14px auto 0" }} />
