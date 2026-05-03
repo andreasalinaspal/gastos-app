@@ -388,22 +388,6 @@ export default function App() {
     }
   }, []);
 
-  // Auto carry-over balance from previous month (runs from June 2025 onwards,
-  // May is handled manually via the one-time carryover modal)
-  useEffect(() => {
-    if (authPhase !== "app") return;
-    try { if (!localStorage.getItem('qori-balance-carryover-seen-v1')) return; } catch(e) {}
-    const storageKey = 'qori-last-carryover-month';
-    let lastMonth; try { lastMonth = localStorage.getItem(storageKey); } catch(e) {}
-    if (lastMonth === curMonth) return;
-    const alreadyAdded = data.incomeExtra.some(i => i.month === curMonth && i.name === "Saldo mes anterior");
-    if (alreadyAdded) { try { localStorage.setItem(storageKey, curMonth); } catch(e) {} return; }
-    const prevBal = getMonthData(-1).balance;
-    if (prevBal > 0) {
-      setData(p => ({ ...p, incomeExtra: [...p.incomeExtra, { id: genId(), name: "Saldo mes anterior", amount: Math.round(prevBal), month: curMonth }] }));
-    }
-    try { localStorage.setItem(storageKey, curMonth); } catch(e) {}
-  }, [authPhase, curMonth]);
 
   const curMonth = getCurrentMonthLabel();
   const todayExp = data.expenses.filter(e => new Date(e.date).toDateString() === new Date().toDateString());
@@ -455,6 +439,25 @@ export default function App() {
   const prevMonthLabel = getMonthLabel(-1); // e.g. "Abril 2025"
   const prevMonthName = prevMonthLabel.split(" ")[0]; // e.g. "Abril"
   const curMonthName = curMonth.split(" ")[0]; // e.g. "Mayo"
+
+  // Auto carry-over balance from previous month (from next month onwards,
+  // May 2025 is handled manually via the one-time carryover modal)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (authPhase !== "app") return;
+    try { if (!localStorage.getItem('qori-balance-carryover-seen-v1')) return; } catch(e) {}
+    const cm = getCurrentMonthLabel();
+    const storageKey = 'qori-last-carryover-month';
+    let lastMonth; try { lastMonth = localStorage.getItem(storageKey); } catch(e) {}
+    if (lastMonth === cm) return;
+    const alreadyAdded = data.incomeExtra.some(i => i.month === cm && i.name === "Saldo mes anterior");
+    if (alreadyAdded) { try { localStorage.setItem(storageKey, cm); } catch(e) {} return; }
+    const prevBal = getMonthData(-1).balance;
+    if (prevBal > 0) {
+      setData(p => ({ ...p, incomeExtra: [...p.incomeExtra, { id: genId(), name: "Saldo mes anterior", amount: Math.round(prevBal), month: cm }] }));
+    }
+    try { localStorage.setItem(storageKey, cm); } catch(e) {}
+  }, [authPhase]); // month computed inside to avoid TDZ
 
   const addExpense = (amt, desc) => {
     if (!amt || amt <= 0) return;
