@@ -13,6 +13,10 @@ import MiMes from "./components/screens/MiMes";
 import Ingresos from "./components/screens/Ingresos";
 import { FijosScreen, CatsSubScreen, PresupuestosScreen, AllCatsScreen } from "./components/screens/Fijos";
 import Config from "./components/screens/Config";
+import Onboarding from "./components/auth/Onboarding";
+import Login from "./components/auth/Login";
+import Pin from "./components/auth/Pin";
+import { sharedStyle } from "./components/shared/globalStyles";
 import { catSpend as catSpendSel, budgetAlerts as budgetAlertsSel, getMonthData as getMonthDataSel } from "./state/selectors";
 
 export default function App() {
@@ -80,7 +84,6 @@ export default function App() {
   const [authPhone, setAuthPhone] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [obSlide, setObSlide] = useState(0);
   const [pinDigits, setPinDigits] = useState(4);
   const [pinVal, setPinVal] = useState("");
   const [pinFirst, setPinFirst] = useState("");
@@ -579,97 +582,6 @@ export default function App() {
   const TABS = [{ id: "home", label: "Inicio", Icon: HomeIcon }, { id: "month", label: "Mi Mes", Icon: CalIcon }, { id: "income", label: "Ingresos", Icon: WalletIcon }, { id: "config", label: "Config", Icon: GearIcon }];
 
 
-  const obSlides = [
-    {
-      bg: C.purple,
-      title: "Registra al instante",
-      desc: "Di el monto y listo. Qori entiende tu voz y registra tus gastos en segundos.",
-      icon: (
-        <div style={{ position: "relative", width: 260, height: 210, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ position: "absolute", width: 200, height: 200, borderRadius: "50%", background: "rgba(255,255,255,0.07)" }} />
-          <div style={{ position: "absolute", width: 220, height: 220, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.15)", animation: "ripple 2s ease-out infinite" }} />
-          <div style={{ position: "absolute", width: 175, height: 175, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.22)", animation: "ripple 2s ease-out infinite 0.6s" }} />
-          <div style={{ width: 96, height: 96, borderRadius: "50%", background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 2 }}>
-            <MicIcon size={44} color="#fff" />
-          </div>
-          <div style={{ position: "absolute", top: 12, right: 12, background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "7px 14px", fontSize: 13, fontWeight: 700, color: "#fff", animation: "float 3s ease-in-out infinite" }}>🍽️ S/ 25</div>
-          <div style={{ position: "absolute", bottom: 22, left: 8, background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "7px 14px", fontSize: 13, fontWeight: 700, color: "#fff", animation: "float 3s ease-in-out infinite 1s" }}>🚌 S/ 4.50</div>
-          <div style={{ position: "absolute", top: 58, right: 0, background: "rgba(255,255,255,0.15)", borderRadius: 20, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.85)", animation: "float 3s ease-in-out infinite 0.5s" }}>✅ Guardado</div>
-        </div>
-      )
-    },
-    {
-      bg: C.green,
-      title: "Controla tu mes",
-      desc: "Ve tus gastos fijos, ingresos y balance de un vistazo. Sin complicaciones.",
-      icon: (
-        <div style={{ position: "relative", width: 260, height: 210, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-          <div style={{ position: "absolute", inset: 0, borderRadius: 24, background: "rgba(255,255,255,0.07)" }} />
-          <div style={{ position: "absolute", top: 10, right: 12, background: "rgba(255,255,255,0.18)", borderRadius: 14, padding: "10px 14px", animation: "float 3s ease-in-out infinite" }}>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", fontWeight: 600 }}>Balance</div>
-            <div style={{ fontSize: 16, fontWeight: 900, color: "#fff" }}>S/ 1,240</div>
-          </div>
-          <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "flex-end", gap: 12, padding: "0 16px 4px" }}>
-            {[
-              { h: 105, emoji: "🍽️", amt: "S/320", op: 0.25 },
-              { h: 68, emoji: "🚌", amt: "S/180", op: 0.32 },
-              { h: 88, emoji: "🏠", amt: "S/240", op: 1, white: true },
-              { h: 40, emoji: "💊", amt: "S/90", op: 0.25 },
-              { h: 28, emoji: "🎉", amt: "S/60", op: 0.2 },
-            ].map((b, i) => (
-              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5 }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)", fontWeight: 700 }}>{b.amt}</div>
-                <div style={{ width: 34, height: b.h, background: b.white ? "#fff" : `rgba(255,255,255,${b.op})`, borderRadius: "7px 7px 0 0" }} />
-                <div style={{ fontSize: 11 }}>{b.emoji}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )
-    },
-    {
-      bg: C.orange,
-      title: "Tu data, segura",
-      desc: "Sincronización automática en la nube. Cambia de dispositivo sin perder nada.",
-      icon: (
-        <div style={{ position: "relative", width: 260, height: 210, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ position: "absolute", width: 180, height: 180, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
-          <div style={{ width: 90, height: 90, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", animation: "pulse 2.5s ease-in-out infinite", position: "relative", zIndex: 2 }}>
-            <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
-            </svg>
-          </div>
-          <div style={{ position: "absolute", left: 10, top: 28, background: "rgba(255,255,255,0.18)", borderRadius: 14, padding: "10px 12px", animation: "float 3s ease-in-out infinite", textAlign: "center" }}>
-            <div style={{ fontSize: 22 }}>📱</div>
-            <div style={{ fontSize: 10, color: "#fff", fontWeight: 700, marginTop: 4 }}>iPhone</div>
-          </div>
-          <div style={{ position: "absolute", right: 10, top: 28, background: "rgba(255,255,255,0.18)", borderRadius: 14, padding: "10px 12px", animation: "float 3s ease-in-out infinite 1s", textAlign: "center" }}>
-            <div style={{ fontSize: 22 }}>💻</div>
-            <div style={{ fontSize: 10, color: "#fff", fontWeight: 700, marginTop: 4 }}>Mac</div>
-          </div>
-          <div style={{ position: "absolute", bottom: 18, left: "50%", transform: "translateX(-50%)", background: "rgba(255,255,255,0.18)", borderRadius: 20, padding: "8px 16px", animation: "float 3s ease-in-out infinite 0.5s", whiteSpace: "nowrap" }}>
-            <span style={{ fontSize: 12, color: "#fff", fontWeight: 700 }}>🔒 Cifrado seguro</span>
-          </div>
-        </div>
-      )
-    },
-  ];
-  const slide = obSlides[obSlide];
-
-  const sharedStyle = `
-    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap');
-    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-    @keyframes slideUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-    @keyframes spin { to{transform:rotate(360deg)} }
-    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
-    @keyframes ripple { 0%{opacity:0.6;transform:scale(0.85)} 100%{opacity:0;transform:scale(1.15)} }
-    input:focus { border-color: #6C5CE7 !important; outline: none; }
-    input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
-    input[type="number"] { -moz-appearance: textfield; }
-    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; margin: 0; }
-    ::-webkit-scrollbar { width: 0; }
-  `;
-
   if (authPhase === "loading") return (
     <div style={{ fontFamily: FONT_BODY, position: "fixed", inset: 0, background: C.purple, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 20 }}>
       <style>{sharedStyle}</style>
@@ -678,85 +590,25 @@ export default function App() {
     </div>
   );
 
-  if (authPhase === "onboarding") return (
-    <div style={{ fontFamily: FONT_BODY, position: "fixed", inset: 0, background: slide.bg, display: "flex", flexDirection: "column", transition: "background 0.4s ease" }}>
-      <style>{sharedStyle}</style>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 40px 20px", gap: 24 }}>
-        <div style={{ fontSize: 32, fontWeight: 900, color: "rgba(255,255,255,0.55)", letterSpacing: -1, alignSelf: "flex-start", fontFamily: FONT_TITLE }}>Qori.</div>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>{slide.icon}</div>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 34, fontWeight: 900, color: "#fff", marginBottom: 12, lineHeight: 1.2, fontFamily: FONT_TITLE }}>{slide.title}</div>
-          <div style={{ fontSize: 16, color: "rgba(255,255,255,0.75)", lineHeight: 1.6 }}>{slide.desc}</div>
-        </div>
-      </div>
-      <div style={{ padding: "0 32px 52px", display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 4 }}>
-          {[0,1,2].map(i => <div key={i} style={{ width: i === obSlide ? 24 : 8, height: 8, borderRadius: 4, background: i === obSlide ? "#fff" : "rgba(255,255,255,0.35)", transition: "all 0.3s" }} />)}
-        </div>
-        {obSlide < 2 ? (
-          <button onClick={() => setObSlide(obSlide + 1)} style={{ width: "100%", padding: 18, borderRadius: 16, background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.4)", color: "#fff", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Siguiente</button>
-        ) : (
-          <button onClick={() => { localStorage.setItem('qori-onboarding','1'); setAuthPhase("auth"); }} style={{ width: "100%", padding: 18, borderRadius: 16, background: "#fff", border: "none", color: C.purple, fontSize: 16, fontWeight: 900, cursor: "pointer", fontFamily: "inherit" }}>Comenzar →</button>
-        )}
-        <button onClick={() => { localStorage.setItem('qori-onboarding','1'); setAuthPhase("auth"); }} style={{ padding: "10px 0", background: "transparent", border: "none", color: "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Omitir</button>
-      </div>
-    </div>
-  );
+  if (authPhase === "onboarding") return <Onboarding />;
 
   if (authPhase === "auth") return (
-    <div style={{ fontFamily: FONT_BODY, position: "fixed", inset: 0, background: C.beige, display: "flex", flexDirection: "column", overflowY: "auto" }}>
-      <style>{sharedStyle}</style>
-      <div style={{ padding: "72px 32px 24px", textAlign: "center" }}>
-        <div style={{ fontSize: 54, fontWeight: 900, color: C.purple, letterSpacing: -2, marginBottom: 6, fontFamily: FONT_TITLE }}>Qori<span style={{ color: C.orange }}>.</span></div>
-        <div style={{ fontSize: 15, color: C.muted }}>Controla tus gastos, sin complicaciones.</div>
-      </div>
-      <div style={{ padding: "0 28px", flex: 1 }}>
-        <div style={{ display: "flex", background: "#E8E4DA", borderRadius: 12, padding: 4, marginBottom: 24 }}>
-          {["login","register"].map(t => (
-            <button key={t} onClick={() => { setAuthTab(t); setAuthError(""); }} style={{ flex: 1, padding: "10px 0", borderRadius: 9, background: authTab === t ? "#fff" : "transparent", border: "none", fontSize: 14, fontWeight: 700, color: authTab === t ? C.black : C.muted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s" }}>{t === "login" ? "Iniciar sesión" : "Registrarme"}</button>
-          ))}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <input type="email" placeholder="Correo electrónico" value={authEmail} onChange={e => { setAuthEmail(e.target.value); setAuthError(""); }} style={{ ...inputStyle, color: C.black }} />
-          <input type="password" placeholder="Contraseña" value={authPass} onChange={e => { setAuthPass(e.target.value); setAuthError(""); }} onKeyDown={e => e.key === "Enter" && (authTab === "login" ? signIn() : signUp())} style={{ ...inputStyle, color: C.black }} />
-          {authTab === "register" && <input type="tel" placeholder="Celular (opcional)" value={authPhone} onChange={e => setAuthPhone(e.target.value)} style={{ ...inputStyle, color: C.black }} />}
-          {authError && <div style={{ fontSize: 13, fontWeight: 600, textAlign: "center", color: authError.startsWith("✓") ? C.green : C.orange }}>{authError}</div>}
-          <button onClick={authTab === "login" ? signIn : signUp} disabled={authLoading} style={{ width: "100%", padding: 16, borderRadius: 14, background: C.purple, color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: authLoading ? 0.7 : 1, marginTop: 4 }}>
-            {authLoading ? "Cargando..." : authTab === "login" ? "Entrar" : "Crear cuenta"}
-          </button>
-        </div>
-      </div>
-      <div style={{ height: 40 }} />
-    </div>
+    <Login
+      authTab={authTab} setAuthTab={setAuthTab}
+      authEmail={authEmail} setAuthEmail={setAuthEmail}
+      authPass={authPass} setAuthPass={setAuthPass}
+      authPhone={authPhone} setAuthPhone={setAuthPhone}
+      authLoading={authLoading} authError={authError} setAuthError={setAuthError}
+      signIn={signIn} signUp={signUp}
+    />
   );
 
   if (authPhase === "pin-setup") return (
-    <div style={{ fontFamily: FONT_BODY, position: "fixed", inset: 0, background: C.beige, display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <style>{sharedStyle}</style>
-      <div style={{ padding: "72px 32px 32px", textAlign: "center", width: "100%" }}>
-        <div style={{ fontSize: 28, fontWeight: 900, color: C.black, marginBottom: 8, fontFamily: FONT_TITLE }}>{pinPhase === "enter" ? "Crea tu clave rápida" : "Confirma tu clave"}</div>
-        <div style={{ fontSize: 15, color: C.muted }}>{pinPhase === "enter" ? "Elige tu PIN de acceso rápido" : "Vuelve a ingresar el PIN"}</div>
-      </div>
-      {pinPhase === "enter" && (
-        <div style={{ display: "flex", gap: 10, marginBottom: 32 }}>
-          {[4,6].map(n => <button key={n} onClick={() => { setPinDigits(n); setPinVal(""); }} style={{ padding: "8px 22px", borderRadius: 10, border: "2px solid", borderColor: pinDigits === n ? C.purple : "#D4D0C8", background: pinDigits === n ? C.purpleSoft : "#fff", color: pinDigits === n ? C.purple : C.muted, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{n} dígitos</button>)}
-        </div>
-      )}
-      <div style={{ display: "flex", gap: 14, marginBottom: 32 }}>
-        {Array.from({ length: pinDigits }).map((_, i) => <div key={i} style={{ width: 18, height: 18, borderRadius: "50%", background: i < pinVal.length ? C.purple : "transparent", border: "2.5px solid", borderColor: i < pinVal.length ? C.purple : "#C8C4BC", transition: "all 0.15s" }} />)}
-      </div>
-      {authError && <div style={{ fontSize: 13, color: C.orange, fontWeight: 600, marginBottom: 16 }}>{authError}</div>}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, width: "100%", maxWidth: 300, padding: "0 20px" }}>
-        {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k, i) => k === "" ? <div key={i} /> : (
-          <button key={i} onClick={() => {
-            if (k === "⌫") { setPinVal(v => v.slice(0,-1)); return; }
-            const next = pinVal + String(k);
-            if (next.length <= pinDigits) { setPinVal(next); if (next.length === pinDigits) setTimeout(() => savePinSetup(), 200); }
-          }} style={{ aspectRatio: "1", borderRadius: 16, background: k === "⌫" ? "transparent" : "#fff", border: k === "⌫" ? "none" : "2px solid #E0DCD4", fontSize: k === "⌫" ? 26 : 22, fontWeight: 700, color: C.black, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center" }}>{k}</button>
-        ))}
-      </div>
-      <button onClick={() => setAuthPhase("app")} style={{ marginTop: 28, padding: "10px 24px", background: "transparent", border: "none", color: C.muted, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Omitir por ahora</button>
-    </div>
+    <Pin
+      pinDigits={pinDigits} setPinDigits={setPinDigits}
+      pinVal={pinVal} setPinVal={setPinVal}
+      pinPhase={pinPhase} authError={authError} savePinSetup={savePinSetup}
+    />
   );
 
   return (
