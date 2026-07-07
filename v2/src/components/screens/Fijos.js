@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { CheckIcon, PlusIcon, TrashIcon } from "../shared/icons";
 import { subStyle, subHeader } from "../shared/subnav";
 import { genId } from "../../lib/format";
-import { buildCatMap } from "../../state/selectors";
+import { buildCatMap, getMonthData } from "../../state/selectors";
 import { useStore } from "../../state/store";
 
 const typeLabel = (t) => t === "manual" ? "Lo pago yo" : t === "debito" ? "Debito automatico" : "Descuento sueldo";
@@ -174,41 +175,100 @@ export function CatsSubScreen({
 export function PresupuestosScreen({ subScreen, setSubScreen, fmt, catSpend }) {
   const data = useStore(s => s.data);
   const setData = useStore(s => s.setData);
+  const [editCat, setEditCat] = useState(null);
+  const [editVal, setEditVal] = useState("");
+
+  const budgets = data.budgets || {};
+  const { totalInc, totalFijosAll } = getMonthData(data, 0);
+  const disponible = totalInc - totalFijosAll;
+  const totalAsignado = Object.values(budgets).reduce((s, v) => s + (Number(v) || 0), 0);
+  const sinAsignar = disponible - totalAsignado;
+  const sliderMax = Math.max(500, Math.ceil(Math.max(disponible, 0) / 100) * 100);
+
+  // Presupuestadas primero, el resto después (sort estable mantiene el orden original dentro de cada grupo)
+  const cats = [...(data.categories?.gastos || [])].sort((a, b) => (budgets[b.id] > 0 ? 1 : 0) - (budgets[a.id] > 0 ? 1 : 0));
+
+  const setBudget = (catId, val) => {
+    const v = Math.max(0, Number(val) || 0);
+    setData(p => {
+      const nb = { ...p.budgets };
+      if (v > 0) nb[catId] = v; else delete nb[catId];
+      return { ...p, budgets: nb };
+    });
+  };
+  const commitEdit = (catId) => {
+    setBudget(catId, editVal === "" ? 0 : Number(editVal));
+    setEditCat(null);
+  };
+
   return (
       <div style={subStyle(subScreen, "presupuestos")}>
-        {subHeader("Presupuestos", () => setSubScreen(null))}
+        <style>{`
+          .qori-range { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; border-radius: 4px; outline: none; cursor: pointer; margin: 0; accent-color: ${C.purple}; }
+          .qori-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%; background: ${C.purple}; border: 3px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,0.25); cursor: pointer; }
+          .qori-range::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: ${C.purple}; border: 3px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,0.25); cursor: pointer; }
+        `}</style>
+        {subHeader("Presupuestos", () => { setSubScreen(null); setEditCat(null); })}
+        {/* Header de contexto: sticky justo debajo del subHeader (102px de alto) */}
+        <div style={{ position: "sticky", top: 102, zIndex: 9, background: C.beige, padding: "0 16px 10px" }}>
+          <div style={{ ...cardStyle, padding: "14px 16px" }}>
+            <div style={{ display: "flex", gap: 8, fontSize: 12, color: C.muted, fontWeight: 500 }}>
+              <span>Ingresos del mes: {fmt(totalInc)}</span><span>−</span><span>Fijos: {fmt(totalFijosAll)}</span>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginTop: 8 }}>Disponible para presupuestar</div>
+            <div style={{ fontSize: 30, fontWeight: 900, color: C.black, fontFamily: FONT_TITLE, lineHeight: 1.15 }}>{fmt(disponible)}</div>
+            <div style={{ borderTop: "1px solid #F0EDE4", marginTop: 10, paddingTop: 10 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>Sin asignar:</span>
+                <span style={{ fontSize: 18, fontWeight: 900, fontFamily: FONT_TITLE, color: sinAsignar >= 0 ? C.green : C.orange }}>{sinAsignar < 0 ? "−" + fmt(Math.abs(sinAsignar)) : fmt(sinAsignar)}</span>
+              </div>
+              {sinAsignar < 0 && (
+                <div style={{ fontSize: 12, color: C.orange, fontWeight: 600, lineHeight: 1.5, marginTop: 4 }}>
+                  Asignaste {fmt(Math.abs(sinAsignar))} más de lo que tienes disponible. Baja algún límite o ajusta tus ingresos.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
         <div style={{ padding: "0 16px 8px" }}>
-          <div style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
-            Define cuánto quieres gastar por categoría este mes. Te avisaremos cuando llegues al 80%.
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
+            Mueve el slider o toca el monto para definir cuánto quieres gastar por categoría. Te avisaremos cuando llegues al 80%.
           </div>
           <div style={{ ...cardStyle, marginBottom: 12, overflow: "hidden", padding: 0 }}>
-            {(data.categories?.gastos || []).map((cat, i, arr) => (
-              <div key={cat.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: i < arr.length - 1 ? "1px solid #F0EDE4" : "none" }}>
-                <div style={{ width: 40, height: 40, borderRadius: 12, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{cat.emoji}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: C.black }}>{cat.name}</div>
-                  {data.budgets?.[cat.id] > 0 && (
-                    <div style={{ fontSize: 11, color: C.purple, fontWeight: 600, marginTop: 2 }}>
-                      Gastado: {fmt(catSpend[cat.id] || 0)} de {fmt(data.budgets[cat.id])}
+            {cats.map((cat, i, arr) => {
+              const budget = budgets[cat.id] || 0;
+              const spent = catSpend[cat.id] || 0;
+              const pct = sliderMax > 0 ? Math.min(100, (budget / sliderMax) * 100) : 0;
+              return (
+                <div key={cat.id} style={{ padding: "13px 16px", borderBottom: i < arr.length - 1 ? "1px solid #F0EDE4" : "none" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 12, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{cat.emoji}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.black }}>{cat.name}</div>
+                      {spent > 0 && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Este mes: {fmt(spent)}</div>}
                     </div>
-                  )}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, background: data.budgets?.[cat.id] > 0 ? C.purpleSoft : C.beige, border: `1.5px solid ${data.budgets?.[cat.id] > 0 ? C.purple : "#D4D0C8"}`, borderRadius: 10, padding: "6px 10px", minWidth: 88 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: data.budgets?.[cat.id] > 0 ? C.purple : C.muted }}>{data.currency === "USD" ? "US$" : "S/"}</span>
+                    {editCat === cat.id ? (
+                      <input
+                        type="number" inputMode="decimal" autoFocus value={editVal} placeholder="0"
+                        onChange={e => setEditVal(e.target.value)}
+                        onBlur={() => commitEdit(cat.id)}
+                        onKeyDown={e => e.key === "Enter" && commitEdit(cat.id)}
+                        style={{ ...inputStyle, width: 90, padding: "6px 10px", fontSize: 15, fontWeight: 700, color: C.purple, fontFamily: FONT_TITLE, textAlign: "right" }}
+                      />
+                    ) : (
+                      <div onClick={() => { setEditCat(cat.id); setEditVal(budget > 0 ? String(budget) : ""); }} style={{ fontSize: 17, fontWeight: 800, fontFamily: FONT_TITLE, color: budget > 0 ? C.purple : C.muted, cursor: "pointer", padding: "4px 2px" }}>
+                        {budget > 0 ? fmt(budget) : "Sin límite"}
+                      </div>
+                    )}
+                  </div>
                   <input
-                    type="number"
-                    inputMode="decimal"
-                    value={data.budgets?.[cat.id] || ""}
-                    placeholder="0"
-                    onChange={e => {
-                      const val = e.target.value === "" ? 0 : Number(e.target.value);
-                      setData(p => ({ ...p, budgets: { ...p.budgets, [cat.id]: val } }));
-                    }}
-                    style={{ border: "none", background: "transparent", width: 58, fontSize: 14, fontWeight: 600, color: data.budgets?.[cat.id] > 0 ? C.purple : C.black, fontFamily: "inherit", textAlign: "right", outline: "none" }}
+                    type="range" className="qori-range" min={0} max={sliderMax} step={10} value={budget}
+                    onChange={e => setBudget(cat.id, Number(e.target.value))}
+                    style={{ background: `linear-gradient(to right, ${C.purple} 0%, ${C.purple} ${pct}%, #E8E4DA ${pct}%, #E8E4DA 100%)` }}
                   />
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, padding: "0 4px" }}>
             Deja en 0 las categorías que no quieres controlar.
