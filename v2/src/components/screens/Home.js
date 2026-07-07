@@ -2,6 +2,7 @@ import { C, FONT_TITLE, inputStyle } from "../../theme";
 import { TrashIcon } from "../shared/icons";
 import { getToday } from "../../lib/dates";
 import { buildCatMap } from "../../state/selectors";
+import { getCycleFor, getCycleSpend } from "../../lib/cycles";
 import { useStore } from "../../state/store";
 import { PaymentMethodPicker, PmChip } from "../shared/PaymentMethodPicker";
 
@@ -18,6 +19,7 @@ export default function Home({
     const monthExps = data.expenses.filter(e => e.month === curMonth);
     const topCats = buildCatMap(monthExps).slice(0, 5);
     const maxCat = topCats[0]?.amount || 1;
+    const creditCards = (data.paymentMethods || []).filter(m => m.type === "credito" && !m.archived);
 
     return (
       <div style={{ flex: 1, background: "linear-gradient(160deg, #6C5CE7 0%, #5A4BD1 100%)", minHeight: "100vh", display: "flex", flexDirection: "column", paddingBottom: 88 }}>
@@ -61,6 +63,33 @@ export default function Home({
         ) : (
           <div style={{ textAlign: "center", padding: "24px 28px 0" }}>
             <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>Toca <strong style={{ color: "#fff" }}>+</strong> para registrar tu primer gasto</div>
+          </div>
+        )}
+        {/* Tarjetas de crédito: saldo del ciclo + progreso → abre pantalla de ciclo */}
+        {creditCards.length > 0 && (
+          <div style={{ padding: "18px 20px 0" }}>
+            {creditCards.map(card => {
+              const cycle = getCycleFor(card, new Date());
+              const spend = getCycleSpend(data.expenses, card, cycle.key);
+              const accent = card.color || C.purple;
+              return (
+                <div key={card.id} onClick={() => setSubScreen("card-" + card.id)} style={{ background: "rgba(255,255,255,0.94)", borderRadius: 16, padding: "12px 16px", marginBottom: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 2px 10px rgba(0,0,0,0.12)" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 12, background: accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>💳</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.black, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.name}</div>
+                      <div style={{ fontFamily: FONT_TITLE, fontSize: 16, fontWeight: 900, color: C.black, whiteSpace: "nowrap" }}>{fmt(spend)}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
+                      <div style={{ flex: 1, height: 5, background: "#F0EDE4", borderRadius: 99, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.min(Math.round((cycle.dayOfCycle / cycle.totalDays) * 100), 100)}%`, background: accent, borderRadius: 99 }} />
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, whiteSpace: "nowrap" }}>Día {cycle.dayOfCycle} de {cycle.totalDays}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
         {/* Recent expenses */}

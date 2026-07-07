@@ -12,7 +12,7 @@ const fmtDay = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "sh
 // 6 colores de la paleta para identificar tarjetas.
 const CARD_COLORS = [C.purple, C.purpleLight, C.orange, C.green, C.greenLight, C.black];
 
-const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", color: CARD_COLORS[0] };
+const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", cycleBudget: "", color: CARD_COLORS[0] };
 
 export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setConfirm }) {
   const data = useStore(s => s.data);
@@ -46,7 +46,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
   };
   const openEditCard = (card) => {
     setFormError("");
-    setCardForm({ id: card.id, name: card.name, cutoffDay: String(card.cutoffDay), paymentDay: String(card.paymentDay), creditLine: String(card.creditLine || ""), color: card.color || CARD_COLORS[0] });
+    setCardForm({ id: card.id, name: card.name, cutoffDay: String(card.cutoffDay), paymentDay: String(card.paymentDay), creditLine: String(card.creditLine || ""), cycleBudget: card.cycleBudget ? String(card.cycleBudget) : "", color: card.color || CARD_COLORS[0] });
   };
   const reactivateCard = (card) => {
     if (cards.length >= 1) { setShowPro(true); return; }
@@ -69,11 +69,13 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
     if (!Number.isInteger(cutoffDay) || cutoffDay < 1 || cutoffDay > 31) { setFormError("El día de corte debe estar entre 1 y 31"); return; }
     if (!Number.isInteger(paymentDay) || paymentDay < 1 || paymentDay > 31) { setFormError("El día de pago debe estar entre 1 y 31"); return; }
     if (!creditLine || creditLine <= 0) { setFormError("Ingresa una línea de crédito mayor a 0"); return; }
+    const cycleBudget = cardForm.cycleBudget === "" ? null : Number(cardForm.cycleBudget);
+    if (cycleBudget !== null && (!Number.isFinite(cycleBudget) || cycleBudget <= 0)) { setFormError("El presupuesto por ciclo debe ser mayor a 0"); return; }
     if (cardForm.id) {
-      updateMethod(cardForm.id, { name, cutoffDay, paymentDay, creditLine, color: cardForm.color });
+      updateMethod(cardForm.id, { name, cutoffDay, paymentDay, creditLine, cycleBudget, color: cardForm.color });
       showToast("Tarjeta actualizada");
     } else {
-      setData(p => ({ ...p, paymentMethods: [...p.paymentMethods, { id: genId(), type: "credito", name, cutoffDay, paymentDay, creditLine, color: cardForm.color, archived: false }] }));
+      setData(p => ({ ...p, paymentMethods: [...p.paymentMethods, { id: genId(), type: "credito", name, cutoffDay, paymentDay, creditLine, cycleBudget, color: cardForm.color, archived: false }] }));
       showToast("Tarjeta " + name + " agregada");
     }
     setCardForm(null); setFormError("");
@@ -157,6 +159,8 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
             </div>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Línea de crédito ({data.currency === "USD" ? "US$" : "S/"})</div>
             <input type="number" inputMode="decimal" placeholder="Ej: 3000" value={cardForm.creditLine} onChange={e => setCardForm(f => ({ ...f, creditLine: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 12 }} />
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>Presupuesto por ciclo (opcional)</div>
+            <input type="number" inputMode="decimal" placeholder="Ej: 600" value={cardForm.cycleBudget} onChange={e => setCardForm(f => ({ ...f, cycleBudget: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 12 }} />
             <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Color</div>
             <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
               {CARD_COLORS.map(col => (
