@@ -21,6 +21,7 @@ import Pin from "./components/auth/Pin";
 import { sharedStyle } from "./components/shared/globalStyles";
 import { Toast, ScanResultsSheet, ConfirmModal, CatDetailSheet, AddExpenseModal, ScanOptionsModal, ManualModal, RecordingOverlay, NameSetupScreen, CatPickerModal, NotifPanel, CarryoverModal, BudgetFeatureModal } from "./components/shared/modals";
 import { catSpend as catSpendSel, budgetAlerts as budgetAlertsSel, getMonthData as getMonthDataSel } from "./state/selectors";
+import { getDefaultPaymentMethodId } from "./components/shared/PaymentMethodPicker";
 
 export default function App() {
   const tab = useStore(s => s.tab);
@@ -98,6 +99,9 @@ export default function App() {
   const [pendingExpAmt, setPendingExpAmt] = useState("");
   const [pendingExpDesc, setPendingExpDesc] = useState("");
   const [pendingExpCat, setPendingExpCat] = useState(null);
+  const [pendingExpPm, setPendingExpPm] = useState(null); // paymentMethodId en el flujo de registro
+  const [editExpPm, setEditExpPm] = useState(undefined); // paymentMethodId en edición (undefined = sin tocar)
+  const [scanPm, setScanPm] = useState(null); // medio de pago global para los gastos escaneados
 
   // AI categorization state
   const [editExpCat, setEditExpCat] = useState(undefined); // category in edit modal
@@ -325,7 +329,7 @@ export default function App() {
     if (!amt || amt <= 0) return;
     const a = Number(amt); const d = desc || "Gasto diario";
     setConfirm({ message: `¿Registrar: ${d} ${fmt(a)}?`, onConfirm: () => {
-      setData(p => ({ ...p, expenses: [...p.expenses, { id: genId(), amount: a, description: d, date: new Date().toISOString(), month: curMonth }] }));
+      setData(p => ({ ...p, expenses: [...p.expenses, { id: genId(), amount: a, description: d, date: new Date().toISOString(), month: curMonth, paymentMethodId: getDefaultPaymentMethodId(p) }] }));
       showToast(d + " " + fmt(a) + " registrado");
     }});
   };
@@ -335,9 +339,10 @@ export default function App() {
       if (e.id !== id) return e;
       const newDate = editExpDate ? new Date(editExpDate + "T12:00:00").toISOString() : e.date;
       const newMonth = (() => { const d = new Date(newDate); return MONTHS[d.getMonth()] + " " + d.getFullYear(); })();
-      return { ...e, description: editExpDesc || e.description, amount: Number(editExpAmt) || e.amount, date: newDate, month: newMonth, category: editExpCat !== undefined ? editExpCat : e.category };
+      return { ...e, description: editExpDesc || e.description, amount: Number(editExpAmt) || e.amount, date: newDate, month: newMonth, category: editExpCat !== undefined ? editExpCat : e.category, paymentMethodId: editExpPm !== undefined ? editExpPm : (e.paymentMethodId ?? null) };
     })}));
-    setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); setEditExpDate(""); setEditExpCat(undefined); setShowExpCatPicker(false);
+    if (editExpPm !== undefined && editExpPm) setData(p => ({ ...p, lastPaymentMethodId: editExpPm }));
+    setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); setEditExpDate(""); setEditExpCat(undefined); setEditExpPm(undefined); setShowExpCatPicker(false);
   };
   const togglePaid = (id) => setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, paid: !f.paid } : f) }));
   const saveFixedAmt = (id) => { setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, amount: Number(editFixedAmt) || 0 } : f) })); setEditFixed(null); setEditFixedAmt(""); };
@@ -408,6 +413,7 @@ export default function App() {
       });
       const result = await response.json();
       if (result.expenses && result.expenses.length > 0) {
+        setScanPm(getDefaultPaymentMethodId(dataRef.current));
         setScanResults(result.expenses);
       } else {
         showToast("No se encontraron gastos en la imagen");
@@ -445,9 +451,10 @@ export default function App() {
         description: r.description || "Gasto escaneado",
         date: parsedDate ? parsedDate.toISOString() : new Date().toISOString(),
         month: parsedDate ? MONTHS[parsedDate.getMonth()] + " " + parsedDate.getFullYear() : curMonth,
+        paymentMethodId: scanPm || null,
       };
     });
-    setData(p => ({ ...p, expenses: [...p.expenses, ...newExpenses] }));
+    setData(p => ({ ...p, expenses: [...p.expenses, ...newExpenses], ...(scanPm ? { lastPaymentMethodId: scanPm } : {}) }));
     showToast(newExpenses.length + " gastos registrados");
     setScanResults(null);
   };
@@ -591,16 +598,18 @@ export default function App() {
   const registerExpense = (amt, desc, cat) => {
     const a = Number(amt); if (!a || a <= 0) return;
     const d = desc || "Gasto";
-    setData(p => ({ ...p, expenses: [...p.expenses, { id: genId(), amount: a, description: d, date: new Date().toISOString(), month: curMonth, category: cat || null }] }));
+    const pm = pendingExpPm || null;
+    setData(p => ({ ...p, expenses: [...p.expenses, { id: genId(), amount: a, description: d, date: new Date().toISOString(), month: curMonth, category: cat || null, paymentMethodId: pm }], ...(pm ? { lastPaymentMethodId: pm } : {}) }));
     showToast((cat ? cat.emoji + " " : "") + d + " " + fmtWith(a, data.currency) + " registrado");
     setShowCatPicker(false); setShowAddModal(false);
-    setPendingExpAmt(""); setPendingExpDesc(""); setPendingExpCat(null);
+    setPendingExpAmt(""); setPendingExpDesc(""); setPendingExpCat(null); setPendingExpPm(null);
     setManAmt(""); setManDesc("");
   };
 
   const openCatPicker = (amt, desc) => {
     setPendingExpAmt(String(amt)); setPendingExpDesc(desc || "Gasto");
-    setPendingExpCat(null); setShowAddModal(false); setShowCatPicker(true);
+    setPendingExpCat(null); setPendingExpPm(getDefaultPaymentMethodId(dataRef.current));
+    setShowAddModal(false); setShowCatPicker(true);
   };
 
 
@@ -641,7 +650,7 @@ export default function App() {
       <style>{sharedStyle}</style>
       {toast && <Toast toast={toast} />}
       {scanResults && (
-        <ScanResultsSheet scanResults={scanResults} setScanResults={setScanResults} removeScanItem={removeScanItem} confirmScanResults={confirmScanResults} />
+        <ScanResultsSheet scanResults={scanResults} setScanResults={setScanResults} removeScanItem={removeScanItem} confirmScanResults={confirmScanResults} scanPm={scanPm} setScanPm={setScanPm} />
       )}
       {confirm && <ConfirmModal confirm={confirm} setConfirm={setConfirm} />}
       {tab === "home" && (
@@ -649,7 +658,7 @@ export default function App() {
           fmt={fmt} curMonth={curMonth} todayTotal={todayTotal} recentExp={recentExp} budgetAlerts={budgetAlerts}
           editExpId={editExpId} setEditExpId={setEditExpId} editExpDesc={editExpDesc} setEditExpDesc={setEditExpDesc}
           editExpAmt={editExpAmt} setEditExpAmt={setEditExpAmt} editExpDate={editExpDate} setEditExpDate={setEditExpDate}
-          editExpCat={editExpCat} setEditExpCat={setEditExpCat}
+          editExpCat={editExpCat} setEditExpCat={setEditExpCat} editExpPm={editExpPm} setEditExpPm={setEditExpPm}
           saveExpenseEdit={saveExpenseEdit} deleteExpense={deleteExpense}
           setSelectedCatDetail={setSelectedCatDetail} setShowNotifPanel={setShowNotifPanel} setSubScreen={setSubScreen}
           fileInputRef={fileInputRef} cameraInputRef={cameraInputRef} handleScanImage={handleScanImage}
@@ -661,7 +670,7 @@ export default function App() {
           monthTab={monthTab} setMonthTab={setMonthTab} miMesSubTab={miMesSubTab} setMiMesSubTab={setMiMesSubTab}
           editExpId={editExpId} setEditExpId={setEditExpId} editExpDesc={editExpDesc} setEditExpDesc={setEditExpDesc}
           editExpAmt={editExpAmt} setEditExpAmt={setEditExpAmt} editExpDate={editExpDate} setEditExpDate={setEditExpDate}
-          editExpCat={editExpCat} setEditExpCat={setEditExpCat}
+          editExpCat={editExpCat} setEditExpCat={setEditExpCat} editExpPm={editExpPm} setEditExpPm={setEditExpPm}
           saveExpenseEdit={saveExpenseEdit} deleteExpense={deleteExpense}
         />
       )}
@@ -733,7 +742,7 @@ export default function App() {
 
       {/* Category picker modal */}
       {showCatPicker && (
-        <CatPickerModal setShowCatPicker={setShowCatPicker} pendingExpAmt={pendingExpAmt} pendingExpDesc={pendingExpDesc} pendingExpCat={pendingExpCat} setPendingExpCat={setPendingExpCat} registerExpense={registerExpense} />
+        <CatPickerModal setShowCatPicker={setShowCatPicker} pendingExpAmt={pendingExpAmt} pendingExpDesc={pendingExpDesc} pendingExpCat={pendingExpCat} setPendingExpCat={setPendingExpCat} pendingExpPm={pendingExpPm} setPendingExpPm={setPendingExpPm} registerExpense={registerExpense} />
       )}
       {showNotifPanel && (
         <NotifPanel setShowNotifPanel={setShowNotifPanel} budgetAlerts={budgetAlerts} />

@@ -2,12 +2,13 @@ import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { TrashIcon } from "../shared/icons";
 import { MONTHS_SHORT, DAYS, getMonthShort } from "../../lib/dates";
 import { useStore } from "../../state/store";
+import { PaymentMethodPicker, PmChip } from "../shared/PaymentMethodPicker";
 
 export default function MiMes({
   fmt, getMonthData, catSpend, budgetAlerts,
   monthTab, setMonthTab, miMesSubTab, setMiMesSubTab,
   editExpId, setEditExpId, editExpDesc, setEditExpDesc, editExpAmt, setEditExpAmt,
-  editExpDate, setEditExpDate, editExpCat, setEditExpCat,
+  editExpDate, setEditExpDate, editExpCat, setEditExpCat, editExpPm, setEditExpPm,
   saveExpenseEdit, deleteExpense,
 }) {
   const data = useStore(s => s.data);
@@ -96,9 +97,13 @@ export default function MiMes({
                           );})}
                         </div>
                       </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Medio de pago</div>
+                        <PaymentMethodPicker value={editExpPm !== undefined ? editExpPm : (e.paymentMethodId ?? null)} onChange={setEditExpPm} />
+                      </div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => saveExpenseEdit(e.id)} style={{ flex: 1, padding: 10, borderRadius: 10, background: C.green, color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
-                        <button onClick={() => { setEditExpId(null); setEditExpDate(""); setEditExpCat(undefined); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#E0DCD4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                        <button onClick={() => { setEditExpId(null); setEditExpDate(""); setEditExpCat(undefined); setEditExpPm(undefined); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#E0DCD4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
                       </div>
                     </div>
                   ) : (
@@ -109,6 +114,7 @@ export default function MiMes({
                         <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
                           <span>{DAYS[dt.getDay()].toLowerCase().slice(0,3)}, {dt.getDate()} {MONTHS_SHORT[dt.getMonth()].toLowerCase()}.</span>
                           {e.category && <span style={{ background: C.purpleSoft, color: C.purple, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{e.category.emoji} {e.category.name}</span>}
+                          <PmChip pm={(data.paymentMethods || []).find(m => m.id === e.paymentMethodId)} />
                         </div>
                       </div>
                       <div style={{ fontSize: 16, fontWeight: 700, color: C.orange, marginRight: 8 }}>-{fmt(e.amount)}</div>

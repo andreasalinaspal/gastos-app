@@ -3,13 +3,14 @@ import { TrashIcon } from "./icons";
 import { MONTHS_SHORT, DAYS } from "../../lib/dates";
 import { genId, fmtWith } from "../../lib/format";
 import { useStore } from "../../state/store";
+import { PaymentMethodPicker } from "./PaymentMethodPicker";
 
 // Toast global — antes inline en GastosApp.
 export function Toast({ toast }) {
   return <div style={{ position: "fixed", top: 60, left: "50%", transform: "translateX(-50%)", zIndex: 500, background: C.black, color: "#fff", padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600, animation: "slideUp 0.3s ease", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>{toast}</div>;
 }
 
-export function ScanResultsSheet({ scanResults, setScanResults, removeScanItem, confirmScanResults }) {
+export function ScanResultsSheet({ scanResults, setScanResults, removeScanItem, confirmScanResults, scanPm, setScanPm }) {
   const data = useStore(s => s.data);
   return (
         <div style={{ position: "fixed", inset: 0, zIndex: 400, display: "flex", flexDirection: "column", background: C.beige, overflow: "auto" }}>
@@ -28,6 +29,10 @@ export function ScanResultsSheet({ scanResults, setScanResults, removeScanItem, 
                 <button onClick={() => removeScanItem(i)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><TrashIcon color="#ccc" /></button>
               </div>
             ))}
+          </div>
+          <div style={{ padding: "12px 20px 0" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Medio de pago (aplica a todos)</div>
+            <PaymentMethodPicker value={scanPm} onChange={setScanPm} />
           </div>
           <div style={{ padding: "16px 20px 32px", display: "flex", gap: 10 }}>
             <button onClick={() => setScanResults(null)} style={{ flex: 1, padding: 16, borderRadius: 14, background: "#E0DCD4", color: "#666", border: "none", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
@@ -186,7 +191,7 @@ export function NameSetupScreen({ nameSetupValue, setNameSetupValue, setShowName
   );
 }
 
-export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc, pendingExpCat, setPendingExpCat, registerExpense }) {
+export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc, pendingExpCat, setPendingExpCat, pendingExpPm, setPendingExpPm, registerExpense }) {
   const data = useStore(s => s.data);
   return (
         <div style={{ position: "fixed", inset: 0, zIndex: 310 }} onClick={() => setShowCatPicker(false)}>
@@ -201,6 +206,10 @@ export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc
                   {cat.emoji} {cat.name}
                 </button>
               ))}
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Medio de pago</div>
+            <div style={{ marginBottom: 22 }}>
+              <PaymentMethodPicker value={pendingExpPm} onChange={setPendingExpPm} />
             </div>
             <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, pendingExpCat)} disabled={!pendingExpCat} style={{ width: "100%", padding: 16, borderRadius: 14, background: pendingExpCat ? C.purple : "#D4D0C8", color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: pendingExpCat ? "pointer" : "default", fontFamily: "inherit", marginBottom: 10, transition: "background 0.2s" }}>Confirmar gasto</button>
             <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, null)} style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Sin categoría</button>
