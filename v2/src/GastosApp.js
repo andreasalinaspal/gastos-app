@@ -17,6 +17,7 @@ import { FijosScreen, CatsSubScreen, PresupuestosScreen, AllCatsScreen } from ".
 import Config from "./components/screens/Config";
 import { MediosPagoScreen } from "./components/screens/MediosPago";
 import { CardCycleScreen } from "./components/screens/CardCycle";
+import { AprendeScreen } from "./components/screens/Aprende";
 import Onboarding from "./components/auth/Onboarding";
 import Login from "./components/auth/Login";
 import Pin from "./components/auth/Pin";
@@ -718,6 +719,8 @@ export default function App() {
       {(data.paymentMethods || []).filter(m => m.type === "credito" && !m.archived).map(card => (
         <CardCycleScreen key={card.id} card={card} subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} />
       ))}
+      {/* Aprende sub-screen (educación crediticia) */}
+      <AprendeScreen subScreen={subScreen} setSubScreen={setSubScreen} />
       {/* Presupuestos sub-screen */}
       <PresupuestosScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} catSpend={catSpend} />
       {/* All categories subscreen */}
