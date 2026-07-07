@@ -1,5 +1,6 @@
 import { getCurrentMonthLabel } from "./lib/dates";
 import { genId } from "./lib/format";
+import { defaultPaymentMethods, defaultEducation } from "./lib/migrate";
 
 export const FIXED_DEFAULTS = [
   { name: "Alquiler", type: "manual" },
@@ -36,5 +37,10 @@ export function initData() {
     userName: "",
     currency: "PEN",
     budgets: {},
+    // Schema v2 (Fase 1): medios de pago y tarjetas de crédito
+    schemaVersion: 2,
+    paymentMethods: defaultPaymentMethods(),
+    cardPayments: [],
+    education: defaultEducation(),
   };
 }

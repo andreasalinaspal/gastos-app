@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { DEFAULT_CATS_GASTOS, DEFAULT_CATS_INGRESOS, initData } from "../constants";
 import { genId } from "../lib/format";
+import { migrateData } from "../lib/migrate";
 
 // Replica la inicialización original del useState de `data` en GastosApp:
 // lee localStorage 'gastos-data', repara categories faltantes, fallback initData().
@@ -16,11 +17,11 @@ const loadInitialData = () => {
             ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
           };
         }
-        return parsed;
+        return migrateData(parsed);
       }
     } catch (e) {}
   }
-  return initData();
+  return migrateData(initData());
 };
 
 // Replica la inicialización original del useState de `authPhase`.

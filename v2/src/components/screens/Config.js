@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { initData } from "../../constants";
+import { migrateData } from "../../lib/migrate";
 import { useStore } from "../../state/store";
 
 const cfgRowStyle = { display: "flex", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #F0EDE4", cursor: "pointer", gap: 14 };
@@ -34,7 +35,7 @@ export default function Config({ fmt, curMonth, setSubScreen, setConfirm, showTo
         const imported = JSON.parse(ev.target.result);
         if (imported && imported.expenses) {
           setConfirm({ message: "¿Restaurar backup? Esto reemplaza todos tus datos actuales.", onConfirm: () => {
-            setData(imported);
+            setData(migrateData(imported));
             showToast("Datos restaurados");
           }});
         } else {

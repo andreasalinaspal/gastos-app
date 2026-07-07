@@ -8,6 +8,7 @@ import { DEFAULT_CATS_GASTOS, DEFAULT_CATS_INGRESOS, initData } from "./constant
 import { parseAmount, extractDescription } from "./lib/voice";
 import { hasSignificantData, saveLocalBackup, loadLocalBackup, clearLocalData } from "./lib/sync";
 import { buildDemoData } from "./lib/demo";
+import { migrateData } from "./lib/migrate";
 import { useStore } from "./state/store";
 import Home from "./components/screens/Home";
 import MiMes from "./components/screens/MiMes";
@@ -191,6 +192,12 @@ export default function App() {
         } else {
           saveLocalBackup(userId, loaded);
         }
+        // Migración lazy de esquema: si el blob cambió, persistirlo migrado en Supabase
+        const migrated = migrateData(loaded);
+        if (migrated !== loaded) {
+          loaded = migrated;
+          await forceUploadToSupabase(userId, loaded);
+        }
         skipNextSync.current = true;
         setData(loaded);
         setCloudStatus("synced");
@@ -199,9 +206,10 @@ export default function App() {
       // No cloud data — check local backup
       const backup = loadLocalBackup(userId);
       if (hasSignificantData(backup)) {
-        await forceUploadToSupabase(userId, backup);
+        const migratedBackup = migrateData(backup);
+        await forceUploadToSupabase(userId, migratedBackup);
         skipNextSync.current = true;
-        setData(backup);
+        setData(migratedBackup);
       }
       setCloudStatus("synced");
     } catch (e) {
