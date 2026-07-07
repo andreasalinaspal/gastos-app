@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
@@ -13,5 +14,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
   }
 }
