@@ -3,8 +3,11 @@ import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { PlusIcon } from "../shared/icons";
 import { subStyle, subHeader } from "../shared/subnav";
 import { genId } from "../../lib/format";
+import { getCycleFor, getLineUsage } from "../../lib/cycles";
 import { useStore } from "../../state/store";
 import { pmEmoji } from "../shared/PaymentMethodPicker";
+
+const fmtDay = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "short" });
 
 // 6 colores de la paleta para identificar tarjetas.
 const CARD_COLORS = [C.purple, C.purpleLight, C.orange, C.green, C.greenLight, C.black];
@@ -19,6 +22,8 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
   const [cardForm, setCardForm] = useState(null); // null | {id, name, cutoffDay, paymentDay, creditLine, color}
   const [formError, setFormError] = useState("");
   const [showPro, setShowPro] = useState(false);
+  const [payCardId, setPayCardId] = useState(null); // TC que se está pagando
+  const [payAmt, setPayAmt] = useState("");
 
   const methods = data.paymentMethods || [];
   const basics = methods.filter(m => m.type !== "credito");
@@ -110,7 +115,9 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
             Agrega tu tarjeta para seguir tu ciclo de facturación y tu línea de crédito.
           </div>
         )}
-        {cards.map(card => (
+        {cards.map(card => {
+          const { balance } = getLineUsage(card, data.expenses, data.cardPayments);
+          return (
           <div key={card.id} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ width: 42, height: 42, borderRadius: 12, background: card.color || C.purple, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>💳</div>
@@ -121,8 +128,17 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
               <button onClick={() => openEditCard(card)} style={{ background: C.purpleSoft, color: C.purple, border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Editar</button>
               <button onClick={() => archiveCard(card)} style={{ background: "#F0EDE4", color: "#666", border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Archivar</button>
             </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+              <div style={{ flex: 1, fontSize: 12, color: C.muted }}>Saldo vivo: <strong style={{ color: balance > 0 ? C.orange : C.green }}>{fmt(balance)}</strong></div>
+              {balance > 0 ? (
+                <button onClick={() => { setPayCardId(card.id); setPayAmt(String(Math.round(balance * 100) / 100)); }} style={{ background: card.color || C.purple, color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Pagar tarjeta</button>
+              ) : (
+                <button disabled style={{ background: "#F0EDE4", color: C.muted, border: "none", borderRadius: 10, padding: "9px 16px", fontWeight: 700, fontSize: 13, cursor: "default", fontFamily: "inherit" }}>Sin deuda 🎉</button>
+              )}
+            </div>
           </div>
-        ))}
+          );
+        })}
 
         {/* Formulario crear/editar tarjeta */}
         {cardForm ? (
@@ -179,6 +195,64 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
         </>
       )}
       <div style={{ height: "calc(40px + env(safe-area-inset-bottom, 20px))" }} />
+
+      {/* Modal pagar tarjeta: liquidación de gastos ya registrados, NO crea gastos (P1) */}
+      {payCardId && (() => {
+        const card = methods.find(m => m.id === payCardId);
+        if (!card) return null;
+        const cycle = getCycleFor(card, new Date());
+        const { balance } = getLineUsage(card, data.expenses, data.cardPayments);
+        const cycleExps = (data.expenses || []).filter(e => {
+          if (e.paymentMethodId !== card.id || !e.date) return false;
+          const d = new Date(e.date);
+          const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+          return day >= cycle.start && day <= cycle.end;
+        }).sort((a, b) => new Date(b.date) - new Date(a.date));
+        const amtNum = Number(payAmt);
+        const valid = amtNum > 0;
+        const closePay = () => { setPayCardId(null); setPayAmt(""); };
+        const confirmPay = () => {
+          if (!valid) return;
+          setData(p => ({ ...p, cardPayments: [...(p.cardPayments || []), { id: genId(), cardId: card.id, amount: amtNum, date: new Date().toISOString(), cycleKey: cycle.key }] }));
+          closePay();
+          showToast("Pago de " + card.name + " registrado");
+        };
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 410 }} onClick={closePay}>
+            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
+            <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", padding: "16px 24px 40px", maxHeight: "85vh", overflowY: "auto", animation: "slideUp 0.3s ease" }}>
+              <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
+              <div style={{ fontSize: 20, fontWeight: 800, color: C.black, marginBottom: 2 }}>Pagar {card.name}</div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Ciclo actual: {fmtDay(cycle.start)} – {fmtDay(cycle.end)} · vence {fmtDay(cycle.paymentDate)}</div>
+              {/* Saldo vivo */}
+              <div style={{ background: card.color || C.purple, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", letterSpacing: 1, textTransform: "uppercase" }}>Saldo vivo</div>
+                <div style={{ fontFamily: FONT_TITLE, fontSize: 30, fontWeight: 900, color: "#fff", letterSpacing: -0.5 }}>{fmt(balance)}</div>
+              </div>
+              {/* Gastos del ciclo que se liquidan */}
+              {cycleExps.length > 0 && (
+                <>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Gastos del ciclo</div>
+                  <div style={{ background: C.beige, borderRadius: 12, padding: "4px 14px", marginBottom: 16 }}>
+                    {cycleExps.map((e, i) => (
+                      <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: i < cycleExps.length - 1 ? "1px solid #E8E4DA" : "none" }}>
+                        <span style={{ fontSize: 13, color: C.black, fontWeight: 500 }}>{e.description}</span>
+                        <span style={{ fontSize: 13, color: C.orange, fontWeight: 600 }}>{fmt(e.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {/* Monto a pagar */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Monto a pagar</div>
+              <input type="number" inputMode="decimal" value={payAmt} onChange={e => setPayAmt(e.target.value)} style={{ ...inputStyle, color: C.black, fontSize: 24, fontWeight: 800, textAlign: "center", marginBottom: 6, padding: 14 }} />
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>Este pago liquida gastos ya registrados: no se crea ningún gasto nuevo.</div>
+              <button onClick={confirmPay} disabled={!valid} style={{ width: "100%", padding: 16, borderRadius: 14, background: valid ? C.green : "#D4D0C8", color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: valid ? "pointer" : "default", fontFamily: "inherit", marginBottom: 10 }}>Confirmar pago</button>
+              <button onClick={closePay} style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Gate freemium: Qori Pro — próximamente */}
       {showPro && (
