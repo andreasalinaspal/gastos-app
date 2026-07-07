@@ -16,6 +16,7 @@ import Ingresos from "./components/screens/Ingresos";
 import { FijosScreen, CatsSubScreen, PresupuestosScreen, AllCatsScreen } from "./components/screens/Fijos";
 import Config from "./components/screens/Config";
 import { MediosPagoScreen } from "./components/screens/MediosPago";
+import { CardCycleScreen } from "./components/screens/CardCycle";
 import Onboarding from "./components/auth/Onboarding";
 import Login from "./components/auth/Login";
 import Pin from "./components/auth/Pin";
@@ -713,6 +714,10 @@ export default function App() {
       />
       {/* Medios de pago sub-screen */}
       <MediosPagoScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} showToast={showToast} setConfirm={setConfirm} />
+      {/* Pantallas de ciclo por tarjeta de crédito activa (key `card-{id}`) */}
+      {(data.paymentMethods || []).filter(m => m.type === "credito" && !m.archived).map(card => (
+        <CardCycleScreen key={card.id} card={card} subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} />
+      ))}
       {/* Presupuestos sub-screen */}
       <PresupuestosScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} catSpend={catSpend} />
       {/* All categories subscreen */}
