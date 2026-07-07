@@ -7,27 +7,14 @@ import { genId, fmtWith } from "./lib/format";
 import { FIXED_DEFAULTS, DEFAULT_CATS_GASTOS, DEFAULT_CATS_INGRESOS, initData } from "./constants";
 import { parseAmount, extractDescription } from "./lib/voice";
 import { LOCAL_BACKUP_KEY, hasSignificantData, saveLocalBackup, loadLocalBackup, clearLocalData } from "./lib/sync";
+import { useStore } from "./state/store";
+import { catSpend as catSpendSel, budgetAlerts as budgetAlertsSel, getMonthData as getMonthDataSel, buildCatMap } from "./state/selectors";
 
 export default function App() {
-  const [tab, setTab] = useState("home");
-  const [data, setData] = useState(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('gastos-data');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (!parsed.categories) {
-            parsed.categories = {
-              gastos: DEFAULT_CATS_GASTOS.map(c => ({ id: genId(), ...c })),
-              ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
-            };
-          }
-          return parsed;
-        }
-      } catch (e) {}
-    }
-    return initData();
-  });
+  const tab = useStore(s => s.tab);
+  const setTab = useStore(s => s.setTab);
+  const data = useStore(s => s.data);
+  const setData = useStore(s => s.setData);
   const [recording, setRecording] = useState(false);
   const [recTime, setRecTime] = useState(0);
   const [showManual, setShowManual] = useState(false);
@@ -79,11 +66,10 @@ export default function App() {
   const [newCatName, setNewCatName] = useState("");
 
   // Auth state — start immediately in the right screen, no loading screen delay
-  const [authUser, setAuthUser] = useState(null);
-  const [authPhase, setAuthPhase] = useState(() => {
-    if (typeof window === 'undefined') return "loading";
-    return localStorage.getItem('qori-onboarding') ? "auth" : "onboarding";
-  }); // loading | onboarding | auth | pin-setup | app
+  const authUser = useStore(s => s.authUser);
+  const setAuthUser = useStore(s => s.setAuthUser);
+  const authPhase = useStore(s => s.authPhase); // loading | onboarding | auth | pin-setup | app
+  const setAuthPhase = useStore(s => s.setAuthPhase);
   const [authTab, setAuthTab] = useState("login");
   const [authEmail, setAuthEmail] = useState("");
   const [authPass, setAuthPass] = useState("");
@@ -169,7 +155,8 @@ export default function App() {
   }, [data]);
 
   // Cloud sync state
-  const [cloudStatus, setCloudStatus] = useState("loading");
+  const cloudStatus = useStore(s => s.cloudStatus);
+  const setCloudStatus = useStore(s => s.setCloudStatus);
   const skipNextSync = useRef(false);
   const isLoadingUserData = useRef(false);
   const loadedThisSession = useRef(false);
@@ -320,45 +307,12 @@ export default function App() {
   const recentExp = [...data.expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
 
   // Spending per category this month
-  const catSpend = useMemo(() => {
-    const m = {};
-    data.expenses
-      .filter(e => e.month === curMonth)
-      .forEach(e => {
-        if (e.category?.id) {
-          m[e.category.id] = (m[e.category.id] || 0) + e.amount;
-        }
-      });
-    return m;
-  }, [data.expenses, curMonth]);
+  const catSpend = useMemo(() => catSpendSel(data, curMonth), [data.expenses, curMonth]);
 
   // Budget alerts: categories at >=80% of their limit
-  const budgetAlerts = useMemo(() => {
-    return (data.categories?.gastos || [])
-      .filter(cat => data.budgets?.[cat.id] > 0)
-      .map(cat => {
-        const limit = data.budgets[cat.id];
-        const spent = catSpend[cat.id] || 0;
-        const pct = Math.round((spent / limit) * 100);
-        return { cat, limit, spent, pct };
-      })
-      .filter(a => a.pct >= 80)
-      .sort((a, b) => b.pct - a.pct);
-  }, [data.budgets, data.categories, catSpend]);
+  const budgetAlerts = useMemo(() => budgetAlertsSel(data, catSpend), [data.budgets, data.categories, catSpend]);
 
-  const getMonthData = (offset) => {
-    const mk = getMonthLabel(offset);
-    const exps = data.expenses.filter(e => e.month === mk);
-    const fixd = data.fixed.filter(f => f.month === mk);
-    const incF = data.incomeFixed.filter(i => i.month === mk);
-    const incE = data.incomeExtra.filter(i => i.month === mk);
-    const totalDiarios = exps.reduce((s, e) => s + e.amount, 0);
-    const totalFijos = fixd.filter(f => f.paid).reduce((s, f) => s + f.amount, 0);
-    const totalFijosAll = fixd.reduce((s, f) => s + f.amount, 0);
-    const totalInc = incF.reduce((s, i) => s + i.amount, 0) + incE.reduce((s, i) => s + i.amount, 0);
-    const balance = totalInc - totalFijos - totalDiarios;
-    return { exps, totalDiarios, totalFijos, totalFijosAll, totalInc, balance };
-  };
+  const getMonthData = (offset) => getMonthDataSel(data, offset);
 
   const prevMonthBalance = getMonthData(-1).balance;
   const prevMonthLabel = getMonthLabel(-1); // e.g. "Abril 2025"
@@ -654,18 +608,6 @@ export default function App() {
 
   const typeLabel = (t) => t === "manual" ? "Lo pago yo" : t === "debito" ? "Debito automatico" : "Descuento sueldo";
   const typeBg = (t) => t === "manual" ? C.orange : t === "debito" ? C.purple : C.green;
-
-  const buildCatMap = (exps) => {
-    const m = {};
-    exps.forEach(e => {
-      const key = e.category?.name || "Otros";
-      const emoji = e.category?.emoji || "📦";
-      if (!m[key]) m[key] = { name: key, emoji, amount: 0, expenses: [] };
-      m[key].amount += e.amount;
-      m[key].expenses.push(e);
-    });
-    return Object.values(m).sort((a, b) => b.amount - a.amount);
-  };
 
   const homeScreen = (() => {
     const monthExps = data.expenses.filter(e => e.month === curMonth);
