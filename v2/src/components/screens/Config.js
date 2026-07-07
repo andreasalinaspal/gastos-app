@@ -82,11 +82,21 @@ export default function Config({ fmt, curMonth, setSubScreen, setConfirm, showTo
             </div>
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
           </div>
-          <div onClick={() => setSubScreen("cats-ingreso")} style={{ ...cfgRowStyle, borderBottom: "none" }}>
+          <div onClick={() => setSubScreen("cats-ingreso")} style={cfgRowStyle}>
             <span style={{ fontSize: 22 }}>💰</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Categorías de ingresos</div>
               <div style={{ fontSize: 12, color: C.muted }}>{(data.categories?.ingresos?.length || 0)} categorías</div>
+            </div>
+            <span style={{ fontSize: 20, color: C.muted }}>›</span>
+          </div>
+          <div onClick={() => setSubScreen("medios-pago")} style={{ ...cfgRowStyle, borderBottom: "none" }}>
+            <span style={{ fontSize: 22 }}>💳</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Medios de pago</div>
+              <div style={{ fontSize: 12, color: C.muted }}>
+                {(() => { const n = (data.paymentMethods || []).filter(m => m.type === "credito" && !m.archived).length; return n === 1 ? "1 tarjeta de crédito activa" : `${n} tarjetas de crédito activas`; })()}
+              </div>
             </div>
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
           </div>

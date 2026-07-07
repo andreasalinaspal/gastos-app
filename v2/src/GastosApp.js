@@ -15,6 +15,7 @@ import MiMes from "./components/screens/MiMes";
 import Ingresos from "./components/screens/Ingresos";
 import { FijosScreen, CatsSubScreen, PresupuestosScreen, AllCatsScreen } from "./components/screens/Fijos";
 import Config from "./components/screens/Config";
+import { MediosPagoScreen } from "./components/screens/MediosPago";
 import Onboarding from "./components/auth/Onboarding";
 import Login from "./components/auth/Login";
 import Pin from "./components/auth/Pin";
@@ -710,6 +711,8 @@ export default function App() {
         showAddCat={showAddCat} setShowAddCat={setShowAddCat} newCatEmoji={newCatEmoji} setNewCatEmoji={setNewCatEmoji}
         newCatName={newCatName} setNewCatName={setNewCatName}
       />
+      {/* Medios de pago sub-screen */}
+      <MediosPagoScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} showToast={showToast} setConfirm={setConfirm} />
       {/* Presupuestos sub-screen */}
       <PresupuestosScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} catSpend={catSpend} />
       {/* All categories subscreen */}
