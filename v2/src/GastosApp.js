@@ -283,6 +283,23 @@ export default function App() {
     }
   }, [authUser, authPhase, data.userName]);
 
+  // Persistir el quiz de diagnóstico del onboarding: se guarda temporalmente en
+  // localStorage 'qori-quiz-result' (en el onboarding aún no hay data cargada) y
+  // aquí pasa a data.education.quizResult la primera vez que entramos al app con
+  // data lista (cubre login real y modo demo, donde buildDemoData pisa la data).
+  useEffect(() => {
+    if (authPhase !== "app") return;
+    if (isLoadingUserData.current) return; // esperar a que cargue la data de la nube
+    let raw; try { raw = localStorage.getItem('qori-quiz-result'); } catch (e) {}
+    if (!raw) return;
+    let parsed = null;
+    try { parsed = JSON.parse(raw); } catch (e) {}
+    if (parsed && parsed.segment && !data.education?.quizResult) {
+      setData(p => ({ ...p, education: { ...(p.education || { completedLessons: [], simulatorState: null }), quizResult: parsed } }));
+    }
+    try { localStorage.removeItem('qori-quiz-result'); } catch (e) {}
+  }, [authPhase, data]);
+
   // Register service worker
   useEffect(() => {
     if ('serviceWorker' in navigator) {
