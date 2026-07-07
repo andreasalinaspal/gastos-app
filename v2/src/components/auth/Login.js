@@ -3,7 +3,7 @@ import { sharedStyle } from "../shared/globalStyles";
 
 export default function Login({
   authTab, setAuthTab, authEmail, setAuthEmail, authPass, setAuthPass,
-  authPhone, setAuthPhone, authLoading, authError, setAuthError, signIn, signUp,
+  authPhone, setAuthPhone, authLoading, authError, setAuthError, signIn, signUp, enterDemo,
 }) {
   return (
     <div style={{ fontFamily: FONT_BODY, position: "fixed", inset: 0, background: C.beige, display: "flex", flexDirection: "column", overflowY: "auto" }}>
@@ -25,6 +25,9 @@ export default function Login({
           {authError && <div style={{ fontSize: 13, fontWeight: 600, textAlign: "center", color: authError.startsWith("✓") ? C.green : C.orange }}>{authError}</div>}
           <button onClick={authTab === "login" ? signIn : signUp} disabled={authLoading} style={{ width: "100%", padding: 16, borderRadius: 14, background: C.purple, color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: authLoading ? 0.7 : 1, marginTop: 4 }}>
             {authLoading ? "Cargando..." : authTab === "login" ? "Entrar" : "Crear cuenta"}
+          </button>
+          <button onClick={enterDemo} style={{ padding: "12px 0", background: "transparent", border: "none", color: C.purple, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            Probar con datos de ejemplo →
           </button>
         </div>
       </div>

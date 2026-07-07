@@ -7,6 +7,7 @@ import { genId, fmtWith } from "./lib/format";
 import { DEFAULT_CATS_GASTOS, DEFAULT_CATS_INGRESOS, initData } from "./constants";
 import { parseAmount, extractDescription } from "./lib/voice";
 import { hasSignificantData, saveLocalBackup, loadLocalBackup, clearLocalData } from "./lib/sync";
+import { buildDemoData } from "./lib/demo";
 import { useStore } from "./state/store";
 import Home from "./components/screens/Home";
 import MiMes from "./components/screens/MiMes";
@@ -544,8 +545,23 @@ export default function App() {
   const signInWithGoogle = async () => {
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
   };
+  const enterDemo = () => {
+    try { localStorage.setItem('qori-demo', '1'); } catch(e) {}
+    setData(buildDemoData());
+    setAuthPhase("app");
+    showToast("Modo demo: los datos no se guardan en la nube");
+  };
   const signOut = async () => {
-    setConfirm({ message: "¿Cerrar sesión?", onConfirm: async () => {
+    let isDemo = false;
+    try { isDemo = !!localStorage.getItem('qori-demo'); } catch(e) {}
+    setConfirm({ message: isDemo ? "¿Salir del modo demo?" : "¿Cerrar sesión?", onConfirm: async () => {
+      if (isDemo) {
+        try { localStorage.removeItem('qori-demo'); } catch(e) {}
+        clearLocalData();
+        setData(initData());
+        setAuthPhase("auth");
+        return;
+      }
       await supabase.auth.signOut();
     }});
   };
@@ -600,7 +616,7 @@ export default function App() {
       authPass={authPass} setAuthPass={setAuthPass}
       authPhone={authPhone} setAuthPhone={setAuthPhone}
       authLoading={authLoading} authError={authError} setAuthError={setAuthError}
-      signIn={signIn} signUp={signUp}
+      signIn={signIn} signUp={signUp} enterDemo={enterDemo}
     />
   );
 

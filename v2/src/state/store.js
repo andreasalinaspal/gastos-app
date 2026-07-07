@@ -26,6 +26,7 @@ const loadInitialData = () => {
 // Replica la inicialización original del useState de `authPhase`.
 const loadInitialAuthPhase = () => {
   if (typeof window === 'undefined') return "loading";
+  if (localStorage.getItem('qori-demo')) return "app"; // sesión demo activa sobrevive recargas
   return localStorage.getItem('qori-onboarding') ? "auth" : "onboarding";
 };
 
