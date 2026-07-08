@@ -9,15 +9,22 @@ const fmtDay = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "sh
 
 // Pantalla de ciclo de facturación de una TC (P2): el ciclo como unidad de tiempo.
 // Solo lectura — no muta expenses ni cardPayments; MiMes no se ve afectado.
-export function CardCycleScreen({ card, subScreen, setSubScreen, fmt }) {
+// Fuente de datos inyectable (F3): expenses/cardPayments/now/budgets llegan por props
+// para reusar la pantalla en el simulador; sin props se comporta igual que siempre
+// (lee del store y usa la fecha real). `screenId` y `topSlot` permiten montarla como
+// otra sub-pantalla con un banner/panel extra arriba.
+export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, cardPayments, now, budgets, screenId, topSlot }) {
   const data = useStore(s => s.data);
   const [showRule30, setShowRule30] = useState(false);
 
-  const cycle = getCycleFor(card, new Date());
+  const allExps = expenses ?? data.expenses ?? [];
+  const allPayments = cardPayments ?? data.cardPayments ?? [];
+  const catBudgets = budgets ?? data.budgets;
+  const cycle = getCycleFor(card, now ? new Date(now) : new Date());
   const accent = card.color || C.purple;
 
   // Gastos de la tarjeta dentro del ciclo actual
-  const cycleExps = (data.expenses || []).filter(e => {
+  const cycleExps = allExps.filter(e => {
     if (!e || e.paymentMethodId !== card.id || !e.date) return false;
     const d = new Date(e.date);
     const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -41,9 +48,9 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt }) {
   const cycleCatSpend = {};
   cycleExps.forEach(e => { if (e.category?.id) cycleCatSpend[e.category.id] = (cycleCatSpend[e.category.id] || 0) + (Number(e.amount) || 0); });
   const projAlerts = (data.categories?.gastos || [])
-    .filter(cat => data.budgets?.[cat.id] > 0 && cycleCatSpend[cat.id] > 0)
+    .filter(cat => catBudgets?.[cat.id] > 0 && cycleCatSpend[cat.id] > 0)
     .map(cat => {
-      const limit = data.budgets[cat.id];
+      const limit = catBudgets[cat.id];
       const spent = cycleCatSpend[cat.id];
       const projected = (spent / cycle.dayOfCycle) * cycle.totalDays;
       return { cat, limit, spent, projected, ratio: projected / limit, pct: Math.round((spent / limit) * 100) };
@@ -53,13 +60,13 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt }) {
     .slice(0, 2);
 
   // Uso de línea (footer educativo)
-  const { pct: linePct } = getLineUsage(card, data.expenses, data.cardPayments);
+  const { pct: linePct } = getLineUsage(card, allExps, allPayments);
   const linePctRound = Math.round(linePct);
   const lineColor = linePct < 30 ? C.green : linePct <= 60 ? C.orange : "#C0392B";
   const lineZone = linePct < 30 ? "zona saludable (<30%)" : linePct <= 60 ? "zona media (30–60%)" : "zona de riesgo (>60%)";
 
   return (
-    <div style={subStyle(subScreen, "card-" + card.id)}>
+    <div style={subStyle(subScreen, screenId || "card-" + card.id)}>
       {/* Header: nombre de tarjeta + rango del ciclo actual */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "52px 20px 12px", position: "sticky", top: 0, background: C.beige, zIndex: 10 }}>
         <button onClick={() => { setSubScreen(null); setShowRule30(false); }} style={{ width: 38, height: 38, borderRadius: "50%", background: "#fff", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 6px rgba(0,0,0,0.1)", fontSize: 22, color: C.black, flexShrink: 0 }}>‹</button>
@@ -68,6 +75,9 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt }) {
           <div style={{ fontSize: 13, fontWeight: 700, color: accent, marginTop: 2 }}>{fmtDay(cycle.start)} – {fmtDay(cycle.end)}</div>
         </div>
       </div>
+
+      {/* Slot extra (F3): banner/panel del simulador; null para tarjetas reales */}
+      {topSlot}
 
       {/* Barra de progreso del ciclo */}
       <div style={{ ...cardStyle, margin: "8px 16px 12px", padding: "14px 16px" }}>
