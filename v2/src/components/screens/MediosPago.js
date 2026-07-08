@@ -14,6 +14,13 @@ const CARD_COLORS = [C.purple, C.purpleLight, C.orange, C.green, C.greenLight, C
 
 const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", cycleBudget: "", color: CARD_COLORS[0] };
 
+// Datos ficticios para el preview bloqueado del gate Pro (ordenados por próxima fecha de pago).
+const PRO_PREVIEW_CARDS = [
+  { name: "Amex Interbank", cutoff: 3, due: "15 jul", amount: "S/1,240", usage: "48%" },
+  { name: "Mastercard BBVA", cutoff: 15, due: "27 jul", amount: "S/460", usage: "12%" },
+  { name: "Visa BCP", cutoff: 25, due: "5 ago", amount: "S/890", usage: "31%" },
+];
+
 export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setConfirm }) {
   const data = useStore(s => s.data);
   const setData = useStore(s => s.setData);
@@ -267,8 +274,33 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
           <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", lineHeight: 1.6, marginBottom: 8, maxWidth: 300 }}>
             En el plan gratis puedes tener <strong style={{ color: "#fff" }}>1 tarjeta activa</strong>.
           </div>
-          <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", lineHeight: 1.6, marginBottom: 32, maxWidth: 300 }}>
+          <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", lineHeight: 1.6, marginBottom: 18, maxWidth: 300 }}>
             Con Qori Pro: gestiona varias tarjetas, vista consolidada de pagos y más.
+          </div>
+          {/* Preview bloqueado: vista consolidada multi-tarjeta (datos ficticios de ejemplo) */}
+          <div style={{ position: "relative", width: "100%", maxWidth: 320, marginBottom: 20 }}>
+            <div style={{ filter: "blur(2px)", opacity: 0.85, pointerEvents: "none", userSelect: "none", textAlign: "left" }} aria-hidden="true">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0 4px 8px" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.6)", letterSpacing: 1, textTransform: "uppercase" }}>Próximos pagos</span>
+                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.85)" }}><strong style={{ fontFamily: FONT_TITLE, fontSize: 14, color: "#fff" }}>S/2,590</strong> este mes</span>
+              </div>
+              {PRO_PREVIEW_CARDS.map(c => (
+                <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.14)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 14, padding: "10px 14px", marginBottom: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
+                    <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.65)", marginTop: 1 }}>vence {c.due} · corte {c.cutoff}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontFamily: FONT_TITLE, fontSize: 16, fontWeight: 700, color: "#fff" }}>{c.amount}</div>
+                    <div style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#fff", background: "rgba(255,255,255,0.2)", borderRadius: 8, padding: "1px 7px", marginTop: 2 }}>{c.usage} línea</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+              <div style={{ fontSize: 26 }}>🔒</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.35)", borderRadius: 12, padding: "3px 12px", letterSpacing: 0.5 }}>Vista Pro</div>
+            </div>
           </div>
           <button onClick={() => setShowPro(false)} style={{ width: "100%", maxWidth: 320, padding: 16, borderRadius: 16, background: "#fff", color: C.purple, border: "none", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Entendido</button>
         </div>
