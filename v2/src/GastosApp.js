@@ -18,6 +18,7 @@ import Config from "./components/screens/Config";
 import { MediosPagoScreen } from "./components/screens/MediosPago";
 import { CardCycleScreen } from "./components/screens/CardCycle";
 import { AprendeScreen } from "./components/screens/Aprende";
+import { SimuladorScreen } from "./components/screens/Simulador";
 import Onboarding from "./components/auth/Onboarding";
 import Login from "./components/auth/Login";
 import Pin from "./components/auth/Pin";
@@ -738,6 +739,8 @@ export default function App() {
       ))}
       {/* Aprende sub-screen (educación crediticia) */}
       <AprendeScreen subScreen={subScreen} setSubScreen={setSubScreen} />
+      {/* Simulador de tarjeta (F3): modo práctica, key `simulador` */}
+      <SimuladorScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} />
       {/* Presupuestos sub-screen */}
       <PresupuestosScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} catSpend={catSpend} />
       {/* All categories subscreen */}

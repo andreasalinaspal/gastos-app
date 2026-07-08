@@ -60,6 +60,17 @@ export function AprendeScreen({ subScreen, setSubScreen }) {
               </div>
             );
           })}
+          {/* Simulador (F3): siempre visible al final para que sea descubrible */}
+          <div onClick={() => setSubScreen("simulador")} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, border: `1.5px solid ${C.orange}44` }}>
+            <div style={{ width: 42, height: 42, borderRadius: 12, background: "#FDEDE0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🎮</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.black, lineHeight: 1.3 }}>Simulador — practica sin riesgo</div>
+              <div style={{ fontSize: 12, color: C.orange, fontWeight: 600, marginTop: 2 }}>
+                {data.education?.simulatorState ? `Score simulado: ${data.education.simulatorState.score}/100` : "Una tarjeta de mentira para aprender de verdad"}
+              </div>
+            </div>
+            <div style={{ fontSize: 20, color: C.muted, flexShrink: 0 }}>›</div>
+          </div>
         </div>
       )}
 

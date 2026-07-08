@@ -93,6 +93,21 @@ export default function Home({
             })}
           </div>
         )}
+        {/* Simulador (F3): entrada para quienes aún no tienen TC (o el quiz dijo "sin-tarjeta") */}
+        {(creditCards.length === 0 || data.education?.quizResult?.segment === "sin-tarjeta") && (
+          <div style={{ padding: "10px 20px 0" }}>
+            <div onClick={() => setSubScreen("simulador")} style={{ background: "rgba(255,255,255,0.94)", borderRadius: 16, padding: "12px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 2px 10px rgba(0,0,0,0.12)" }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: "#FDEDE0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🎮</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.black }}>Practica con una tarjeta</div>
+                <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginTop: 2 }}>
+                  {data.education?.simulatorState ? `Score simulado: ${data.education.simulatorState.score}/100` : "Aprende a manejar una TC sin riesgo"}
+                </div>
+              </div>
+              <div style={{ fontSize: 20, color: C.muted, flexShrink: 0 }}>›</div>
+            </div>
+          </div>
+        )}
         {/* Aprende: entrada compacta a la educación crediticia */}
         {(() => {
           const doneCount = (data.education?.completedLessons || []).length;
