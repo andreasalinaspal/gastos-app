@@ -7,6 +7,9 @@ import { genId, fmtWith } from "./lib/format";
 import { DEFAULT_CATS_GASTOS, DEFAULT_CATS_INGRESOS, initData } from "./constants";
 import { parseAmount, extractDescription } from "./lib/voice";
 import { hasSignificantData, saveLocalBackup, loadLocalBackup, clearLocalData } from "./lib/sync";
+import { saveLocalSession, loadLocalSession, clearLocalSession, stashRescueCopy, saveLastSyncAt, loadLastSyncAt, CLOUD_RESCUE_KEY } from "./lib/localSession";
+import { reconcileData } from "./lib/reconcile";
+import { downloadBackup } from "./lib/export";
 import { buildDemoData } from "./lib/demo";
 import { migrateData } from "./lib/migrate";
 import { useStore } from "./state/store";
@@ -144,6 +147,7 @@ export default function App() {
   const skipNextSync = useRef(false);
   const isLoadingUserData = useRef(false);
   const loadedThisSession = useRef(false);
+  const intentionalSignOut = useRef(false); // distingue cierre de sesión real de fallo de red
   const dataRef = useRef(data); // mirrors data state for use in async callbacks
   useEffect(() => { dataRef.current = data; }, [data]);
 
@@ -167,60 +171,82 @@ export default function App() {
         if (error) throw error;
       }
       setCloudStatus("synced");
+      saveLastSyncAt();
+      return true;
     } catch (e) {
       console.error('[Qori] Supabase upload failed:', e);
       setCloudStatus("offline");
+      return false;
     }
   };
 
+  // Reconcilia lo local con la nube en vez de dejar que la nube pise a ciegas.
+  // Regla de oro: el perdedor nunca se descarta, se guarda en 'qori-rescate'.
   const loadUserData = async (userId) => {
     try {
       // Use array query + limit to handle possible duplicate rows gracefully
-      const { data: rows } = await supabase.from('app_data')
+      const { data: rows, error } = await supabase.from('app_data')
         .select('data')
         .eq('user_id', userId)
         .order('updated_at', { ascending: false })
         .limit(1);
-      const row = rows?.[0];
+      if (error) throw error;
 
-      if (row?.data) {
-        let loaded = row.data;
-        if (!loaded.categories) {
-          loaded.categories = {
+      let cloudBlob = rows?.[0]?.data || null;
+      if (cloudBlob && !cloudBlob.categories) {
+        cloudBlob = {
+          ...cloudBlob,
+          categories: {
             gastos: DEFAULT_CATS_GASTOS.map(c => ({ id: genId(), ...c })),
             ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),
-          };
-        }
-        if (!hasSignificantData(loaded)) {
-          const backup = loadLocalBackup(userId);
-          if (hasSignificantData(backup)) {
-            loaded = backup;
-            await forceUploadToSupabase(userId, backup);
-          }
-        } else {
-          saveLocalBackup(userId, loaded);
-        }
-        // Migración lazy de esquema: si el blob cambió, persistirlo migrado en Supabase
-        const migrated = migrateData(loaded);
-        if (migrated !== loaded) {
-          loaded = migrated;
-          await forceUploadToSupabase(userId, loaded);
-        }
+          },
+        };
+      }
+
+      // Candidato local: lo que hay en memoria; si está vacío, el backup del usuario.
+      const inMemory = dataRef.current;
+      const backup = loadLocalBackup(userId);
+      const localBlob = hasSignificantData(inMemory) ? inMemory
+        : (hasSignificantData(backup) ? backup : inMemory);
+
+      const { winner, loser, reason } = reconcileData(localBlob, cloudBlob);
+
+      if (winner === cloudBlob) {
+        // Gana la nube: guardamos el local perdedor antes de pisarlo.
+        if (hasSignificantData(loser)) stashRescueCopy('nube-gano', loser);
+        const migrated = migrateData(cloudBlob); // migración lazy de esquema
         skipNextSync.current = true;
-        setData(loaded);
-        setCloudStatus("synced");
+        setData(migrated, { stamp: false });
+        saveLocalBackup(userId, migrated);
+        if (migrated !== cloudBlob) {
+          await forceUploadToSupabase(userId, migrated);
+        } else {
+          setCloudStatus("synced");
+          saveLastSyncAt();
+        }
         return;
       }
-      // No cloud data — check local backup
-      const backup = loadLocalBackup(userId);
-      if (hasSignificantData(backup)) {
-        const migratedBackup = migrateData(backup);
-        await forceUploadToSupabase(userId, migratedBackup);
+
+      // Gana lo local: NO pisamos la data, subimos lo nuestro a la nube.
+      const migrated = migrateData(winner);
+      if (migrated !== inMemory) {
         skipNextSync.current = true;
-        setData(migratedBackup);
+        setData(migrated, { stamp: false });
       }
-      setCloudStatus("synced");
+      if (hasSignificantData(migrated)) {
+        saveLocalBackup(userId, migrated);
+        await forceUploadToSupabase(userId, migrated);
+      } else {
+        // Nada que subir (usuaria nueva sin datos en ningún lado)
+        setCloudStatus("synced");
+      }
+      if (reason !== 'sin-nube' && hasSignificantData(loser)) {
+        // La nube queda pisada por lo local: guardamos su copia en una llave
+        // aparte para no tapar el rescate de datos locales.
+        stashRescueCopy('local-gano', loser, CLOUD_RESCUE_KEY);
+      }
     } catch (e) {
+      // Sin nube: seguimos con los datos locales, que son la fuente de verdad.
       setCloudStatus("offline");
     }
   };
@@ -231,6 +257,7 @@ export default function App() {
       try {
         if (session?.user) {
           setAuthUser(session.user);
+          saveLocalSession({ userId: session.user.id, email: session.user.email });
           setAuthPhase("app");
           if (!loadedThisSession.current) {
             loadedThisSession.current = true;
@@ -248,14 +275,38 @@ export default function App() {
           }
         } else if (event === 'SIGNED_OUT') {
           loadedThisSession.current = false;
+          if (!intentionalSignOut.current) {
+            // SIGNED_OUT sin que la usuaria lo pidiera: token inválido, proyecto
+            // pausado o fallo de red. NO se borra nada — seguimos en modo local.
+            setCloudStatus("offline");
+            if (loadLocalSession() || hasSignificantData(dataRef.current)) {
+              setAuthPhase("app");
+              return;
+            }
+            setAuthUser(null);
+            const seenLocal = localStorage.getItem('qori-onboarding');
+            setAuthPhase(seenLocal ? "auth" : "onboarding");
+            return;
+          }
+          // Cierre de sesión intencional: siempre dejamos copia antes de borrar.
+          intentionalSignOut.current = false;
+          stashRescueCopy('cierre-sesion', dataRef.current);
           clearLocalData();
+          clearLocalSession();
           setAuthUser(null);
-          setData(initData());
+          setData(initData(), { stamp: false });
           const seen = localStorage.getItem('qori-onboarding');
           setAuthPhase(seen ? "auth" : "onboarding");
         }
         // Other no-session events (TOKEN_REFRESHED, etc.) — ignore, stay in current phase
       } catch (e) {
+        // Nunca dejar a la usuaria fuera por un error de la nube: si hay sesión
+        // local o datos en el dispositivo, se entra igual.
+        if (loadLocalSession() || hasSignificantData(dataRef.current)) {
+          setCloudStatus("offline");
+          setAuthPhase("app");
+          return;
+        }
         const seen = localStorage.getItem('qori-onboarding');
         setAuthPhase(seen ? "auth" : "onboarding");
       }
@@ -590,16 +641,45 @@ export default function App() {
   const signOut = async () => {
     let isDemo = false;
     try { isDemo = !!localStorage.getItem('qori-demo'); } catch(e) {}
-    setConfirm({ message: isDemo ? "¿Salir del modo demo?" : "¿Cerrar sesión?", onConfirm: async () => {
-      if (isDemo) {
-        try { localStorage.removeItem('qori-demo'); } catch(e) {}
-        clearLocalData();
-        setData(initData());
-        setAuthPhase("auth");
-        return;
-      }
-      await supabase.auth.signOut();
-    }});
+    const lastSync = loadLastSyncAt();
+    const current = dataRef.current;
+    const pendientes = !isDemo && hasSignificantData(current) &&
+      (!lastSync || (current.updatedAt && new Date(current.updatedAt) > new Date(lastSync)));
+    const message = isDemo
+      ? "¿Salir del modo demo?"
+      : pendientes
+        ? "Tienes cambios que no se han subido a la nube. Si cierras sesión se borrarán de este dispositivo."
+        : "¿Cerrar sesión?";
+    setConfirm({
+      message,
+      secondary: pendientes ? { label: "⬇️ Exportar mis datos antes", onClick: () => { downloadBackup(current); showToast("Backup descargado"); } } : null,
+      onConfirm: async () => {
+        if (isDemo) {
+          try { localStorage.removeItem('qori-demo'); } catch(e) {}
+          stashRescueCopy('salida-demo', dataRef.current);
+          clearLocalData();
+          clearLocalSession();
+          setData(initData(), { stamp: false });
+          setAuthPhase("auth");
+          return;
+        }
+        intentionalSignOut.current = true;
+        try {
+          await supabase.auth.signOut();
+        } catch (e) {
+          // La nube no responde, pero el cierre de sesión sí debe ocurrir:
+          // guardamos copia de rescate y limpiamos localmente.
+          stashRescueCopy('cierre-sesion', dataRef.current);
+          clearLocalData();
+          clearLocalSession();
+          setAuthUser(null);
+          setData(initData(), { stamp: false });
+          intentionalSignOut.current = false;
+          let seen = null; try { seen = localStorage.getItem('qori-onboarding'); } catch(e2) {}
+          setAuthPhase(seen ? "auth" : "onboarding");
+        }
+      },
+    });
   };
   const savePinSetup = () => {
     if (pinPhase === "enter") {

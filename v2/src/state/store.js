@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { DEFAULT_CATS_GASTOS, DEFAULT_CATS_INGRESOS, initData } from "../constants";
 import { genId } from "../lib/format";
 import { migrateData } from "../lib/migrate";
+import { loadLocalSession } from "../lib/localSession";
+import { hasSignificantData } from "../lib/sync";
 
 // Replica la inicialización original del useState de `data` en GastosApp:
 // lee localStorage 'gastos-data', repara categories faltantes, fallback initData().
@@ -24,11 +26,18 @@ const loadInitialData = () => {
   return migrateData(initData());
 };
 
-// Replica la inicialización original del useState de `authPhase`.
+// Arranque local-first: entrar NO depende de que Supabase responda.
+// Si hay sesión local guardada y datos en este dispositivo, entramos directo a
+// la app; la nube se reconcilia después, en segundo plano.
 const loadInitialAuthPhase = () => {
   if (typeof window === 'undefined') return "loading";
-  if (localStorage.getItem('qori-demo')) return "app"; // sesión demo activa sobrevive recargas
-  return localStorage.getItem('qori-onboarding') ? "auth" : "onboarding";
+  try {
+    if (localStorage.getItem('qori-demo')) return "app"; // sesión demo activa sobrevive recargas
+    if (loadLocalSession() && hasSignificantData(loadInitialData())) return "app";
+    return localStorage.getItem('qori-onboarding') ? "auth" : "onboarding";
+  } catch (e) {
+    return "onboarding";
+  }
 };
 
 // Todos los setters aceptan valor o función (estilo setState) para migración mecánica.

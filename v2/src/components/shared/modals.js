@@ -48,6 +48,9 @@ export function ConfirmModal({ confirm, setConfirm }) {
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }} />
           <div onClick={e => e.stopPropagation()} style={{ position: "relative", background: "#fff", borderRadius: 20, padding: "28px 24px 20px", width: "100%", maxWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", animation: "slideUp 0.25s ease", fontFamily: "inherit" }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: C.black, lineHeight: 1.5, marginBottom: 20, textAlign: "center" }}>{confirm.message}</div>
+            {confirm.secondary && (
+              <button onClick={() => confirm.secondary.onClick()} style={{ width: "100%", marginBottom: 10, padding: 13, borderRadius: 12, background: C.purpleSoft, color: C.purple, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{confirm.secondary.label}</button>
+            )}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setConfirm(null)} style={{ flex: 1, padding: 14, borderRadius: 12, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
               <button onClick={() => { confirm.onConfirm(); setConfirm(null); }} style={{ flex: 1, padding: 14, borderRadius: 12, background: C.purple, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Confirmar</button>

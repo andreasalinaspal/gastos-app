@@ -3,6 +3,9 @@
 
 export const LOCAL_SESSION_KEY = 'qori-local-session';
 export const RESCUE_KEY = 'qori-rescate';
+// Copia aparte del blob de la nube cuando lo local gana: así el rescate
+// principal (datos locales a punto de perderse) nunca queda pisado.
+export const CLOUD_RESCUE_KEY = 'qori-rescate-nube';
 export const LAST_SYNC_KEY = 'qori-last-sync';
 
 const store = () => {
@@ -40,19 +43,19 @@ export function clearLocalSession() {
 
 // Red de seguridad: guarda el blob que estaría a punto de perderse.
 // Pisa la copia anterior a propósito (no es historial, es último recurso).
-export function stashRescueCopy(reason, data) {
+export function stashRescueCopy(reason, data, key = RESCUE_KEY) {
   const ls = store();
   if (!ls || !data) return null;
   const copy = { reason: reason || 'desconocido', date: new Date().toISOString(), data };
-  try { ls.setItem(RESCUE_KEY, JSON.stringify(copy)); } catch (e) { return null; }
+  try { ls.setItem(key, JSON.stringify(copy)); } catch (e) { return null; }
   return copy;
 }
 
-export function loadRescueCopy() {
+export function loadRescueCopy(key = RESCUE_KEY) {
   const ls = store();
   if (!ls) return null;
   try {
-    const raw = ls.getItem(RESCUE_KEY);
+    const raw = ls.getItem(key);
     if (!raw) return null;
     return JSON.parse(raw);
   } catch (e) { return null; }
