@@ -8,7 +8,7 @@ import { DEFAULT_CATS_GASTOS, DEFAULT_CATS_INGRESOS, initData } from "./constant
 import { parseAmount, extractDescription } from "./lib/voice";
 import { hasSignificantData, saveLocalBackup, loadLocalBackup, clearLocalData } from "./lib/sync";
 import { saveLocalSession, loadLocalSession, clearLocalSession, stashRescueCopy, saveLastSyncAt, loadLastSyncAt, CLOUD_RESCUE_KEY } from "./lib/localSession";
-import { reconcileData } from "./lib/reconcile";
+import { decideSync } from "./lib/reconcile";
 import { downloadBackup } from "./lib/export";
 import { buildDemoData } from "./lib/demo";
 import { migrateData } from "./lib/migrate";
@@ -209,11 +209,11 @@ export default function App() {
       const localBlob = hasSignificantData(inMemory) ? inMemory
         : (hasSignificantData(backup) ? backup : inMemory);
 
-      const { winner, loser, reason } = reconcileData(localBlob, cloudBlob);
+      const { action, data: winner, rescueLocal, rescueCloud } = decideSync(localBlob, cloudBlob);
 
-      if (winner === cloudBlob) {
+      if (action === 'bajar') {
         // Gana la nube: guardamos el local perdedor antes de pisarlo.
-        if (hasSignificantData(loser)) stashRescueCopy('nube-gano', loser);
+        if (rescueLocal) stashRescueCopy('nube-gano', rescueLocal);
         const migrated = migrateData(cloudBlob); // migración lazy de esquema
         skipNextSync.current = true;
         setData(migrated, { stamp: false });
@@ -228,22 +228,22 @@ export default function App() {
       }
 
       // Gana lo local: NO pisamos la data, subimos lo nuestro a la nube.
+      if (rescueCloud) {
+        // La nube queda pisada por lo local: guardamos su copia en una llave
+        // aparte para no tapar el rescate de datos locales.
+        stashRescueCopy('local-gano', rescueCloud, CLOUD_RESCUE_KEY);
+      }
       const migrated = migrateData(winner);
       if (migrated !== inMemory) {
         skipNextSync.current = true;
         setData(migrated, { stamp: false });
       }
-      if (hasSignificantData(migrated)) {
+      if (action === 'subir') {
         saveLocalBackup(userId, migrated);
         await forceUploadToSupabase(userId, migrated);
       } else {
         // Nada que subir (usuaria nueva sin datos en ningún lado)
         setCloudStatus("synced");
-      }
-      if (reason !== 'sin-nube' && hasSignificantData(loser)) {
-        // La nube queda pisada por lo local: guardamos su copia en una llave
-        // aparte para no tapar el rescate de datos locales.
-        stashRescueCopy('local-gano', loser, CLOUD_RESCUE_KEY);
       }
     } catch (e) {
       // Sin nube: seguimos con los datos locales, que son la fuente de verdad.

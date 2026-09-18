@@ -51,3 +51,31 @@ export function reconcileData(local, cloud) {
   // Empate total: preferimos lo local (es lo que la usuaria está viendo ahora).
   return { winner: local, loser: cloud, reason: 'empate-mas-contenido' };
 }
+
+// Traduce la reconciliación a la acción que debe ejecutar el orquestador.
+// action: 'bajar' (adoptar la nube) | 'subir' (mandar lo local) | 'nada'.
+// `rescueLocal` / `rescueCloud` son los blobs que hay que stashear ANTES de
+// pisar nada; si vienen no-null, guardarlos no es opcional.
+export function decideSync(local, cloud) {
+  const { winner, loser, reason } = reconcileData(local, cloud);
+  if (winner === cloud && cloud) {
+    return {
+      action: 'bajar',
+      data: cloud,
+      reason,
+      rescueLocal: hasSignificantData(loser) ? loser : null,
+      rescueCloud: null,
+    };
+  }
+  if (!hasSignificantData(winner)) {
+    return { action: 'nada', data: winner, reason, rescueLocal: null, rescueCloud: null };
+  }
+  return {
+    action: 'subir',
+    data: winner,
+    reason,
+    rescueLocal: null,
+    // Sólo cuando realmente vamos a pisar una nube con contenido.
+    rescueCloud: reason !== 'sin-nube' && hasSignificantData(loser) ? loser : null,
+  };
+}

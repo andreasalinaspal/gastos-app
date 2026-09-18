@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { reconcileData, countContent } from "./reconcile";
+import { reconcileData, countContent, decideSync } from "./reconcile";
 
 const blob = (over = {}) => ({
   expenses: [{ id: "e1", amount: 10, description: "Menú", date: "2026-06-01T12:00:00.000Z", month: "Junio 2026" }],
@@ -122,5 +122,60 @@ describe("reconcileData", () => {
     const r = reconcileData(local, cloud);
     expect(r.winner).toBe(local);
     expect(r.reason).toBe("empate-mas-contenido");
+  });
+});
+
+describe("decideSync", () => {
+  it("nube más nueva → bajar, con rescate del local", () => {
+    const local = blob({ updatedAt: "2026-06-01T10:00:00.000Z" });
+    const cloud = blob({ updatedAt: "2026-06-10T10:00:00.000Z" });
+    const d = decideSync(local, cloud);
+    expect(d.action).toBe("bajar");
+    expect(d.data).toBe(cloud);
+    expect(d.rescueLocal).toBe(local);
+    expect(d.rescueCloud).toBeNull();
+  });
+
+  it("local más nuevo → subir, con rescate de la nube pisada", () => {
+    const local = blob({ updatedAt: "2026-06-10T10:00:00.000Z" });
+    const cloud = blob({ updatedAt: "2026-06-01T10:00:00.000Z" });
+    const d = decideSync(local, cloud);
+    expect(d.action).toBe("subir");
+    expect(d.data).toBe(local);
+    expect(d.rescueCloud).toBe(cloud);
+    expect(d.rescueLocal).toBeNull();
+  });
+
+  it("sin nube → subir lo local, sin rescate de nube (no hay nada que pisar)", () => {
+    const local = blob({ expenses: exps(2) });
+    const d = decideSync(local, null);
+    expect(d.action).toBe("subir");
+    expect(d.rescueCloud).toBeNull();
+  });
+
+  it("local vacío y nube con datos → bajar sin rescate (no se pierde nada)", () => {
+    const d = decideSync(vacio(), blob({ expenses: exps(2) }));
+    expect(d.action).toBe("bajar");
+    expect(d.rescueLocal).toBeNull();
+  });
+
+  it("todo vacío → nada que hacer", () => {
+    const d = decideSync(vacio(), null);
+    expect(d.action).toBe("nada");
+    expect(d.rescueLocal).toBeNull();
+    expect(d.rescueCloud).toBeNull();
+  });
+
+  it("nunca pisa un blob con datos sin devolver su copia de rescate", () => {
+    const casos = [
+      [blob({ updatedAt: "2026-06-10T10:00:00.000Z" }), blob({ updatedAt: "2026-06-01T10:00:00.000Z" })],
+      [blob({ updatedAt: "2026-06-01T10:00:00.000Z" }), blob({ updatedAt: "2026-06-10T10:00:00.000Z" })],
+      [blob({ expenses: exps(2) }), blob({ expenses: exps(5) })],
+    ];
+    for (const [l, c] of casos) {
+      const d = decideSync(l, c);
+      const perdedor = d.data === l ? c : l;
+      expect(d.rescueLocal || d.rescueCloud).toBe(perdedor);
+    }
   });
 });
