@@ -68,7 +68,7 @@ export const useStore = create((set) => ({
   authPhase: loadInitialAuthPhase(), // loading | onboarding | auth | pin-setup | app
   setAuthPhase: settable('authPhase', set),
   // Nube
-  cloudStatus: "loading", // loading | synced | offline
+  cloudStatus: "syncing", // syncing | synced | offline
   setCloudStatus: settable('cloudStatus', set),
   // Navegación top-level
   tab: "home",

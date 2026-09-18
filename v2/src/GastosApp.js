@@ -314,6 +314,54 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Reintento de conexión con la nube: la app ya funciona sin ella, pero
+  // cuando vuelve queremos sincronizar sin obligar a recargar.
+  const retryCloud = useCallback(async () => {
+    try { if (localStorage.getItem('qori-demo')) return false; } catch (e) {}
+    setCloudStatus("syncing");
+    try {
+      const { data: sess, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      const session = sess?.session;
+      if (!session?.user) { setCloudStatus("offline"); return false; }
+      setAuthUser(session.user);
+      saveLocalSession({ userId: session.user.id, email: session.user.email });
+      isLoadingUserData.current = true;
+      try { await loadUserData(session.user.id); } finally { isLoadingUserData.current = false; }
+      return true;
+    } catch (e) {
+      setCloudStatus("offline");
+      return false;
+    }
+  }, []);
+
+  // Mientras estemos offline: reintentar cada 60s, al volver la red y al
+  // recuperar el foco de la pestaña.
+  useEffect(() => {
+    if (authPhase !== "app") return;
+    if (cloudStatus !== "offline") return;
+    const id = setInterval(() => { retryCloud(); }, 60000);
+    const onOnline = () => { retryCloud(); };
+    const onVisible = () => { if (document.visibilityState === "visible") retryCloud(); };
+    window.addEventListener('online', onOnline);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [authPhase, cloudStatus, retryCloud]);
+
+  // Nada de "Conectando..." eterno: si la nube no contesta, lo decimos.
+  useEffect(() => {
+    if (authPhase !== "app") return;
+    if (cloudStatus !== "syncing") return;
+    const t = setTimeout(() => {
+      setCloudStatus(s => (s === "syncing" ? "offline" : s));
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [authPhase, cloudStatus]);
+
   // Sync data to Supabase on every change (debounced)
   const syncTimer = useRef(null);
   useEffect(() => {
@@ -638,6 +686,12 @@ export default function App() {
     setAuthPhase("app");
     showToast("Modo demo: los datos no se guardan en la nube");
   };
+  // Rescate desde el login: entrar en modo local sin tocar Supabase.
+  const enterOffline = () => {
+    setCloudStatus("offline");
+    setAuthPhase("app");
+    showToast("Modo local: tus datos están en este dispositivo");
+  };
   const signOut = async () => {
     let isDemo = false;
     try { isDemo = !!localStorage.getItem('qori-demo'); } catch(e) {}
@@ -734,7 +788,7 @@ export default function App() {
       authPass={authPass} setAuthPass={setAuthPass}
       authPhone={authPhone} setAuthPhone={setAuthPhone}
       authLoading={authLoading} authError={authError} setAuthError={setAuthError}
-      signIn={signIn} signUp={signUp} enterDemo={enterDemo}
+      signIn={signIn} signUp={signUp} enterDemo={enterDemo} enterOffline={enterOffline}
     />
   );
 
@@ -786,7 +840,7 @@ export default function App() {
           editExtraCategory={editExtraCategory} setEditExtraCategory={setEditExtraCategory} saveExtraEdit={saveExtraEdit}
         />
       )}
-      {tab === "config" && <Config fmt={fmt} curMonth={curMonth} setSubScreen={setSubScreen} setConfirm={setConfirm} showToast={showToast} signOut={signOut} forceUploadToSupabase={forceUploadToSupabase} />}
+      {tab === "config" && <Config fmt={fmt} curMonth={curMonth} setSubScreen={setSubScreen} setConfirm={setConfirm} showToast={showToast} signOut={signOut} forceUploadToSupabase={forceUploadToSupabase} retryCloud={retryCloud} />}
       {/* Sub-screens (slide over tabs) */}
       <FijosScreen
         subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} curMonth={curMonth}

@@ -1,18 +1,29 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { initData } from "../../constants";
 import { migrateData } from "../../lib/migrate";
+import { loadLastSyncAt } from "../../lib/localSession";
 import { useStore } from "../../state/store";
 
 const cfgRowStyle = { display: "flex", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #F0EDE4", cursor: "pointer", gap: 14 };
 
-export default function Config({ fmt, curMonth, setSubScreen, setConfirm, showToast, signOut, forceUploadToSupabase }) {
+const fmtSync = (iso) => {
+  if (!iso) return "nunca";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "nunca";
+  return d.toLocaleString("es-PE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+};
+
+export default function Config({ fmt, curMonth, setSubScreen, setConfirm, showToast, signOut, forceUploadToSupabase, retryCloud }) {
   const data = useStore(s => s.data);
   const setData = useStore(s => s.setData);
   const cloudStatus = useStore(s => s.cloudStatus);
   const setCloudStatus = useStore(s => s.setCloudStatus);
   const authUser = useStore(s => s.authUser);
   const backupInputRef = useRef(null);
+  const [lastSync, setLastSync] = useState(null);
+  useEffect(() => { setLastSync(loadLastSyncAt()); }, [cloudStatus]);
+  const lastSyncLabel = fmtSync(lastSync);
 
   const exportData = () => {
     const json = JSON.stringify(data, null, 2);
@@ -147,12 +158,33 @@ export default function Config({ fmt, curMonth, setSubScreen, setConfirm, showTo
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 10, height: 10, borderRadius: "50%", background: cloudStatus === "synced" ? C.green : C.orange }} />
             <span style={{ fontSize: 14, color: C.black, fontWeight: 600 }}>
-              {cloudStatus === "synced" ? "Sincronizado con la nube" : cloudStatus === "loading" ? "Conectando..." : "Sin conexión a la nube"}
+              {cloudStatus === "synced" ? "Sincronizado con la nube" : cloudStatus === "syncing" ? "Sincronizando..." : "Sin conexión a la nube"}
             </span>
           </div>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Tus datos se guardan automáticamente en la nube. Aunque borres el historial del navegador, tus datos están seguros.</div>
-          <button onClick={async () => { if (!authUser) return; setCloudStatus("loading"); await forceUploadToSupabase(authUser.id, data); setCloudStatus(s => { if (s === "synced") showToast("✅ Datos sincronizados con la nube"); else showToast("❌ Error al sincronizar — revisa conexión"); return s; }); }} style={{ width: "100%", marginTop: 14, padding: 13, borderRadius: 12, background: C.purpleSoft, color: C.purple, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-            ☁️ Sincronizar ahora
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
+            {cloudStatus === "offline"
+              ? "Sin conexión a la nube — tus datos se guardan en este dispositivo. Puedes seguir usando Qori con normalidad; cuando la nube vuelva, se sincroniza sola."
+              : "Tus datos se guardan en este dispositivo y se respaldan en la nube automáticamente."}
+          </div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 6, fontWeight: 600 }}>
+            Última sincronización: {lastSyncLabel}
+          </div>
+          <button
+            onClick={async () => {
+              setCloudStatus("syncing");
+              if (cloudStatus === "offline" || !authUser) {
+                const ok = retryCloud ? await retryCloud() : false;
+                setLastSync(loadLastSyncAt());
+                showToast(ok ? "✅ Conexión recuperada y datos sincronizados" : "❌ La nube sigue sin responder — tus datos siguen seguros aquí");
+                return;
+              }
+              const ok = await forceUploadToSupabase(authUser.id, data);
+              setLastSync(loadLastSyncAt());
+              showToast(ok ? "✅ Datos sincronizados con la nube" : "❌ Error al sincronizar — revisa conexión");
+            }}
+            style={{ width: "100%", marginTop: 14, padding: 13, borderRadius: 12, background: C.purpleSoft, color: C.purple, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            {cloudStatus === "offline" ? "🔄 Reintentar ahora" : "☁️ Sincronizar ahora"}
           </button>
         </div>
         {/* Cuenta */}
