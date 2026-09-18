@@ -37,10 +37,22 @@ const settable = (key, set) => (updaterOrValue) =>
     [key]: typeof updaterOrValue === 'function' ? updaterOrValue(state[key]) : updaterOrValue,
   }));
 
+// setData estampa `updatedAt` por defecto: casi todos los call sites son
+// mutaciones del usuario y esa marca es la que permite reconciliar con la nube
+// sin perder cambios. Con { stamp: false } NO estampa — sólo para data que
+// viene de la nube (loadUserData), que ya trae su propia marca.
+const setDataWith = (set) => (updaterOrValue, opts) =>
+  set((state) => {
+    const next = typeof updaterOrValue === 'function' ? updaterOrValue(state.data) : updaterOrValue;
+    if (opts && opts.stamp === false) return { data: next };
+    if (!next || typeof next !== 'object') return { data: next };
+    return { data: { ...next, updatedAt: new Date().toISOString() } };
+  });
+
 export const useStore = create((set) => ({
   // Datos (blob completo de la app)
   data: loadInitialData(),
-  setData: settable('data', set),
+  setData: setDataWith(set),
   // Auth
   authUser: null,
   setAuthUser: settable('authUser', set),
