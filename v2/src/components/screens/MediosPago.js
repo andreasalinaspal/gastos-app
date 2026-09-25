@@ -14,13 +14,6 @@ const CARD_COLORS = [C.purple, C.purpleLight, C.orange, C.green, C.greenLight, C
 
 const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", cycleBudget: "", color: CARD_COLORS[0] };
 
-// Datos ficticios para el preview bloqueado del gate Pro (ordenados por próxima fecha de pago).
-const PRO_PREVIEW_CARDS = [
-  { name: "Amex Interbank", cutoff: 3, due: "15 jul", amount: "S/1,240", usage: "48%" },
-  { name: "Mastercard BBVA", cutoff: 15, due: "27 jul", amount: "S/460", usage: "12%" },
-  { name: "Visa BCP", cutoff: 25, due: "5 ago", amount: "S/890", usage: "31%" },
-];
-
 export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setConfirm }) {
   const data = useStore(s => s.data);
   const setData = useStore(s => s.setData);
@@ -28,7 +21,6 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
   const [editNameVal, setEditNameVal] = useState("");
   const [cardForm, setCardForm] = useState(null); // null | {id, name, cutoffDay, paymentDay, creditLine, color}
   const [formError, setFormError] = useState("");
-  const [showPro, setShowPro] = useState(false);
   const [payCardId, setPayCardId] = useState(null); // TC que se está pagando
   const [payAmt, setPayAmt] = useState("");
 
@@ -46,17 +38,18 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
     setEditNameId(null); setEditNameVal("");
   };
 
-  // Gate freemium: gratis = 1 TC activa. Crear o reactivar por encima del límite → Qori Pro.
+  // Sin límite de tarjetas: esta versión no tiene planes de pago.
+  // El color por defecto es el primero que no esté en uso, para distinguirlas de un vistazo.
   const openNewCard = () => {
-    if (cards.length >= 1) { setShowPro(true); return; }
-    setFormError(""); setCardForm({ ...emptyCardForm });
+    const usados = new Set(cards.map(c => c.color));
+    const color = CARD_COLORS.find(c => !usados.has(c)) || CARD_COLORS[cards.length % CARD_COLORS.length];
+    setFormError(""); setCardForm({ ...emptyCardForm, color });
   };
   const openEditCard = (card) => {
     setFormError("");
     setCardForm({ id: card.id, name: card.name, cutoffDay: String(card.cutoffDay), paymentDay: String(card.paymentDay), creditLine: String(card.creditLine || ""), cycleBudget: card.cycleBudget ? String(card.cycleBudget) : "", color: card.color || CARD_COLORS[0] });
   };
   const reactivateCard = (card) => {
-    if (cards.length >= 1) { setShowPro(true); return; }
     updateMethod(card.id, { archived: false });
     showToast(card.name + " reactivada");
   };
@@ -90,7 +83,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
 
   return (
     <div style={subStyle(subScreen, "medios-pago")}>
-      {subHeader("Medios de pago", () => { setSubScreen(null); setCardForm(null); setEditNameId(null); setShowPro(false); })}
+      {subHeader("Medios de pago", () => { setSubScreen(null); setCardForm(null); setEditNameId(null); })}
 
       {/* Efectivo y débito */}
       <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "4px 20px 8px" }}>Básicos</div>
@@ -265,46 +258,6 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
         );
       })()}
 
-      {/* Gate freemium: Qori Pro — próximamente */}
-      {showPro && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 420, background: C.purple, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 32px", textAlign: "center", animation: "slideUp 0.3s ease" }}>
-          <div style={{ fontSize: 52, marginBottom: 20 }}>✨</div>
-          <div style={{ display: "inline-flex", background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 20, padding: "5px 14px", fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>Próximamente</div>
-          <div style={{ fontFamily: FONT_TITLE, fontSize: 38, fontWeight: 900, color: "#fff", letterSpacing: -1, lineHeight: 1.1, marginBottom: 14 }}>Qori Pro</div>
-          <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", lineHeight: 1.6, marginBottom: 8, maxWidth: 300 }}>
-            En el plan gratis puedes tener <strong style={{ color: "#fff" }}>1 tarjeta activa</strong>.
-          </div>
-          <div style={{ fontSize: 15, color: "rgba(255,255,255,0.8)", lineHeight: 1.6, marginBottom: 18, maxWidth: 300 }}>
-            Con Qori Pro: gestiona varias tarjetas, vista consolidada de pagos y más.
-          </div>
-          {/* Preview bloqueado: vista consolidada multi-tarjeta (datos ficticios de ejemplo) */}
-          <div style={{ position: "relative", width: "100%", maxWidth: 320, marginBottom: 20 }}>
-            <div style={{ filter: "blur(2px)", opacity: 0.85, pointerEvents: "none", userSelect: "none", textAlign: "left" }} aria-hidden="true">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0 4px 8px" }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.6)", letterSpacing: 1, textTransform: "uppercase" }}>Próximos pagos</span>
-                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.85)" }}><strong style={{ fontFamily: FONT_TITLE, fontSize: 14, color: "#fff" }}>S/2,590</strong> este mes</span>
-              </div>
-              {PRO_PREVIEW_CARDS.map(c => (
-                <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.14)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 14, padding: "10px 14px", marginBottom: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
-                    <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.65)", marginTop: 1 }}>vence {c.due} · corte {c.cutoff}</div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontFamily: FONT_TITLE, fontSize: 16, fontWeight: 700, color: "#fff" }}>{c.amount}</div>
-                    <div style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#fff", background: "rgba(255,255,255,0.2)", borderRadius: 8, padding: "1px 7px", marginTop: 2 }}>{c.usage} línea</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
-              <div style={{ fontSize: 26 }}>🔒</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.35)", borderRadius: 12, padding: "3px 12px", letterSpacing: 0.5 }}>Vista Pro</div>
-            </div>
-          </div>
-          <button onClick={() => setShowPro(false)} style={{ width: "100%", maxWidth: 320, padding: 16, borderRadius: 16, background: "#fff", color: C.purple, border: "none", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Entendido</button>
-        </div>
-      )}
     </div>
   );
 }
