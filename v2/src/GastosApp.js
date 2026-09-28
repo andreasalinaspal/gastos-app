@@ -157,6 +157,7 @@ export default function App() {
   const setCloudStatus = useStore(s => s.setCloudStatus);
   const skipNextSync = useRef(false);
   const isLoadingUserData = useRef(false);
+  const fxPedido = useRef(false); // el tipo de cambio se pide una sola vez por sesión
   const loadedThisSession = useRef(false);
   const intentionalSignOut = useRef(false); // distingue cierre de sesión real de fallo de red
   const dataRef = useRef(data); // mirrors data state for use in async callbacks
@@ -470,6 +471,37 @@ export default function App() {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
   }, []);
+
+  // Tipo de cambio referencial (F12): se consulta una sola vez por sesión y se
+  // guarda el último conocido en data.fx, para que el equivalente en soles de
+  // la deuda en dólares siga apareciendo SIN CONEXIÓN (local-first).
+  // Si la API no responde no pasa nada en pantalla: se usa el último conocido
+  // y se muestra su fecha; si nunca hubo ninguno, no se muestra el equivalente.
+  useEffect(() => {
+    if (authPhase !== "app" || fxPedido.current) return;
+    if (isLoadingUserData.current) return;
+    // Sin una sola línea en dólares no hace falta molestar a nadie.
+    if (!(data.paymentMethods || []).some(m => hasLine(m, "USD"))) return;
+    // Si el último conocido es de hace menos de 6 horas, ese vale.
+    const guardado = data.fx && data.fx.actualizadoEn ? new Date(data.fx.actualizadoEn) : null;
+    if (guardado && !isNaN(guardado) && Date.now() - guardado.getTime() < 6 * 60 * 60 * 1000) return;
+    fxPedido.current = true;
+    fetch("/api/tipo-cambio")
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => {
+        if (!j || !(Number(j.venta) > 0)) return; // 503 o respuesta rara: se ignora en silencio
+        setData(p => ({
+          ...p,
+          fx: {
+            venta: Number(j.venta),
+            fecha: j.fecha || new Date().toISOString().slice(0, 10),
+            fuente: j.fuente || "referencial",
+            actualizadoEn: new Date().toISOString(),
+          },
+        }));
+      })
+      .catch(() => {}); // sin conexión: manda el último conocido
+  }, [authPhase, data.paymentMethods, data.fx]);
 
 
   const curMonth = getCurrentMonthLabel();
