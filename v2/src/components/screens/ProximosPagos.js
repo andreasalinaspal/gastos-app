@@ -105,7 +105,7 @@ function CardRow({ it, fmtC, onOpen, equivData, aviso }) {
 
 // Pantalla "Próximos pagos" (F6 + F10): cuánto hay que pagar, en soles y en
 // dólares POR SEPARADO, y si el mes alcanza para cubrir los soles.
-export function ProximosPagosScreen({ subScreen, setSubScreen, fmt }) {
+export function ProximosPagosScreen({ subScreen, setSubScreen, fmt, traerFijosDe, onTraerFijos, irAIngresos }) {
   const data = useStore(s => s.data);
   const now = new Date();
   const upcoming = getUpcomingTotal(data.paymentMethods, data.expenses, data.cardPayments, now, data.cardStatements);
@@ -120,6 +120,10 @@ export function ProximosPagosScreen({ subScreen, setSubScreen, fmt }) {
   // tarjeta. Solo soles, igual que la cuenta de "¿te alcanza?".
   const ingresosDelMes = (data.incomeFixed || []).filter(i => i.month === getCurrentMonthLabel());
   const chequeo = chequeoDeIngresos(ingresosDelMes, items, now);
+  // F15: sin ingresos fijos del mes, la resta de arriba da un número que parece
+  // una respuesta y no lo es (restar contra CERO siempre "no alcanza"). Mejor
+  // decírselo y darle cómo arreglarlo que mostrarle un resultado inventado.
+  const sinIngresos = ingresosDelMes.length === 0;
   const avisoDe = (cardId) => {
     const a = chequeo.avisos.find(x => x.cardId === cardId && !x.alcanza);
     return a ? textoAviso(a, fmt) : null;
@@ -173,6 +177,26 @@ export function ProximosPagosScreen({ subScreen, setSubScreen, fmt }) {
                 </div>
               ))}
               <div style={{ height: 1, background: "#EDE9E0", margin: "10px 0" }} />
+              {sinIngresos ? (
+                /* F15: en vez del número, la verdad y un botón para arreglarlo. */
+                <div style={{ background: "#F5F2EC", borderRadius: 12, padding: "13px 14px" }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.black, lineHeight: 1.45 }}>
+                    No tienes ingresos registrados este mes, así que no puedo decirte si te alcanza.
+                  </div>
+                  <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, marginTop: 6 }}>
+                    {totalInc > 0
+                      ? "Tienes ingresos extra, pero tus ingresos fijos del mes están vacíos: la resta todavía no cuadra."
+                      : "Tus ingresos fijos se guardan mes a mes y este todavía está vacío."}
+                  </div>
+                  <button
+                    onClick={traerFijosDe && onTraerFijos ? onTraerFijos : irAIngresos}
+                    style={{ width: "100%", marginTop: 11, padding: 12, borderRadius: 11, background: C.purple, color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                  >
+                    {traerFijosDe && onTraerFijos ? `Traer mis fijos de ${traerFijosDe}` : "Registrar mis ingresos"}
+                  </button>
+                </div>
+              ) : (
+              <>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: C.black }}>{alcanza ? "Te quedarían" : "Te faltarían"}</span>
                 <span style={{ fontFamily: FONT_TITLE, fontSize: 28, fontWeight: 900, color: alcanza ? C.green : C.orange, letterSpacing: -0.5 }}>{fmt(Math.abs(sobra))}</span>
@@ -182,6 +206,8 @@ export function ProximosPagosScreen({ subScreen, setSubScreen, fmt }) {
                   ? "Te alcanza para cubrir tus fijos y tus tarjetas este mes."
                   : `Te faltarían ${fmt(Math.abs(sobra))} para cubrir todo este mes. Baja lo que puedas de tus gastos con tarjeta o suma un ingreso extra antes del vencimiento.`}
               </div>
+              </>
+              )}
               {usd.total30 > 0 && (
                 <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, marginTop: 8, paddingTop: 8, borderTop: "1px solid #EDE9E0" }}>
                   Esta cuenta es solo de soles. Tus <strong style={{ color: C.black }}>{fmtUsd(usd.total30)}</strong> en dólares se pagan aparte y no están incluidos acá.

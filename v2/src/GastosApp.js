@@ -1063,7 +1063,11 @@ export default function App() {
       {/* Medios de pago sub-screen */}
       <MediosPagoScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} showToast={showToast} setConfirm={setConfirm} />
       {/* Próximos pagos: cuánto vence y si alcanza el mes (key `proximos-pagos`) */}
-      <ProximosPagosScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} />
+      <ProximosPagosScreen
+        subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt}
+        traerFijosDe={traerIngresosDe} onTraerFijos={() => setShowMesNuevo(true)}
+        irAIngresos={() => { setSubScreen(null); setTab("income"); }}
+      />
       {/* Pantallas de ciclo por tarjeta de crédito activa (key `card-{id}`) */}
       {(data.paymentMethods || []).filter(m => m.type === "credito" && !m.archived).map(card => (
         <CardCycleScreen key={card.id} card={card} subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} />

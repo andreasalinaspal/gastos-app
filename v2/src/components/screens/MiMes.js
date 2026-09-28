@@ -64,6 +64,13 @@ export default function MiMes({
                 <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Balance del mes</div>
                 <div style={{ fontSize: "clamp(22px, 9vw, 46px)", fontWeight: 900, color: "#fff", letterSpacing: -1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: FONT_TITLE }}>{fmt(Math.abs(d.balance))}</div>
                 {isNeg && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.65)", marginTop: 4 }}>estás en rojo</div>}
+                {/* F15: con los ingresos en cero este balance es solo lo que
+                    gastó, no un balance. Se dice, sin dramatizar. */}
+                {monthTab === 0 && d.totalInc === 0 && (d.totalDiarios + d.totalFijosAll) > 0 && (
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 1.45 }}>
+                    No tienes ingresos registrados este mes: esto es solo lo que llevas gastado, no un balance. Regístralos en Ingresos.
+                  </div>
+                )}
                 {d.totalDiariosUSD > 0 && (
                   <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 6, lineHeight: 1.45 }}>
                     Gastaste además {fmtWith(d.totalDiariosUSD, "USD")} en dólares. No se suman acá: esa deuda se paga aparte, en dólares.
