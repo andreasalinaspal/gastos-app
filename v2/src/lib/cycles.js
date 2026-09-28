@@ -302,15 +302,21 @@ export function getStatementPrompt(card, expenses, statements, now = new Date())
 // → { cycle, missing: [{ currency, estimateGross, registrado, dueDate }] }
 // `dueDate` (F12) es la fecha que ella ya había registrado para ESA moneda, si
 // la hubo: al entrar a corregir el monto no se le pierde la fecha que puso.
+// Ofrece SIEMPRE las dos monedas, tenga o no declarada la línea: ella sabe lo
+// que debe aunque no sepa (o no haya puesto) su cupo en dólares. Las monedas sin
+// línea vienen marcadas con `sinLinea` para que la hoja lo explique y, al
+// guardar, se le cree una línea mínima y la deuda aparezca donde corresponde.
 export function buildStatementEntry(card, expenses, statements, now = new Date()) {
   if (!card || card.type !== "credito") return null;
   const closed = getClosedCycle(card, now);
-  const missing = cardCurrencies(card).map(cur => {
+  const missing = CURRENCIES.map(cur => {
     const previo = findStatement(statements, card.id, closed.key, cur);
     const dueDate = previo && previo.dueDate ? new Date(previo.dueDate) : null;
+    const sinLinea = !hasLine(card, cur);
     return {
       currency: cur,
-      estimateGross: openingAt(card, closed.end, cur) + spentSince(card, expenses, closed.end, cur),
+      sinLinea,
+      estimateGross: sinLinea ? 0 : openingAt(card, closed.end, cur) + spentSince(card, expenses, closed.end, cur),
       registrado: previo ? previo.amount : null,
       dueDate: dueDate && !isNaN(dueDate) ? dueDate : null,
     };

@@ -113,8 +113,20 @@ export function StatementSheet({ card, prompt, fmt, onClose, showToast }) {
     }));
     // Reemplaza el registro anterior de ese ciclo y moneda en vez de duplicarlo.
     const reemplazadas = new Set(nuevos.map(n => n.cardId + "|" + n.cycleKey + "|" + n.currency));
+    // Si registró una moneda cuya línea no estaba declarada, se le crea una línea
+    // mínima: sin ese registro la deuda no aparecería en la tarjeta ni en
+    // Próximos pagos, que recorren solo las monedas que la tarjeta "tiene".
+    const nuevasLineas = filled.filter(m => m.sinLinea).map(m => m.currency);
     setData(p => ({
       ...p,
+      paymentMethods: nuevasLineas.length === 0 ? p.paymentMethods : p.paymentMethods.map(m => {
+        if (m.id !== card.id) return m;
+        const lines = { ...(m.lines || {}) };
+        for (const cur of nuevasLineas) {
+          if (!lines[cur]) lines[cur] = { creditLine: 0, openingBalance: 0, openingDate: new Date().toISOString() };
+        }
+        return { ...m, lines };
+      }),
       cardStatements: [
         ...(p.cardStatements || []).filter(s => !reemplazadas.has(s.cardId + "|" + s.cycleKey + "|" + s.currency)),
         ...nuevos,
@@ -149,7 +161,9 @@ export function StatementSheet({ card, prompt, fmt, onClose, showToast }) {
               style={{ ...inputStyle, color: C.black, fontSize: 22, fontWeight: 800, textAlign: "center", padding: 14, ...(multi ? { background: "#fff" } : {}) }}
             />
             <div style={{ fontSize: 12, color: C.muted, marginTop: 5 }}>
-              Qori estimaba {fmtCurWith(Math.round(m.estimateGross * 100) / 100, m.currency, fmt)} con los gastos que registraste.
+              {m.sinLinea
+                ? <>Esta tarjeta no tiene línea en {CUR_LABEL[m.currency]} configurada. Puedes registrar igual lo que debes; luego, si quieres ver tu disponible, agrégala al editar la tarjeta.</>
+                : <>Qori estimaba {fmtCurWith(Math.round(m.estimateGross * 100) / 100, m.currency, fmt)} con los gastos que registraste.</>}
             </div>
             {/* Equivalente en soles de lo que debe en dólares: informativo, nunca
                 se suma a ningún total en soles. */}

@@ -691,3 +691,25 @@ describe("buildStatementEntry — fecha ya registrada por moneda", () => {
     expect(buildStatementEntry(c, expenses, sts, NOW).missing.find(m => m.currency === "PEN").dueDate).toBe(null);
   });
 });
+
+describe("buildStatementEntry — registrar sin línea declarada", () => {
+  const soloSoles = {
+    id: "c1", type: "credito", name: "Visa BCP", cutoffDay: 25, paymentDay: 15,
+    lines: { PEN: { creditLine: 3000, openingBalance: 0, openingDate: "2026-01-01T00:00:00.000Z" } },
+  };
+
+  it("ofrece dólares aunque la tarjeta no tenga esa línea", () => {
+    const entry = buildStatementEntry(soloSoles, [], [], new Date(2026, 8, 28));
+    const monedas = entry.missing.map(m => m.currency);
+    expect(monedas).toContain("USD");
+    const usd = entry.missing.find(m => m.currency === "USD");
+    expect(usd.sinLinea).toBe(true);
+    expect(usd.estimateGross).toBe(0);
+  });
+
+  it("la moneda que sí tiene línea no se marca como sin línea", () => {
+    const entry = buildStatementEntry(soloSoles, [], [], new Date(2026, 8, 28));
+    const pen = entry.missing.find(m => m.currency === "PEN");
+    expect(pen.sinLinea).toBe(false);
+  });
+});

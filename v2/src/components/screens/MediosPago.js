@@ -216,22 +216,33 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
                 cada una con su semáforo. Nunca se suman ni se convierten. */}
             {usos.map(({ cur, usage, next }) => {
               const barColor = usageColor(usage.pct);
+              // Línea sin cupo declarado (p. ej. registró deuda en dólares sin saber
+              // su línea): se muestra el saldo, no un "de US$0" ni una barra vacía.
+              const sinCupo = !usage.creditLine;
               return (
                 <div key={cur} style={{ background: C.beige, borderRadius: 12, padding: "10px 14px", marginTop: 10 }}>
                   <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
                     <div>
                       <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>
-                        Disponible{curs.length > 1 ? " en " + CUR_LABEL[cur] : ""}
+                        {sinCupo ? "Deuda" : "Disponible"}{curs.length > 1 ? " en " + CUR_LABEL[cur] : ""}
                       </div>
                       <div style={{ fontFamily: FONT_TITLE, fontSize: 24, fontWeight: 900, color: C.black, letterSpacing: -0.5, lineHeight: 1.15 }}>
-                        {fmtCur(usage.available, cur)} <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>de {fmtCur(usage.creditLine, cur)}</span>
+                        {sinCupo
+                          ? fmtCur(usage.balance, cur)
+                          : <>{fmtCur(usage.available, cur)} <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>de {fmtCur(usage.creditLine, cur)}</span></>}
                       </div>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: barColor, whiteSpace: "nowrap" }}>{Math.round(usage.pct)}% usado</div>
+                    {!sinCupo && <div style={{ fontSize: 13, fontWeight: 800, color: barColor, whiteSpace: "nowrap" }}>{Math.round(usage.pct)}% usado</div>}
                   </div>
-                  <div style={{ height: 6, background: "#E4E0D6", borderRadius: 99, overflow: "hidden", marginTop: 8 }}>
-                    <div style={{ height: "100%", width: `${Math.min(Math.round(usage.pct), 100)}%`, background: barColor, borderRadius: 99 }} />
-                  </div>
+                  {sinCupo ? (
+                    <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6, lineHeight: 1.45 }}>
+                      Sin línea declarada en {CUR_LABEL[cur]}. Agrégala al editar la tarjeta para ver cuánto te queda disponible.
+                    </div>
+                  ) : (
+                    <div style={{ height: 6, background: "#E4E0D6", borderRadius: 99, overflow: "hidden", marginTop: 8 }}>
+                      <div style={{ height: "100%", width: `${Math.min(Math.round(usage.pct), 100)}%`, background: barColor, borderRadius: 99 }} />
+                    </div>
+                  )}
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
                     {next.status === "por-vencer"
                       ? <>Próximo pago: <strong style={{ color: C.black }}>{fmtCur(next.amount, cur)}</strong> el {fmtLong(next.dueDate)} <span style={{ fontSize: 11 }}>· {nextPaymentSourceLabel(next.source)}</span></>
