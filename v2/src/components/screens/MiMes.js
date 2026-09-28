@@ -3,12 +3,13 @@ import { TrashIcon } from "../shared/icons";
 import { MONTHS_SHORT, DAYS, getMonthShort } from "../../lib/dates";
 import { useStore } from "../../state/store";
 import { PaymentMethodPicker, PmChip } from "../shared/PaymentMethodPicker";
+import { CategoryPicker } from "../shared/CategoryPicker";
 
 export default function MiMes({
   fmt, getMonthData, catSpend, budgetAlerts,
   monthTab, setMonthTab, miMesSubTab, setMiMesSubTab,
   editExpId, setEditExpId, editExpDesc, setEditExpDesc, editExpAmt, setEditExpAmt,
-  editExpDate, setEditExpDate, editExpCat, setEditExpCat, editExpPm, setEditExpPm,
+  editExpDate, setEditExpDate, editExpCat, setEditExpCat, editExpSub, setEditExpSub, editExpPm, setEditExpPm,
   saveExpenseEdit, deleteExpense,
 }) {
   const data = useStore(s => s.data);
@@ -90,12 +91,12 @@ export default function MiMes({
                         <input type="date" value={editExpDate} onChange={ev => setEditExpDate(ev.target.value)} style={{ ...inputStyle, color: C.black, fontSize: 14, padding: "8px 12px" }} />
                       </div>
                       <div style={{ marginBottom: 10 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Categoría</div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                          {(data.categories?.gastos || []).map(cat => { const sel = (editExpCat !== undefined ? editExpCat : e.category)?.id === cat.id; return (
-                            <button key={cat.id} onClick={() => setEditExpCat(sel ? null : cat)} style={{ padding: "5px 10px", borderRadius: 20, border: `2px solid ${sel ? C.purple : "#D4D0C8"}`, background: sel ? C.purpleSoft : "#fff", color: sel ? C.purple : C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
-                          );})}
-                        </div>
+                        <CategoryPicker
+                          value={editExpCat !== undefined ? editExpCat : e.category}
+                          onChange={setEditExpCat}
+                          subValue={editExpSub !== undefined ? editExpSub : (e.subcategory || null)}
+                          onSubChange={setEditExpSub}
+                        />
                       </div>
                       <div style={{ marginBottom: 10 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Medio de pago</div>
@@ -103,7 +104,7 @@ export default function MiMes({
                       </div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => saveExpenseEdit(e.id)} style={{ flex: 1, padding: 10, borderRadius: 10, background: C.green, color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
-                        <button onClick={() => { setEditExpId(null); setEditExpDate(""); setEditExpCat(undefined); setEditExpPm(undefined); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#E0DCD4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                        <button onClick={() => { setEditExpId(null); setEditExpDate(""); setEditExpCat(undefined); setEditExpSub(undefined); setEditExpPm(undefined); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#E0DCD4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
                       </div>
                     </div>
                   ) : (
@@ -113,7 +114,7 @@ export default function MiMes({
                         <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>{e.description}</div>
                         <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
                           <span>{DAYS[dt.getDay()].toLowerCase().slice(0,3)}, {dt.getDate()} {MONTHS_SHORT[dt.getMonth()].toLowerCase()}.</span>
-                          {e.category && <span style={{ background: C.purpleSoft, color: C.purple, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{e.category.emoji} {e.category.name}</span>}
+                          {e.category && <span style={{ background: C.purpleSoft, color: C.purple, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{e.category.emoji} {e.category.name}{e.subcategory ? " · " + e.subcategory.name : ""}</span>}
                           <PmChip pm={(data.paymentMethods || []).find(m => m.id === e.paymentMethodId)} />
                         </div>
                       </div>

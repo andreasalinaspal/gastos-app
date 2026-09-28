@@ -6,11 +6,12 @@ import { getCycleFor, getCycleSpend, getUpcomingTotal } from "../../lib/cycles";
 import { plazoLabel } from "./ProximosPagos";
 import { useStore } from "../../state/store";
 import { PaymentMethodPicker, PmChip } from "../shared/PaymentMethodPicker";
+import { CategoryPicker } from "../shared/CategoryPicker";
 
 export default function Home({
   fmt, curMonth, todayTotal, recentExp, budgetAlerts,
   editExpId, setEditExpId, editExpDesc, setEditExpDesc, editExpAmt, setEditExpAmt,
-  editExpDate, setEditExpDate, editExpCat, setEditExpCat, editExpPm, setEditExpPm,
+  editExpDate, setEditExpDate, editExpCat, setEditExpCat, editExpSub, setEditExpSub, editExpPm, setEditExpPm,
   saveExpenseEdit, deleteExpense,
   setSelectedCatDetail, setShowNotifPanel, setSubScreen,
   fileInputRef, cameraInputRef, handleScanImage,
@@ -129,12 +130,13 @@ export default function Home({
                         <input type="date" value={editExpDate} onChange={ev => setEditExpDate(ev.target.value)} style={{ ...inputStyle, color: C.black, fontSize: 14, padding: "8px 12px" }} />
                       </div>
                       <div style={{ marginBottom: 10 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>Categoría</div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                          {(data.categories?.gastos || []).map(cat => { const sel = (editExpCat !== undefined ? editExpCat : e.category)?.id === cat.id; return (
-                            <button key={cat.id} onClick={() => setEditExpCat(sel ? null : cat)} style={{ padding: "5px 10px", borderRadius: 20, border: sel ? "2px solid #fff" : "2px solid rgba(255,255,255,0.25)", background: sel ? "rgba(255,255,255,0.25)" : "transparent", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{cat.emoji} {cat.name}</button>
-                          );})}
-                        </div>
+                        <CategoryPicker
+                          dark
+                          value={editExpCat !== undefined ? editExpCat : e.category}
+                          onChange={setEditExpCat}
+                          subValue={editExpSub !== undefined ? editExpSub : (e.subcategory || null)}
+                          onSubChange={setEditExpSub}
+                        />
                       </div>
                       <div style={{ marginBottom: 10 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>Medio de pago</div>
@@ -142,7 +144,7 @@ export default function Home({
                       </div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => saveExpenseEdit(e.id)} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#fff", color: C.green, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Guardar</button>
-                        <button onClick={() => { setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); setEditExpDate(""); setEditExpCat(undefined); setEditExpPm(undefined); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                        <button onClick={() => { setEditExpId(null); setEditExpDesc(""); setEditExpAmt(""); setEditExpDate(""); setEditExpCat(undefined); setEditExpSub(undefined); setEditExpPm(undefined); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
                       </div>
                     </div>
                   ) : (
@@ -150,7 +152,7 @@ export default function Home({
                       <div style={{ flex: 1, cursor: "pointer" }} onClick={() => { setEditExpId(e.id); setEditExpDesc(e.description); setEditExpAmt(String(e.amount)); setEditExpDate(new Date(e.date).toISOString().split("T")[0]); }}>
                         <div style={{ fontSize: 15, fontWeight: 500, color: "rgba(255,255,255,0.9)" }}>{e.description}</div>
                         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                          <span>{e.category ? `${e.category.emoji} ${e.category.name} · ` : ""}{new Date(e.date).toLocaleDateString("es-PE", { day: "numeric", month: "short" })}</span>
+                          <span>{e.category ? `${e.category.emoji} ${e.category.name}${e.subcategory ? " · " + e.subcategory.name : ""} · ` : ""}{new Date(e.date).toLocaleDateString("es-PE", { day: "numeric", month: "short" })}</span>
                           <PmChip dark pm={(data.paymentMethods || []).find(m => m.id === e.paymentMethodId)} />
                         </div>
                       </div>

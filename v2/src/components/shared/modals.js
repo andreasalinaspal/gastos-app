@@ -4,6 +4,7 @@ import { MONTHS_SHORT, DAYS } from "../../lib/dates";
 import { genId, fmtWith } from "../../lib/format";
 import { useStore } from "../../state/store";
 import { PaymentMethodPicker } from "./PaymentMethodPicker";
+import { CategoryPicker } from "./CategoryPicker";
 
 // Toast global — antes inline en GastosApp.
 export function Toast({ toast }) {
@@ -194,7 +195,7 @@ export function NameSetupScreen({ nameSetupValue, setNameSetupValue, setShowName
   );
 }
 
-export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc, pendingExpCat, setPendingExpCat, pendingExpPm, setPendingExpPm, pendingExpDate, setPendingExpDate, registerExpense }) {
+export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc, pendingExpCat, setPendingExpCat, pendingExpPm, setPendingExpPm, pendingExpDate, setPendingExpDate, pendingExpSub, setPendingExpSub, registerExpense }) {
   const data = useStore(s => s.data);
   return (
         <div style={{ position: "fixed", inset: 0, zIndex: 310 }} onClick={() => setShowCatPicker(false)}>
@@ -203,12 +204,13 @@ export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc
             <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
             <div style={{ fontSize: 20, fontWeight: 800, color: C.black, marginBottom: 4 }}>¿En qué categoría?</div>
             <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>{pendingExpDesc} · {fmtWith(pendingExpAmt, data.currency)}</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
-              {(data.categories?.gastos || []).map(cat => (
-                <button key={cat.id} onClick={() => setPendingExpCat(pendingExpCat?.id === cat.id ? null : cat)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 20, border: "2px solid", borderColor: pendingExpCat?.id === cat.id ? C.purple : "#E0DCD4", background: pendingExpCat?.id === cat.id ? C.purpleSoft : "#fff", color: pendingExpCat?.id === cat.id ? C.purple : C.black, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
-                  {cat.emoji} {cat.name}
-                </button>
-              ))}
+            <div style={{ marginBottom: 20 }}>
+              <CategoryPicker
+                value={pendingExpCat}
+                onChange={setPendingExpCat}
+                subValue={pendingExpSub}
+                onSubChange={setPendingExpSub}
+              />
             </div>
             {/* Fecha — compacta, en la misma tira que el medio de pago */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
@@ -224,8 +226,8 @@ export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc
             <div style={{ marginBottom: 22 }}>
               <PaymentMethodPicker value={pendingExpPm} onChange={setPendingExpPm} />
             </div>
-            <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, pendingExpCat, pendingExpDate)} disabled={!pendingExpCat} style={{ width: "100%", padding: 16, borderRadius: 14, background: pendingExpCat ? C.purple : "#D4D0C8", color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: pendingExpCat ? "pointer" : "default", fontFamily: "inherit", marginBottom: 10, transition: "background 0.2s" }}>Confirmar gasto</button>
-            <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, null, pendingExpDate)} style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Sin categoría</button>
+            <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, pendingExpCat, pendingExpDate, pendingExpSub)} disabled={!pendingExpCat} style={{ width: "100%", padding: 16, borderRadius: 14, background: pendingExpCat ? C.purple : "#D4D0C8", color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: pendingExpCat ? "pointer" : "default", fontFamily: "inherit", marginBottom: 10, transition: "background 0.2s" }}>Confirmar gasto</button>
+            <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, null, pendingExpDate, null)} style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Sin categoría</button>
           </div>
         </div>
   );
