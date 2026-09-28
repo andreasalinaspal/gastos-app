@@ -26,7 +26,7 @@ export function plazoLabel(days) {
 export function ProximosPagosScreen({ subScreen, setSubScreen, fmt }) {
   const data = useStore(s => s.data);
   const now = new Date();
-  const { total30, items } = getUpcomingTotal(data.paymentMethods, data.expenses, data.cardPayments, now);
+  const { total30, items } = getUpcomingTotal(data.paymentMethods, data.expenses, data.cardPayments, now, data.cardStatements).PEN;
   const { totalInc, totalFijosAll } = getMonthData(data, 0);
   const sobra = totalInc - totalFijosAll - total30;
   const alcanza = sobra >= 0;

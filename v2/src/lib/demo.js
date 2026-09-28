@@ -34,16 +34,27 @@ export function buildDemoData() {
   // Medios de pago: efectivo/débito vienen de initData; agregamos una TC de ejemplo
   // openingBalance/openingDate (F6): la deuda que la tarjeta ya traía cuando se registró.
   const card = { id: genId(), type: "credito", name: "Visa BCP", cutoffDay: 25, paymentDay: 15, creditLine: 3000, cycleBudget: 600, color: "#6C5CE7", archived: false, openingBalance: 850, openingDate: daysAgo(40, 9).toISOString() };
-  d.paymentMethods = [...d.paymentMethods, card];
+  // Segunda TC (F10) con DOS líneas: una en soles y otra en dólares, independientes.
+  // Conviven una tarjeta bimoneda y una de solo soles, que es el caso real.
+  const cardUsd = {
+    id: genId(), type: "credito", name: "Amex Interbank", cutoffDay: 10, paymentDay: 2,
+    creditLine: 5000, openingBalance: 400, openingDate: daysAgo(40, 9).toISOString(),
+    lines: { PEN: { creditLine: 5000, openingBalance: 400 }, USD: { creditLine: 1500, openingBalance: 120 } },
+    cycleBudget: null, color: "#1B6B3A", archived: false,
+  };
+  d.paymentMethods = [...d.paymentMethods, card, cardUsd];
   const efectivo = d.paymentMethods.find(m => m.type === "efectivo");
   const debito = d.paymentMethods.find(m => m.type === "debito");
 
-  const exp = (n, description, amount, catName, hour, paymentMethod, subName) => {
+  // `currency` (F10): "PEN" por defecto; "USD" solo para gastos hechos contra la
+  // línea en dólares de la tarjeta. Nunca se suman entre sí.
+  const exp = (n, description, amount, catName, hour, paymentMethod, subName, currency) => {
     const date = daysAgo(n, hour);
     return {
       id: genId(), amount, description, date: date.toISOString(), month: monthOf(date), category: slimCat(cat(catName)),
       subcategory: subName ? sub(catName, subName) : null,
       paymentMethodId: paymentMethod ? paymentMethod.id : null,
+      ...(currency === "USD" ? { currency: "USD" } : {}),
     };
   };
 
@@ -58,6 +69,9 @@ export function buildDemoData() {
     exp(4, "Taxi", 18, "Transporte", 22, efectivo, "Taxi"),
     exp(5, "Zapatillas", 189, "Compras", 17, card),
     exp(6, "Spotify", 22.9, "Suscripciones", 9, card),
+    exp(2, "Netflix", 12.99, "Suscripciones", 9, cardUsd, null, "USD"),
+    exp(4, "Libro de Amazon", 28.5, "Educación", 11, cardUsd, null, "USD"),
+    exp(5, "Almuerzo con amigas", 72, "Comida", 14, cardUsd, "Almuerzo"),
     exp(8, "Gimnasio del mes", 89, "Deporte", 7, debito),
     exp(10, "Cumpleaños amiga", 60, "Ocio", 21, null), // histórico, sin medio
     exp(12, "Corte de pelo", 30, "Estética", 16, null), // histórico, sin medio

@@ -2,7 +2,8 @@ import { C, FONT_TITLE, inputStyle, usageColor } from "../../theme";
 import { TrashIcon } from "../shared/icons";
 import { getToday } from "../../lib/dates";
 import { buildCatMap } from "../../state/selectors";
-import { getCycleFor, getCycleSpend, getUpcomingTotal, getLineUsage } from "../../lib/cycles";
+import { getCycleFor, getCycleSpend, getUpcomingTotal, getLineUsage, cardCurrencies } from "../../lib/cycles";
+import { fmtWith } from "../../lib/format";
 import { plazoLabel } from "./ProximosPagos";
 import { useStore } from "../../state/store";
 import { PaymentMethodPicker, PmChip } from "../shared/PaymentMethodPicker";
@@ -79,7 +80,11 @@ export default function Home({
         />
         {/* Próximos pagos (F6): lo primero que ve si tiene TC — cuánto vence y cuándo */}
         {creditCards.length > 0 && (() => {
-          const { total30, items } = getUpcomingTotal(data.paymentMethods, data.expenses, data.cardPayments, new Date());
+          // Soles y dólares van separados (F10): el resumen de Inicio muestra los soles
+          // y, si hay deuda en dólares, la agrega como línea aparte (nunca sumada).
+          const upcoming = getUpcomingTotal(data.paymentMethods, data.expenses, data.cardPayments, new Date(), data.cardStatements);
+          const { total30, items } = upcoming.PEN;
+          const usd30 = upcoming.USD.total30;
           const proximo = items.find(i => i.status === "por-vencer");
           return (
             <div style={{ padding: "18px 20px 0" }}>
@@ -88,6 +93,9 @@ export default function Home({
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.2, textTransform: "uppercase" }}>Próximos pagos</div>
                   <div style={{ fontFamily: FONT_TITLE, fontSize: 24, fontWeight: 900, color: C.black, letterSpacing: -0.8, lineHeight: 1.2 }}>{fmt(total30)}</div>
+                  {usd30 > 0 && (
+                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginTop: 1 }}>+ {fmtWith(usd30, "USD")} en dólares</div>
+                  )}
                   <div style={{ fontSize: 12, color: proximo ? C.orange : C.green, fontWeight: 600, marginTop: 2 }}>
                     {proximo ? `El más cercano ${plazoLabel(proximo.days)}` : "Estás al día con tus tarjetas"}
                   </div>

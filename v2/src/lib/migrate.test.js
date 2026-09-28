@@ -18,9 +18,9 @@ const v1Blob = () => ({
 });
 
 describe("migrateData — blob v1", () => {
-  it("agrega paymentMethods default (efectivo y débito), cardPayments, education y schemaVersion 3", () => {
+  it("agrega paymentMethods default (efectivo y débito), cardPayments, education y schemaVersion 4", () => {
     const m = migrateData(v1Blob());
-    expect(m.schemaVersion).toBe(3);
+    expect(m.schemaVersion).toBe(4);
     expect(m.paymentMethods).toHaveLength(2);
     expect(m.paymentMethods.map(p => p.type).sort()).toEqual(["debito", "efectivo"]);
     expect(m.paymentMethods.every(p => p.id && p.name)).toBe(true);
@@ -65,15 +65,15 @@ describe("migrateData — idempotencia", () => {
     const partial = { ...v1Blob(), schemaVersion: 2, paymentMethods: [{ id: "pm1", type: "efectivo", name: "Efectivo" }] };
     delete partial.cardPayments;
     const m = migrateData(partial);
-    expect(m.schemaVersion).toBe(3);
+    expect(m.schemaVersion).toBe(4);
     expect(m.paymentMethods).toEqual([{ id: "pm1", type: "efectivo", name: "Efectivo" }]); // no se pisa
     expect(m.cardPayments).toEqual([]);
     expect(m.education).toEqual({ completedLessons: [], quizResult: null, simulatorState: null });
   });
 
-  it("schemaVersion mayor a 3 se respeta", () => {
-    const future = { ...migrateData(v1Blob()), schemaVersion: 4 };
-    expect(migrateData(future).schemaVersion).toBe(4);
+  it("schemaVersion mayor al actual se respeta", () => {
+    const future = { ...migrateData(v1Blob()), schemaVersion: 5 };
+    expect(migrateData(future).schemaVersion).toBe(5);
   });
 });
 
@@ -94,7 +94,7 @@ describe("migrateData — v3: deuda previa en tarjetas", () => {
     const card = m.paymentMethods.find(p => p.id === "c1");
     expect(card.openingBalance).toBe(0);
     expect(card.openingDate).toBe(LEGACY_OPENING_DATE);
-    expect(m.schemaVersion).toBe(3);
+    expect(m.schemaVersion).toBe(4);
   });
 
   it("no toca ningún otro campo de la tarjeta", () => {
@@ -135,5 +135,86 @@ describe("migrateData — entradas inválidas", () => {
   it("null/undefined pasan sin explotar", () => {
     expect(migrateData(null)).toBe(null);
     expect(migrateData(undefined)).toBe(undefined);
+  });
+});
+
+// ── F10: dos líneas por tarjeta (soles y dólares) ──
+
+describe("migrateData — v4: lines.PEN / lines.USD", () => {
+  const withCard = (cardOver = {}) => ({
+    ...v1Blob(),
+    schemaVersion: 3,
+    cardPayments: [],
+    education: { completedLessons: [], quizResult: null, simulatorState: null },
+    paymentMethods: [
+      { id: "pm1", type: "efectivo", name: "Efectivo" },
+      { id: "c1", type: "credito", name: "Visa BCP", cutoffDay: 25, paymentDay: 15, creditLine: 3000, openingBalance: 850, openingDate: "2026-08-01T00:00:00.000Z", color: "#6C5CE7", archived: false, ...cardOver },
+    ],
+  });
+
+  it("mueve la línea plana a lines.PEN y sube a schemaVersion 4", () => {
+    const m = migrateData(withCard());
+    const card = m.paymentMethods.find(p => p.id === "c1");
+    expect(m.schemaVersion).toBe(4);
+    expect(card.lines.PEN).toEqual({ creditLine: 3000, openingBalance: 850 });
+  });
+
+  it("NO borra los campos planos viejos (compatibilidad)", () => {
+    const card = migrateData(withCard()).paymentMethods.find(p => p.id === "c1");
+    expect(card.creditLine).toBe(3000);
+    expect(card.openingBalance).toBe(850);
+    expect(card.openingDate).toBe("2026-08-01T00:00:00.000Z");
+  });
+
+  it("no inventa línea en dólares", () => {
+    const card = migrateData(withCard()).paymentMethods.find(p => p.id === "c1");
+    expect(card.lines.USD).toBeUndefined();
+    expect(Object.keys(card.lines)).toEqual(["PEN"]);
+  });
+
+  it("respeta una línea en dólares ya configurada", () => {
+    const m = migrateData(withCard({ lines: { PEN: { creditLine: 3000, openingBalance: 850 }, USD: { creditLine: 1000, openingBalance: 120 } } }));
+    const card = m.paymentMethods.find(p => p.id === "c1");
+    expect(card.lines.USD).toEqual({ creditLine: 1000, openingBalance: 120 });
+  });
+
+  it("completa lines.PEN aunque ya exista lines.USD suelto", () => {
+    const m = migrateData(withCard({ lines: { USD: { creditLine: 1000, openingBalance: 0 } } }));
+    const card = m.paymentMethods.find(p => p.id === "c1");
+    expect(card.lines.PEN).toEqual({ creditLine: 3000, openingBalance: 850 });
+    expect(card.lines.USD).toEqual({ creditLine: 1000, openingBalance: 0 });
+  });
+
+  it("agrega cardStatements vacío y no lo pisa si ya existe", () => {
+    expect(migrateData(withCard()).cardStatements).toEqual([]);
+    const conStatement = { ...withCard(), cardStatements: [{ id: "s1", cardId: "c1", cycleKey: "2026-09-25", currency: "PEN", amount: 1234, dueDate: "2026-10-15", registeredAt: "2026-09-26T10:00:00.000Z" }] };
+    expect(migrateData(conStatement).cardStatements).toHaveLength(1);
+  });
+
+  it("no toca medios que no son de crédito", () => {
+    const efectivo = migrateData(withCard()).paymentMethods.find(p => p.id === "pm1");
+    expect(efectivo).toEqual({ id: "pm1", type: "efectivo", name: "Efectivo" });
+  });
+
+  it("idempotente: segunda pasada devuelve la misma referencia", () => {
+    const once = migrateData(withCard());
+    expect(migrateData(once)).toBe(once);
+    expect(migrateData(migrateData(once))).toBe(once);
+  });
+
+  it("sin pérdida: v1 → v4 conserva gastos, fijos, budgets y campos desconocidos", () => {
+    const original = v1Blob();
+    const m = migrateData(original);
+    expect(m.expenses).toEqual(original.expenses);
+    expect(m.fixed).toEqual(original.fixed);
+    expect(m.budgets).toEqual(original.budgets);
+    expect(m.campoDesconocido).toEqual({ foo: "bar" });
+  });
+
+  it("una tarjeta sin creditLine declarado queda con lines.PEN en 0 (no undefined)", () => {
+    const sinLinea = withCard();
+    delete sinLinea.paymentMethods[1].creditLine;
+    const card = migrateData(sinLinea).paymentMethods.find(p => p.id === "c1");
+    expect(card.lines.PEN.creditLine).toBe(0);
   });
 });

@@ -59,8 +59,41 @@ export function migrateData(data) {
     changed = true;
   }
 
-  if (!(typeof out.schemaVersion === "number" && out.schemaVersion >= 3)) {
-    out.schemaVersion = 3;
+  // v4: dos líneas por tarjeta (soles y dólares). La línea plana `creditLine`/
+  // `openingBalance` que ya existía SIEMPRE fue en soles, así que se copia a
+  // `lines.PEN` sin borrar los campos viejos (quedan como estaban por compatibilidad).
+  // La línea en dólares NO se inventa: aparece solo si la usuaria la configura.
+  const cardsNeedLines = out.paymentMethods.some(
+    m => m && m.type === "credito" && !(m.lines && m.lines.PEN)
+  );
+  if (cardsNeedLines) {
+    out.paymentMethods = out.paymentMethods.map(m => {
+      if (!m || m.type !== "credito") return m;
+      if (m.lines && m.lines.PEN) return m;
+      return {
+        ...m,
+        lines: {
+          ...(m.lines || {}),
+          PEN: {
+            creditLine: Number(m.creditLine) || 0,
+            openingBalance: Number(m.openingBalance) || 0,
+          },
+        },
+      };
+    });
+    changed = true;
+  }
+
+  // v4: montos OFICIALES del estado de cuenta del banco. Qori estima antes del
+  // corte, pero cuando el banco cobra manda su número (intereses, membresía,
+  // seguros y su propio tipo de cambio son cosas que Qori no puede saber).
+  if (!Array.isArray(out.cardStatements)) {
+    out.cardStatements = [];
+    changed = true;
+  }
+
+  if (!(typeof out.schemaVersion === "number" && out.schemaVersion >= 4)) {
+    out.schemaVersion = 4;
     changed = true;
   }
 

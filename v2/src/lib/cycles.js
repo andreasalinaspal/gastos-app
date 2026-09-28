@@ -63,11 +63,49 @@ function parseKey(key) {
   return new Date(y, m - 1, d); // local, no UTC
 }
 
-// Suma de gastos de la tarjeta cuya fecha cae dentro del ciclo identificado por `cycleKey`.
-export function getCycleSpend(expenses, card, cycleKey) {
+// ── Monedas (F10) ────────────────────────────────────────────────────────────
+// Las tarjetas peruanas manejan DOS líneas independientes: una en soles y otra
+// en dólares. Son dos deudas y dos pagos distintos: acá NUNCA se suman ni se
+// convierten. Todo helper trabaja sobre UNA moneda a la vez.
+export const CURRENCIES = ["PEN", "USD"];
+
+// Moneda de un gasto / pago / estado de cuenta. Sin `currency` → soles (todo lo
+// registrado antes de F10 era en soles).
+export const curOf = (x) => (x && x.currency === "USD" ? "USD" : "PEN");
+const normCur = (c) => (c === "USD" ? "USD" : "PEN");
+
+// Configuración de la línea de una moneda: { creditLine, openingBalance }.
+// - Soles: siempre existe (fallback a los campos planos pre-v4 de la tarjeta).
+// - Dólares: solo si la usuaria la configuró → si no, null (la tarjeta no maneja dólares).
+export function getCardLine(card, currency = "PEN") {
+  if (!card) return null;
+  const cur = normCur(currency);
+  const line = card.lines && card.lines[cur];
+  if (line) {
+    return {
+      creditLine: Number(line.creditLine) || 0,
+      openingBalance: Number(line.openingBalance) || 0,
+    };
+  }
+  if (cur === "USD") return null;
+  return {
+    creditLine: Number(card.creditLine) || 0,
+    openingBalance: Number(card.openingBalance) || 0,
+  };
+}
+
+export const hasLine = (card, currency) => getCardLine(card, currency) !== null;
+
+// Monedas que la tarjeta tiene configuradas, en orden (soles primero).
+export const cardCurrencies = (card) => CURRENCIES.filter(c => hasLine(card, c));
+
+// Suma de gastos de la tarjeta (en `currency`) cuya fecha cae dentro del ciclo `cycleKey`.
+export function getCycleSpend(expenses, card, cycleKey, currency = "PEN") {
+  const cur = normCur(currency);
   const cycle = getCycleFor(card, parseKey(cycleKey)); // la fecha de corte pertenece a su propio ciclo
   return (expenses || []).reduce((sum, e) => {
     if (!e || e.paymentMethodId !== card.id || !e.date) return sum;
+    if (curOf(e) !== cur) return sum;
     const d = startOfDay(new Date(e.date));
     if (d >= cycle.start && d <= cycle.end) return sum + (Number(e.amount) || 0);
     return sum;
@@ -84,12 +122,15 @@ function openingCutoff(card) {
   return isNaN(d) ? null : startOfDay(d);
 }
 
-// Σ gastos de la tarjeta desde `openingDate` (inclusive) hasta `until` (inclusive, opcional).
-function spentSince(card, expenses, until) {
+// Σ gastos de la tarjeta EN UNA MONEDA desde `openingDate` (inclusive) hasta
+// `until` (inclusive, opcional).
+function spentSince(card, expenses, until, currency = "PEN") {
+  const cur = normCur(currency);
   const from = openingCutoff(card);
   const to = until ? startOfDay(until) : null;
   return (expenses || []).reduce((sum, e) => {
     if (!e || e.paymentMethodId !== card.id) return sum;
+    if (curOf(e) !== cur) return sum;
     const amount = Number(e.amount) || 0;
     if (!e.date) return sum + amount; // sin fecha: se cuenta igual, no se puede ubicar en el tiempo
     const d = startOfDay(new Date(e.date));
@@ -99,81 +140,150 @@ function spentSince(card, expenses, until) {
   }, 0);
 }
 
-// La deuda previa aplica si `openingDate` ya había ocurrido en la fecha de corte dada.
-function openingAt(card, until) {
-  const opening = Number(card && card.openingBalance) || 0;
+// La deuda previa de una moneda aplica si `openingDate` ya había ocurrido en la
+// fecha de corte dada.
+function openingAt(card, until, currency = "PEN") {
+  const line = getCardLine(card, currency);
+  const opening = line ? line.openingBalance : 0;
   if (!opening) return 0;
   const from = openingCutoff(card);
   if (from && until && from > startOfDay(until)) return 0;
   return opening;
 }
 
-// Uso de línea de crédito (F6): saldo vivo = deuda previa + Σ gastos desde openingDate − Σ pagos.
-// → { balance, pct, available }. balance clampeado a 0 hacia la UI; pct = 0 si no hay creditLine.
-export function getLineUsage(card, expenses, cardPayments) {
-  const spent = spentSince(card, expenses, null);
-  const paid = (cardPayments || []).reduce((sum, p) =>
-    p && p.cardId === card.id ? sum + (Number(p.amount) || 0) : sum, 0);
-  const balance = Math.max(0, (Number(card.openingBalance) || 0) + spent - paid);
-  const pct = card.creditLine ? (balance / card.creditLine) * 100 : 0;
-  const available = card.creditLine ? Math.max(0, card.creditLine - balance) : 0;
-  return { balance, pct, available };
+// Σ pagos de la tarjeta en una moneda (opcionalmente hasta `until` inclusive).
+function paidTotal(card, cardPayments, currency = "PEN", until = null) {
+  const cur = normCur(currency);
+  const to = until ? startOfDay(until) : null;
+  return (cardPayments || []).reduce((sum, p) => {
+    if (!p || p.cardId !== card.id) return sum;
+    if (curOf(p) !== cur) return sum;
+    if (to && p.date && startOfDay(new Date(p.date)) > to) return sum; // pago futuro
+    return sum + (Number(p.amount) || 0);
+  }, 0);
 }
 
-// Próximo pago de una tarjeta (F6): lo que exige el ÚLTIMO estado de cuenta ya cerrado.
-// El ciclo cerrado es el anterior al que contiene `now`; su corte es el día previo al
-// inicio del ciclo actual, y su vencimiento es el paymentDate de ese ciclo.
-// → { amount, dueDate, cycleKey, status }
-//   - amount = deuda previa (si ya corría) + gastos hasta ese corte − pagos aplicados a ese
-//     ciclo o a ciclos anteriores. Clampeado a 0.
-//   - status = 'por-vencer' si queda algo por pagar; 'al-dia' si no.
-export function getNextPayment(card, expenses, cardPayments, now = new Date()) {
-  const current = getCycleFor(card, now);
-  // Día anterior al inicio del ciclo actual = fecha de corte del ciclo ya cerrado.
-  const closedEnd = new Date(current.start.getFullYear(), current.start.getMonth(), current.start.getDate() - 1);
-  const closed = getCycleFor(card, closedEnd);
+// Uso de línea de crédito en UNA moneda (F10): saldo vivo = deuda previa +
+// Σ gastos desde openingDate − Σ pagos, todo en esa misma moneda.
+// → { balance, pct, available, creditLine, currency }. Sin línea en esa moneda → todo 0.
+export function getLineUsage(card, expenses, cardPayments, currency = "PEN") {
+  const cur = normCur(currency);
+  const line = getCardLine(card, cur);
+  if (!line) return { balance: 0, pct: 0, available: 0, creditLine: 0, currency: cur };
+  const spent = spentSince(card, expenses, null, cur);
+  const paid = paidTotal(card, cardPayments, cur);
+  const balance = Math.max(0, line.openingBalance + spent - paid);
+  const pct = line.creditLine ? (balance / line.creditLine) * 100 : 0;
+  const available = line.creditLine ? Math.max(0, line.creditLine - balance) : 0;
+  return { balance, pct, available, creditLine: line.creditLine, currency: cur };
+}
 
-  const spent = spentSince(card, expenses, closed.end);
-  const opening = openingAt(card, closed.end);
+// ── Estados de cuenta oficiales (F10) ────────────────────────────────────────
+// `cardStatements` = [{ id, cardId, cycleKey, currency, amount, dueDate, registeredAt }].
+// El monto del banco se REGISTRA, no se calcula: el banco cobra intereses,
+// membresía, seguros y aplica su propio tipo de cambio. Cuando existe, MANDA.
+export function findStatement(statements, cardId, cycleKey, currency = "PEN") {
+  const cur = normCur(currency);
+  return (statements || []).find(
+    s => s && s.cardId === cardId && s.cycleKey === cycleKey && curOf(s) === cur
+  ) || null;
+}
+
+// Ciclo ya CERRADO respecto a `now`: el anterior al que contiene `now`.
+export function getClosedCycle(card, now = new Date()) {
+  const current = getCycleFor(card, now);
+  const closedEnd = new Date(current.start.getFullYear(), current.start.getMonth(), current.start.getDate() - 1);
+  return getCycleFor(card, closedEnd);
+}
+
+// Próximo pago de una tarjeta EN UNA MONEDA (F10): lo que exige el ÚLTIMO estado
+// de cuenta ya cerrado. El ciclo cerrado es el anterior al que contiene `now`.
+// → { amount, dueDate, cycleKey, status, source, currency, estimateGross, statementAmount }
+//   - Si hay estado de cuenta REGISTRADO de ese ciclo, ese monto MANDA (source 'banco').
+//   - Si no, Qori devuelve su estimado (source 'estimado'): deuda previa (si ya corría)
+//     + gastos hasta ese corte, menos los pagos ya hechos. Clampeado a 0.
+//   - estimateGross = el estimado ANTES de restar pagos, para comparar con el banco.
+//   - status = 'por-vencer' si queda algo por pagar; 'al-dia' si no.
+export function getNextPayment(card, expenses, cardPayments, now = new Date(), currency = "PEN", statements = null) {
+  const cur = normCur(currency);
+  const closed = getClosedCycle(card, now);
+
+  const spent = spentSince(card, expenses, closed.end, cur);
+  const opening = openingAt(card, closed.end, cur);
+  const estimateGross = opening + spent;
   // Todo pago ya hecho descuenta de este estado de cuenta: el banco aplica los pagos
   // a la deuda más antigua primero, así que el `cycleKey` (que solo dice en qué ciclo
   // se registró el pago) no limita a qué estado de cuenta se aplica.
-  const paid = (cardPayments || []).reduce((sum, p) => {
-    if (!p || p.cardId !== card.id) return sum;
-    if (p.date && startOfDay(new Date(p.date)) > startOfDay(now)) return sum; // pago futuro
-    return sum + (Number(p.amount) || 0);
-  }, 0);
+  const paid = paidTotal(card, cardPayments, cur, now);
 
-  const amount = Math.max(0, opening + spent - paid);
+  const st = findStatement(statements, card.id, closed.key, cur);
+  const gross = st ? Number(st.amount) || 0 : estimateGross;
+  const amount = Math.max(0, gross - paid);
+  const dueDate = st && st.dueDate ? startOfDay(new Date(st.dueDate)) : closed.paymentDate;
+
   return {
     amount,
-    dueDate: closed.paymentDate,
+    dueDate,
     cycleKey: closed.key,
     status: amount > 0 ? "por-vencer" : "al-dia",
+    currency: cur,
+    source: st ? "banco" : "estimado",
+    estimateGross,
+    statementAmount: st ? Number(st.amount) || 0 : null,
   };
 }
 
-// Panorama de próximos pagos (F6): total por vencer + detalle por tarjeta activa,
-// ordenado por fecha de vencimiento (la más cercana primero).
-// → { total, total30, items: [{ card, amount, dueDate, cycleKey, status, days, balance, available, pct }] }
-//   - total  = suma de todo lo que exigen los estados de cuenta cerrados.
+// Panorama de próximos pagos (F10): SEPARADO por moneda. NUNCA un total mezclado
+// — son dos deudas distintas que se pagan aparte.
+// → { PEN: { total, total30, items }, USD: { ... } }
+//   items = [{ card, amount, dueDate, cycleKey, status, source, days, balance, available, pct }]
+//   ordenado por fecha de vencimiento (la más cercana primero).
+//   - total  = suma de todo lo que exigen los estados de cuenta cerrados de esa moneda.
 //   - total30 = solo lo que vence dentro de los próximos 30 días (incluye lo ya vencido).
-export function getUpcomingTotal(cards, expenses, cardPayments, now = new Date()) {
+export function getUpcomingTotal(cards, expenses, cardPayments, now = new Date(), statements = null) {
   const active = (cards || []).filter(c => c && c.type === "credito" && !c.archived);
-  const items = active.map(card => {
-    const next = getNextPayment(card, expenses, cardPayments, now);
-    const usage = getLineUsage(card, expenses, cardPayments);
-    return {
-      card,
-      ...next,
-      days: daysBetween(now, next.dueDate),
-      balance: usage.balance,
-      available: usage.available,
-      pct: usage.pct,
+  const out = {};
+  for (const cur of CURRENCIES) {
+    const items = active
+      .filter(card => hasLine(card, cur))
+      .map(card => {
+        const next = getNextPayment(card, expenses, cardPayments, now, cur, statements);
+        const usage = getLineUsage(card, expenses, cardPayments, cur);
+        return {
+          card,
+          ...next,
+          days: daysBetween(now, next.dueDate),
+          balance: usage.balance,
+          available: usage.available,
+          pct: usage.pct,
+        };
+      })
+      .sort((a, b) => a.dueDate - b.dueDate);
+    out[cur] = {
+      total: items.reduce((s, it) => s + it.amount, 0),
+      total30: items.reduce((s, it) => (it.days <= 30 ? s + it.amount : s), 0),
+      items,
     };
-  }).sort((a, b) => a.dueDate - b.dueDate);
+  }
+  return out;
+}
 
-  const total = items.reduce((s, it) => s + it.amount, 0);
-  const total30 = items.reduce((s, it) => (it.days <= 30 ? s + it.amount : s), 0);
-  return { total, total30, items };
+// Lo que Qori tiene que PEDIRLE a la usuaria (F10): el ciclo cerrado más reciente
+// sin estado de cuenta registrado. → null si no hay nada que pedir.
+// → { cycle, missing: [{ currency, estimateGross }] }
+// Solo pide si la tarjeta ya existía en ese corte y ese ciclo tiene algo que
+// cobrar en esa moneda (estimado > 0): con un ciclo vacío no molesta.
+export function getStatementPrompt(card, expenses, statements, now = new Date()) {
+  if (!card || card.type !== "credito" || card.archived) return null;
+  const closed = getClosedCycle(card, now);
+  const opening = openingCutoff(card);
+  if (opening && opening > closed.end) return null; // la tarjeta se registró después del corte
+  const missing = [];
+  for (const cur of cardCurrencies(card)) {
+    if (findStatement(statements, card.id, closed.key, cur)) continue;
+    const estimateGross = openingAt(card, closed.end, cur) + spentSince(card, expenses, closed.end, cur);
+    if (estimateGross > 0) missing.push({ currency: cur, estimateGross });
+  }
+  if (missing.length === 0) return null;
+  return { cycle: closed, missing };
 }
