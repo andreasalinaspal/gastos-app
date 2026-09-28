@@ -551,6 +551,36 @@ describe("getUpcomingTotal — totales SEPARADOS por moneda", () => {
     expect(getUpcomingTotal([bcp, ripley], sinUsd, [], NOW).PEN.total).toBe(getUpcomingTotal([bcp, ripley], expenses, [], NOW).PEN.total);
   });
 
+  // F12: una fecha de vencimiento POR MONEDA. El statement de dólares puede
+  // vencer otro día que el de soles y eso tiene que verse en el orden y en los días.
+  it("una fecha distinta en dólares cambia el orden y los días de ese bloque", () => {
+    const otra = card({ id: "card-3", name: "Amex", cutoffDay: 25, paymentDay: 20, lines: { PEN: { creditLine: 4000, openingBalance: 0 }, USD: { creditLine: 800, openingBalance: 0 } } });
+    const exps = [
+      ...expenses,
+      { id: "e4", amount: 150, paymentMethodId: "card-3", date: new Date(2026, 8, 10).toISOString() },
+      { id: "e5", amount: 90, paymentMethodId: "card-3", date: new Date(2026, 8, 10).toISOString(), currency: "USD" },
+    ];
+    const sts = [
+      // BCP: soles el 15, dólares el 28 (más tarde)
+      { id: "s1", cardId: "card-1", cycleKey: "2026-09-25", currency: "PEN", amount: 300, dueDate: new Date(2026, 9, 15).toISOString() },
+      { id: "s2", cardId: "card-1", cycleKey: "2026-09-25", currency: "USD", amount: 340, dueDate: new Date(2026, 9, 28).toISOString() },
+      // Amex: soles el 20, dólares el 5 (mucho antes)
+      { id: "s3", cardId: "card-3", cycleKey: "2026-09-25", currency: "PEN", amount: 150, dueDate: new Date(2026, 9, 20).toISOString() },
+      { id: "s4", cardId: "card-3", cycleKey: "2026-09-25", currency: "USD", amount: 90, dueDate: new Date(2026, 9, 5).toISOString() },
+    ];
+    const up = getUpcomingTotal([bcp, otra], exps, [], NOW, sts);
+    // En soles BCP vence primero; en dólares el orden se invierte.
+    expect(up.PEN.items.map(i => i.card.name)).toEqual(["BCP", "Amex"]);
+    expect(up.USD.items.map(i => i.card.name)).toEqual(["Amex", "BCP"]);
+    // Y los "vence en N días" salen de la fecha de ESA moneda.
+    const bcpUsd = up.USD.items.find(i => i.card.id === "card-1");
+    const bcpPen = up.PEN.items.find(i => i.card.id === "card-1");
+    expect(ymd(bcpUsd.dueDate)).toBe("2026-10-28");
+    expect(ymd(bcpPen.dueDate)).toBe("2026-10-15");
+    expect(bcpUsd.days).toBe(31); // 27 sep → 28 oct
+    expect(bcpPen.days).toBe(18); // 27 sep → 15 oct
+  });
+
   it("sin tarjetas ambos bloques quedan en 0", () => {
     const up = getUpcomingTotal([], expenses, [], NOW);
     expect(up.PEN).toEqual({ total: 0, total30: 0, items: [] });

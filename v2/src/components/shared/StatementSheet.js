@@ -18,6 +18,8 @@ const CUR_SYMBOL = { PEN: "S/", USD: "US$" };
 export const fmtCurWith = (n, cur, fmt) => (cur === "USD" ? fmtWith(n, "USD") : fmt(n));
 
 const fmtDay = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "short" });
+// Etiqueta de campo de la hoja: mismo estilo en todos.
+const labelCss = { fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 };
 const toDateInput = (d) => {
   const pad = (n) => String(n).padStart(2, "0");
   return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
@@ -69,6 +71,9 @@ export function StatementBanner({ card, expenses, statements, now, onOpen, compa
 
 // Hoja para registrar el monto oficial (una casilla por moneda que falte) y la
 // fecha de vencimiento, prellenada con la calculada.
+//
+// Una fecha POR MONEDA (F12): las tarjetas peruanas bimoneda pueden vencer en
+// días distintos en soles y en dólares. Cada `cardStatement` guarda la suya.
 export function StatementSheet({ card, prompt, fmt, onClose, showToast }) {
   const kb = useKeyboardInset();
   const setData = useStore(s => s.setData);
@@ -77,8 +82,14 @@ export function StatementSheet({ card, prompt, fmt, onClose, showToast }) {
   const [amounts, setAmounts] = useState(() =>
     Object.fromEntries(prompt.missing.map(m => [m.currency, m.registrado != null ? String(m.registrado) : ""]))
   );
-  const [due, setDue] = useState(() => toDateInput(prompt.cycle.paymentDate));
+  // Fecha de vencimiento por moneda, todas prellenadas con la calculada del ciclo.
+  const [dues, setDues] = useState(() =>
+    Object.fromEntries(prompt.missing.map(m => [m.currency, toDateInput(prompt.cycle.paymentDate)]))
+  );
   const [error, setError] = useState("");
+  // Con una sola moneda la hoja se ve igual que antes: sin tarjetas ni etiquetas
+  // repitiendo "en soles".
+  const multi = prompt.missing.length > 1;
 
   const guardar = () => {
     const filled = prompt.missing
@@ -86,10 +97,16 @@ export function StatementSheet({ card, prompt, fmt, onClose, showToast }) {
       .filter(m => amounts[m.currency] !== "");
     if (filled.length === 0) { setError("Escribe al menos un monto"); return; }
     if (filled.some(m => !Number.isFinite(m.amount) || m.amount < 0)) { setError("Los montos no pueden ser negativos"); return; }
-    const dueISO = due ? new Date(due + "T12:00:00").toISOString() : prompt.cycle.paymentDate.toISOString();
+    // Cada moneda con su propia fecha; si quedó vacía o inválida, la calculada.
+    const dueISOde = (cur) => {
+      const raw = dues[cur];
+      if (!raw) return prompt.cycle.paymentDate.toISOString();
+      const d = new Date(raw + "T12:00:00");
+      return isNaN(d) ? prompt.cycle.paymentDate.toISOString() : d.toISOString();
+    };
     const nuevos = filled.map(m => ({
       id: genId(), cardId: card.id, cycleKey: prompt.cycle.key, currency: m.currency,
-      amount: m.amount, dueDate: dueISO, registeredAt: new Date().toISOString(),
+      amount: m.amount, dueDate: dueISOde(m.currency), registeredAt: new Date().toISOString(),
     }));
     // Reemplaza el registro anterior de ese ciclo y moneda en vez de duplicarlo.
     const reemplazadas = new Set(nuevos.map(n => n.cardId + "|" + n.cycleKey + "|" + n.currency));
@@ -115,25 +132,39 @@ export function StatementSheet({ card, prompt, fmt, onClose, showToast }) {
         </div>
 
         {prompt.missing.map(m => (
-          <div key={m.currency} style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>
-              Monto en {CUR_LABEL[m.currency]} ({CUR_SYMBOL[m.currency]})
-            </div>
+          <div
+            key={m.currency}
+            style={multi
+              ? { background: C.beige, borderRadius: 14, padding: "12px 14px", marginBottom: 12 }
+              : { marginBottom: 14 }}
+          >
+            <div style={labelCss}>Monto en {CUR_LABEL[m.currency]} ({CUR_SYMBOL[m.currency]})</div>
             <input
               type="number" inputMode="decimal" placeholder="0.00"
               value={amounts[m.currency]}
               onChange={e => setAmounts(a => ({ ...a, [m.currency]: e.target.value }))}
-              style={{ ...inputStyle, color: C.black, fontSize: 22, fontWeight: 800, textAlign: "center", padding: 14 }}
+              style={{ ...inputStyle, color: C.black, fontSize: 22, fontWeight: 800, textAlign: "center", padding: 14, ...(multi ? { background: "#fff" } : {}) }}
             />
             <div style={{ fontSize: 12, color: C.muted, marginTop: 5 }}>
               Qori estimaba {fmtCurWith(Math.round(m.estimateGross * 100) / 100, m.currency, fmt)} con los gastos que registraste.
             </div>
+            {/* Fecha propia de esta moneda: el banco puede vencerte los dólares otro día. */}
+            <div style={{ ...labelCss, marginTop: 12 }}>
+              Fecha de vencimiento{multi ? " de tus " + CUR_LABEL[m.currency] : ""}
+            </div>
+            <input
+              type="date" value={dues[m.currency]}
+              onChange={e => setDues(d => ({ ...d, [m.currency]: e.target.value }))}
+              style={{ ...inputStyle, color: C.black, ...(multi ? { background: "#fff" } : {}) }}
+            />
           </div>
         ))}
 
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Fecha de vencimiento</div>
-        <input type="date" value={due} onChange={e => setDue(e.target.value)} style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />
-        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16 }}>Ya la pusimos según tu día de pago. Cámbiala si tu estado de cuenta dice otra.</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          {multi
+            ? "Ya pusimos las dos fechas según tu día de pago. Cámbialas si tu estado de cuenta dice otras: los dólares pueden vencer otro día."
+            : "Ya la pusimos según tu día de pago. Cámbiala si tu estado de cuenta dice otra."}
+        </div>
 
         {error && <div style={{ fontSize: 13, color: C.orange, fontWeight: 600, marginBottom: 10 }}>{error}</div>}
         <button onClick={guardar} style={{ width: "100%", padding: 16, borderRadius: 14, background: C.green, color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 }}>Guardar estado de cuenta</button>
