@@ -511,6 +511,31 @@ export default function App() {
       showToast("Categoría eliminada");
     }});
   };
+  // --- Subcategorías (solo detalle: no llevan presupuesto propio) ---
+  // Siempre leemos `c.subcategories || []` para que los datos viejos, sin el
+  // campo, funcionen sin migración.
+  const mapCat = (type, catId, fn) => setData(p => ({
+    ...p,
+    categories: { ...p.categories, [type]: p.categories[type].map(c => c.id === catId ? fn(c) : c) },
+  }));
+  const addSubcat = (type, catId, name) => {
+    const n = (name || "").trim();
+    if (!n) return;
+    mapCat(type, catId, c => ({ ...c, subcategories: [...(c.subcategories || []), { id: genId(), name: n }] }));
+    showToast("Subcategoría agregada");
+  };
+  const saveSubcatEdit = (type, catId, subId, name) => {
+    const n = (name || "").trim();
+    if (!n) return;
+    mapCat(type, catId, c => ({ ...c, subcategories: (c.subcategories || []).map(s => s.id === subId ? { ...s, name: n } : s) }));
+  };
+  const deleteSubcat = (type, catId, subId) => {
+    setConfirm({ message: "¿Eliminar esta subcategoría? Los gastos que ya la usan conservan el nombre.", onConfirm: () => {
+      mapCat(type, catId, c => ({ ...c, subcategories: (c.subcategories || []).filter(s => s.id !== subId) }));
+      showToast("Subcategoría eliminada");
+    }});
+  };
+
   const addCat = (type) => {
     if (!newCatName.trim()) return;
     const emoji = newCatEmoji.trim() || "📌";
@@ -864,12 +889,14 @@ export default function App() {
       <CatsSubScreen type="gastos" title="Cats. Gastos" subScreen={subScreen} setSubScreen={setSubScreen}
         catEditId={catEditId} setCatEditId={setCatEditId} catEditEmoji={catEditEmoji} setCatEditEmoji={setCatEditEmoji}
         catEditName={catEditName} setCatEditName={setCatEditName} saveCatEdit={saveCatEdit} deleteCat={deleteCat} addCat={addCat}
+        addSubcat={addSubcat} saveSubcatEdit={saveSubcatEdit} deleteSubcat={deleteSubcat}
         showAddCat={showAddCat} setShowAddCat={setShowAddCat} newCatEmoji={newCatEmoji} setNewCatEmoji={setNewCatEmoji}
         newCatName={newCatName} setNewCatName={setNewCatName}
       />
       <CatsSubScreen type="ingresos" title="Cats. Ingresos" subScreen={subScreen} setSubScreen={setSubScreen}
         catEditId={catEditId} setCatEditId={setCatEditId} catEditEmoji={catEditEmoji} setCatEditEmoji={setCatEditEmoji}
         catEditName={catEditName} setCatEditName={setCatEditName} saveCatEdit={saveCatEdit} deleteCat={deleteCat} addCat={addCat}
+        addSubcat={addSubcat} saveSubcatEdit={saveSubcatEdit} deleteSubcat={deleteSubcat}
         showAddCat={showAddCat} setShowAddCat={setShowAddCat} newCatEmoji={newCatEmoji} setNewCatEmoji={setNewCatEmoji}
         newCatName={newCatName} setNewCatName={setNewCatName}
       />

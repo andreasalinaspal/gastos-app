@@ -128,16 +128,32 @@ export function CatsSubScreen({
   catEditId, setCatEditId, catEditEmoji, setCatEditEmoji, catEditName, setCatEditName,
   saveCatEdit, deleteCat, addCat,
   showAddCat, setShowAddCat, newCatEmoji, setNewCatEmoji, newCatName, setNewCatName,
+  addSubcat, saveSubcatEdit, deleteSubcat,
 }) {
   const data = useStore(s => s.data);
     const cats = data.categories?.[type] || [];
+    // Subcategorías solo en gastos: son el detalle de "en qué exactamente se fue la plata".
+    const withSubs = type === "gastos" && addSubcat;
+    const [openCat, setOpenCat] = useState(null);
+    const [newSubName, setNewSubName] = useState("");
+    const [subEditId, setSubEditId] = useState(null);
+    const [subEditName, setSubEditName] = useState("");
+    const toggleOpen = (id) => { setOpenCat(prev => prev === id ? null : id); setNewSubName(""); setSubEditId(null); };
+    // Ojo: subStyle recibe (subScreen, id). Se estaba pasando solo el id, asi que
+    // id quedaba undefined, la comparacion nunca daba true y esta pantalla se
+    // quedaba fuera de cuadro (translateX(100%)): no se podia abrir.
     return (
-      <div style={subStyle(`cats-${type === "gastos" ? "gasto" : "ingreso"}`)}>
-        {subHeader(title, () => { setSubScreen(null); setCatEditId(null); setShowAddCat(null); })}
-        <div style={{ fontSize: 13, color: C.muted, padding: "0 20px 12px" }}>Toca el nombre o emoji para editar.</div>
+      <div style={subStyle(subScreen, `cats-${type === "gastos" ? "gasto" : "ingreso"}`)}>
+        {subHeader(title, () => { setSubScreen(null); setCatEditId(null); setShowAddCat(null); setOpenCat(null); })}
+        <div style={{ fontSize: 13, color: C.muted, padding: "0 20px 12px" }}>Toca el nombre o emoji para editar.{withSubs ? " Abre una categoría para ver sus subcategorías." : ""}</div>
         <div style={{ margin: "0 16px" }}>
-          {cats.map((c, i) => (
-            <div key={c.id} style={{ ...catRowStyle, background: "#fff", borderRadius: i === 0 ? "14px 14px 0 0" : i === cats.length - 1 && showAddCat !== type ? "0 0 14px 14px" : 0, borderBottom: i === cats.length - 1 && showAddCat !== type ? "none" : "1px solid #F0EDE4" }}>
+          {cats.map((c, i) => {
+            const subs = Array.isArray(c.subcategories) ? c.subcategories : [];
+            const isOpen = withSubs && openCat === c.id;
+            const isLast = i === cats.length - 1 && showAddCat !== type;
+            return (
+            <div key={c.id} style={{ background: "#fff", borderRadius: i === 0 ? (isLast ? "14px" : "14px 14px 0 0") : isLast ? "0 0 14px 14px" : 0, borderBottom: isLast ? "none" : "1px solid #F0EDE4" }}>
+            <div style={{ ...catRowStyle, borderBottom: "none" }}>
               {catEditId === c.id ? (
                 <>
                   <input value={catEditEmoji} onChange={e => setCatEditEmoji(e.target.value)} placeholder="🏷️" style={{ ...inputStyle, width: 52, textAlign: "center", padding: "8px 6px", fontSize: 20, color: C.black, flex: "none" }} />
@@ -148,12 +164,46 @@ export function CatsSubScreen({
               ) : (
                 <>
                   <div onClick={() => { setCatEditId(c.id); setCatEditEmoji(c.emoji); setCatEditName(c.name); }} style={{ width: 44, height: 44, borderRadius: 12, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, cursor: "pointer", flexShrink: 0 }}>{c.emoji}</div>
-                  <div onClick={() => { setCatEditId(c.id); setCatEditEmoji(c.emoji); setCatEditName(c.name); }} style={{ flex: 1, fontSize: 15, fontWeight: 500, color: C.black, cursor: "pointer" }}>{c.name}</div>
+                  <div onClick={() => { setCatEditId(c.id); setCatEditEmoji(c.emoji); setCatEditName(c.name); }} style={{ flex: 1, cursor: "pointer" }}>
+                    <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>{c.name}</div>
+                    {withSubs && subs.length > 0 && <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{subs.length} subcategoría{subs.length !== 1 ? "s" : ""}</div>}
+                  </div>
+                  {withSubs && (
+                    <button onClick={() => toggleOpen(c.id)} style={{ background: isOpen ? C.purpleSoft : "#F5F2EC", color: C.purple, border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>{isOpen ? "Listo" : "Detalle"}</button>
+                  )}
                   <button onClick={() => deleteCat(type, c.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#bbb", fontSize: 18 }}>✕</button>
                 </>
               )}
             </div>
-          ))}
+            {isOpen && (
+              <div style={{ padding: "0 16px 14px 72px" }}>
+                {subs.length === 0 && <div style={{ fontSize: 12, color: C.muted, paddingBottom: 8 }}>Sin subcategorías todavía. Son solo detalle: no llevan presupuesto propio.</div>}
+                {subs.map(s => (
+                  <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
+                    {subEditId === s.id ? (
+                      <>
+                        <input value={subEditName} onChange={e => setSubEditName(e.target.value)} autoFocus style={{ ...inputStyle, flex: 1, padding: "7px 10px", fontSize: 13, color: C.black }} onKeyDown={e => { if (e.key === "Enter") { saveSubcatEdit(type, c.id, s.id, subEditName); setSubEditId(null); } }} />
+                        <button onClick={() => { saveSubcatEdit(type, c.id, s.id, subEditName); setSubEditId(null); }} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>OK</button>
+                        <button onClick={() => setSubEditId(null)} style={{ background: "#E0DCD4", color: "#666", border: "none", borderRadius: 8, padding: "7px 9px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>✕</button>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ color: C.muted, fontSize: 13 }}>·</span>
+                        <div onClick={() => { setSubEditId(s.id); setSubEditName(s.name); }} style={{ flex: 1, fontSize: 14, color: C.black, cursor: "pointer" }}>{s.name}</div>
+                        <button onClick={() => deleteSubcat(type, c.id, s.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#bbb", fontSize: 16 }}>✕</button>
+                      </>
+                    )}
+                  </div>
+                ))}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                  <input value={newSubName} onChange={e => setNewSubName(e.target.value)} placeholder="Nueva subcategoría" style={{ ...inputStyle, flex: 1, padding: "7px 10px", fontSize: 13, color: C.black }} onKeyDown={e => { if (e.key === "Enter") { addSubcat(type, c.id, newSubName); setNewSubName(""); } }} />
+                  <button onClick={() => { addSubcat(type, c.id, newSubName); setNewSubName(""); }} style={{ background: C.purple, color: "#fff", border: "none", borderRadius: 8, padding: "7px 13px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Agregar</button>
+                </div>
+              </div>
+            )}
+            </div>
+            );
+          })}
           {/* Add row */}
           {showAddCat === type ? (
             <div style={{ ...catRowStyle, background: "#fff", borderRadius: "0 0 14px 14px", borderBottom: "none" }}>
