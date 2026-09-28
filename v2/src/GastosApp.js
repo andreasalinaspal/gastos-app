@@ -14,6 +14,7 @@ import { InboxSheet } from "./components/shared/InboxSheet";
 import { downloadBackup } from "./lib/export";
 import { buildDemoData } from "./lib/demo";
 import { migrateData } from "./lib/migrate";
+import { diaHeredado } from "./lib/ingresos";
 import { useStore } from "./state/store";
 import Home from "./components/screens/Home";
 import MiMes from "./components/screens/MiMes";
@@ -600,7 +601,10 @@ export default function App() {
     const dia = raw === "" ? null : normalizaDiaDelMes(raw);
     if (raw !== "" && dia === null) { showToast("El día tiene que estar entre 1 y 31"); return; }
     setConfirm({ message: dia ? `¿Agregar "${n}" como ingreso fijo que entra el ${dia}?` : `¿Agregar "${n}" como ingreso fijo?`, onConfirm: () => {
-      setData(p => ({ ...p, incomeFixed: [...p.incomeFixed, { id: genId(), name: n, amount: 0, month: curMonth, day: dia }] }));
+      // Los ingresos fijos van una fila por mes: si no escribió día, se hereda
+      // el que ella ya le había puesto a ESE mismo ingreso en otro mes, para que
+      // el dato no se pierda al cambiar de mes.
+      setData(p => ({ ...p, incomeFixed: [...p.incomeFixed, { id: genId(), name: n, amount: 0, month: curMonth, day: dia !== null ? dia : diaHeredado(p.incomeFixed, n) }] }));
       setNewFixedIncomeName(""); setNewFixedIncomeDay(""); setShowAddFixedIncome(false);
       showToast("Ingreso fijo agregado");
     }});
