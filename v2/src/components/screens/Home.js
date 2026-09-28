@@ -1,8 +1,8 @@
 import { C, FONT_TITLE, inputStyle, usageColor } from "../../theme";
 import { TrashIcon } from "../shared/icons";
 import { getToday } from "../../lib/dates";
-import { buildCatMap } from "../../state/selectors";
-import { getCycleFor, getCycleSpend, getUpcomingTotal, getLineUsage, cardCurrencies } from "../../lib/cycles";
+import { buildCatMap, isPEN, sumUSD } from "../../state/selectors";
+import { getCycleFor, getCycleSpend, getUpcomingTotal, getLineUsage, cardCurrencies, curOf } from "../../lib/cycles";
 import { fmtWith } from "../../lib/format";
 import { plazoLabel } from "./ProximosPagos";
 import { useStore } from "../../state/store";
@@ -11,7 +11,7 @@ import { CategoryPicker } from "../shared/CategoryPicker";
 import { InboxBanner } from "../shared/InboxSheet";
 
 export default function Home({
-  fmt, curMonth, todayTotal, recentExp, budgetAlerts,
+  fmt, curMonth, todayTotal, todayTotalUSD, recentExp, budgetAlerts,
   inboxItems, setShowInbox,
   editExpId, setEditExpId, editExpDesc, setEditExpDesc, editExpAmt, setEditExpAmt,
   editExpDate, setEditExpDate, editExpCat, setEditExpCat, editExpSub, setEditExpSub, editExpPm, setEditExpPm,
@@ -22,7 +22,8 @@ export default function Home({
   const data = useStore(s => s.data);
   const setTab = useStore(s => s.setTab);
     const monthExps = data.expenses.filter(e => e.month === curMonth);
-    const topCats = buildCatMap(monthExps).slice(0, 5);
+    const topCats = buildCatMap(monthExps.filter(isPEN)).slice(0, 5);
+    const monthUSD = sumUSD(monthExps); // los dólares no se suman a los soles
     const maxCat = topCats[0]?.amount || 1;
     const creditCards = (data.paymentMethods || []).filter(m => m.type === "credito" && !m.archived);
 
@@ -45,6 +46,10 @@ export default function Home({
         <div style={{ textAlign: "center", padding: "20px 0 8px" }}>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", fontWeight: 700, letterSpacing: 1.5, marginBottom: 4 }}>HOY GASTASTE</div>
           <div style={{ fontSize: 48, fontWeight: 900, color: "#fff", letterSpacing: -2, fontFamily: FONT_TITLE }}>{fmt(todayTotal)}</div>
+          {/* Los dólares no se suman a los soles: van como línea aparte (F10) */}
+          {todayTotalUSD > 0 && (
+            <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.65)", marginTop: 2 }}>+ {fmtWith(todayTotalUSD, "USD")} en dólares</div>
+          )}
         </div>
         {/* Bar chart */}
         {topCats.length > 0 ? (
@@ -187,7 +192,7 @@ export default function Home({
                           <PmChip dark pm={(data.paymentMethods || []).find(m => m.id === e.paymentMethodId)} />
                         </div>
                       </div>
-                      <span style={{ fontSize: 16, fontWeight: 600, color: "rgba(255,255,255,0.9)", marginRight: 10 }}>-{fmt(e.amount)}</span>
+                      <span style={{ fontSize: 16, fontWeight: 600, color: "rgba(255,255,255,0.9)", marginRight: 10 }}>-{curOf(e) === "USD" ? fmtWith(e.amount, "USD") : fmt(e.amount)}</span>
                       <button onClick={() => deleteExpense(e.id)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: 8, cursor: "pointer" }}><TrashIcon size={16} color="rgba(255,255,255,0.7)" /></button>
                     </div>
                   )}

@@ -2,8 +2,8 @@ import { useState } from "react";
 import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { CheckIcon, PlusIcon, TrashIcon } from "../shared/icons";
 import { subStyle, subHeader } from "../shared/subnav";
-import { genId } from "../../lib/format";
-import { buildCatMap, getMonthData } from "../../state/selectors";
+import { genId, fmtWith } from "../../lib/format";
+import { buildCatMap, getMonthData, isPEN, sumUSD } from "../../state/selectors";
 import { getMonthLabel, getMonthShort } from "../../lib/dates";
 import { useStore } from "../../state/store";
 
@@ -230,7 +230,8 @@ export function PresupuestosScreen({ subScreen, setSubScreen, fmt, catSpend }) {
   const [editVal, setEditVal] = useState("");
 
   const budgets = data.budgets || {};
-  const { totalInc, totalFijosAll } = getMonthData(data, 0);
+  const mes = getMonthData(data, 0);
+  const { totalInc, totalFijosAll } = mes;
   const disponible = totalInc - totalFijosAll;
   const totalAsignado = Object.values(budgets).reduce((s, v) => s + (Number(v) || 0), 0);
   const sinAsignar = disponible - totalAsignado;
@@ -276,6 +277,12 @@ export function PresupuestosScreen({ subScreen, setSubScreen, fmt, catSpend }) {
               {sinAsignar < 0 && (
                 <div style={{ fontSize: 12, color: C.orange, fontWeight: 600, lineHeight: 1.5, marginTop: 4 }}>
                   Asignaste {fmt(Math.abs(sinAsignar))} más de lo que tienes disponible. Baja algún límite o ajusta tus ingresos.
+                </div>
+              )}
+              {/* Los gastos en dólares no entran a estos límites en soles (F10) */}
+              {mes.totalDiariosUSD > 0 && (
+                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginTop: 6 }}>
+                  Este mes gastaste además <strong style={{ color: C.black }}>{fmtWith(mes.totalDiariosUSD, "USD")}</strong> en dólares. Esos van aparte y no cuentan contra estos límites.
                 </div>
               )}
             </div>
@@ -343,7 +350,8 @@ export function AllCatsScreen({ subScreen, setSubScreen, fmt, setSelectedCatDeta
   const exps = monthOff === "all"
     ? data.expenses
     : data.expenses.filter(e => e.month === getMonthLabel(monthOff));
-  const cats = buildCatMap(exps);
+  const cats = buildCatMap(exps.filter(isPEN));
+  const totalUSD = sumUSD(exps); // los dólares se listan aparte, nunca sumados
   const total = cats.reduce((s, c) => s + c.amount, 0);
   const max = cats[0]?.amount || 1;
   const rotulo = monthOff === "all" ? "Todo el histórico" : getMonthLabel(monthOff);
@@ -361,6 +369,10 @@ export function AllCatsScreen({ subScreen, setSubScreen, fmt, setSelectedCatDeta
             <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>{rotulo}</div>
             <div style={{ fontFamily: FONT_TITLE, fontSize: 30, fontWeight: 900, color: C.black, marginTop: 2 }}>{fmt(total)}</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{exps.length} gasto{exps.length !== 1 ? "s" : ""} en {cats.length} categoría{cats.length !== 1 ? "s" : ""}</div>
+            {/* Los gastos en dólares van aparte, nunca sumados a los soles (F10) */}
+            {totalUSD > 0 && (
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, marginTop: 4 }}>+ {fmtWith(totalUSD, "USD")} en dólares</div>
+            )}
           </div>
           {cats.map((cat, i) => {
             const pct = Math.round((cat.amount / max) * 100);

@@ -2,6 +2,9 @@ import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { TrashIcon } from "../shared/icons";
 import { MONTHS_SHORT, DAYS, getMonthShort } from "../../lib/dates";
 import { useStore } from "../../state/store";
+import { curOf } from "../../lib/cycles";
+import { sumUSD } from "../../state/selectors";
+import { fmtWith } from "../../lib/format";
 import { PaymentMethodPicker, PmChip } from "../shared/PaymentMethodPicker";
 import { CategoryPicker } from "../shared/CategoryPicker";
 
@@ -61,6 +64,11 @@ export default function MiMes({
                 <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Balance del mes</div>
                 <div style={{ fontSize: "clamp(22px, 9vw, 46px)", fontWeight: 900, color: "#fff", letterSpacing: -1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: FONT_TITLE }}>{fmt(Math.abs(d.balance))}</div>
                 {isNeg && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.65)", marginTop: 4 }}>estás en rojo</div>}
+                {d.totalDiariosUSD > 0 && (
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 6, lineHeight: 1.45 }}>
+                    Gastaste además {fmtWith(d.totalDiariosUSD, "USD")} en dólares. No se suman acá: esa deuda se paga aparte, en dólares.
+                  </div>
+                )}
               </div>
             </div>
             <div style={{ display: "flex", gap: 10, padding: "0 24px", marginBottom: 20, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
@@ -75,6 +83,10 @@ export default function MiMes({
               <div style={{ minWidth: 110, background: C.purple, borderRadius: 14, padding: "14px 12px", color: "#fff", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8 }}>Diarios</div>
                 <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap", fontFamily: FONT_TITLE }}>{fmt(d.totalDiarios)}</div>
+                {/* Los gastos en dólares no entran al total en soles (F10) */}
+                {d.totalDiariosUSD > 0 && (
+                  <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2, whiteSpace: "nowrap", opacity: 0.85 }}>+ {fmtWith(d.totalDiariosUSD, "USD")}</div>
+                )}
               </div>
             </div>
             <div style={{ padding: "0 24px" }}>
@@ -118,7 +130,7 @@ export default function MiMes({
                           <PmChip pm={(data.paymentMethods || []).find(m => m.id === e.paymentMethodId)} />
                         </div>
                       </div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: C.orange, marginRight: 8 }}>-{fmt(e.amount)}</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: C.orange, marginRight: 8 }}>-{curOf(e) === "USD" ? fmtWith(e.amount, "USD") : fmt(e.amount)}</div>
                       <button onClick={() => deleteExpense(e.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><TrashIcon /></button>
                     </div>
                   )}
@@ -132,6 +144,7 @@ export default function MiMes({
               const totalBudget = budgetCats.reduce((s, cat) => s + (data.budgets[cat.id] || 0), 0);
               const totalSpent = budgetCats.reduce((s, cat) => s + (catSpend[cat.id] || 0), 0);
               const alertCount = budgetAlerts.length;
+              const usdMes = sumUSD(d.exps); // los dólares no cuentan contra los presupuestos en soles
               return (
                 <div>
                   {/* Overall summary */}
@@ -141,6 +154,9 @@ export default function MiMes({
                       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>Total presupuestado</div>
                       <div style={{ fontFamily: FONT_TITLE, fontSize: 22, fontWeight: 900, color: "#fff" }}>{fmt(totalSpent)} <span style={{ fontSize: 15, fontWeight: 600, opacity: 0.6 }}>/ {fmt(totalBudget)}</span></div>
                       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>{alertCount > 0 ? `${alertCount} categoría${alertCount > 1 ? "s" : ""} necesita${alertCount > 1 ? "n" : ""} atención` : "Todo dentro del presupuesto ✅"}</div>
+                      {usdMes > 0 && (
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 3 }}>+ {fmtWith(usdMes, "USD")} en dólares, fuera de estos límites</div>
+                      )}
                     </div>
                   </div>
 

@@ -1,4 +1,10 @@
 import { getMonthLabel } from "../lib/dates";
+import { curOf } from "../lib/cycles";
+
+// Los gastos en dólares NO entran a los totales en soles (F10): se muestran
+// siempre como una línea aparte. Nada de tipos de cambio inventados.
+export const isPEN = (e) => curOf(e) !== "USD";
+export const sumUSD = (exps) => (exps || []).reduce((s, e) => (curOf(e) === "USD" ? s + (Number(e.amount) || 0) : s), 0);
 
 // Funciones puras extraídas del monolito GastosApp.js (misma lógica, firmas puras).
 
@@ -6,7 +12,7 @@ import { getMonthLabel } from "../lib/dates";
 export const catSpend = (data, curMonth) => {
   const m = {};
   data.expenses
-    .filter(e => e.month === curMonth)
+    .filter(e => e.month === curMonth && isPEN(e))
     .forEach(e => {
       if (e.category?.id) {
         m[e.category.id] = (m[e.category.id] || 0) + e.amount;
@@ -36,15 +42,17 @@ export const getMonthData = (data, offset) => {
   const fixd = data.fixed.filter(f => f.month === mk);
   const incF = data.incomeFixed.filter(i => i.month === mk);
   const incE = data.incomeExtra.filter(i => i.month === mk);
-  const totalDiarios = exps.reduce((s, e) => s + e.amount, 0);
+  const totalDiarios = exps.filter(isPEN).reduce((s, e) => s + e.amount, 0);
+  const totalDiariosUSD = sumUSD(exps); // aparte, nunca sumado a los soles
   const totalFijos = fixd.filter(f => f.paid).reduce((s, f) => s + f.amount, 0);
   const totalFijosAll = fixd.reduce((s, f) => s + f.amount, 0);
   const totalInc = incF.reduce((s, i) => s + i.amount, 0) + incE.reduce((s, i) => s + i.amount, 0);
   const balance = totalInc - totalFijos - totalDiarios;
-  return { exps, totalDiarios, totalFijos, totalFijosAll, totalInc, balance };
+  return { exps, totalDiarios, totalDiariosUSD, totalFijos, totalFijosAll, totalInc, balance };
 };
 
-// Agrupa gastos por categoría ordenado por monto — antes función inline `buildCatMap`.
+// Agrupa por categoría los gastos que le pasen. OJO: no filtra moneda a propósito
+// — el detalle de ciclo la usa con gastos ya filtrados por moneda.
 export const buildCatMap = (exps) => {
   const m = {};
   exps.forEach(e => {

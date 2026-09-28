@@ -31,7 +31,8 @@ import Login from "./components/auth/Login";
 import Pin from "./components/auth/Pin";
 import { sharedStyle } from "./components/shared/globalStyles";
 import { Toast, ScanResultsSheet, ConfirmModal, CatDetailSheet, AddExpenseModal, ScanOptionsModal, ManualModal, RecordingOverlay, NameSetupScreen, CatPickerModal, NotifPanel, CarryoverModal, BudgetFeatureModal } from "./components/shared/modals";
-import { catSpend as catSpendSel, budgetAlerts as budgetAlertsSel, getMonthData as getMonthDataSel } from "./state/selectors";
+import { catSpend as catSpendSel, budgetAlerts as budgetAlertsSel, getMonthData as getMonthDataSel, isPEN, sumUSD } from "./state/selectors";
+import { hasLine } from "./lib/cycles";
 import { getDefaultPaymentMethodId } from "./components/shared/PaymentMethodPicker";
 
 export default function App() {
@@ -115,6 +116,7 @@ export default function App() {
   const [pendingExpPm, setPendingExpPm] = useState(null); // paymentMethodId en el flujo de registro
   const [pendingExpDate, setPendingExpDate] = useState(toDateInput()); // fecha del gasto al registrar (hoy por defecto)
   const [pendingExpSub, setPendingExpSub] = useState(null); // subcategoria opcional al registrar
+  const [pendingExpCur, setPendingExpCur] = useState("PEN"); // moneda del gasto (F10): PEN salvo que elija una TC con linea en dolares
   const [editExpPm, setEditExpPm] = useState(undefined); // paymentMethodId en edición (undefined = sin tocar)
   const [scanPm, setScanPm] = useState(null); // medio de pago global para los gastos escaneados
 
@@ -472,7 +474,9 @@ export default function App() {
 
   const curMonth = getCurrentMonthLabel();
   const todayExp = data.expenses.filter(e => new Date(e.date).toDateString() === new Date().toDateString());
-  const todayTotal = todayExp.reduce((s, e) => s + e.amount, 0);
+  // Los dólares no se suman a los soles (F10): van en su propia línea.
+  const todayTotal = todayExp.filter(isPEN).reduce((s, e) => s + e.amount, 0);
+  const todayTotalUSD = sumUSD(todayExp);
   const recentExp = [...data.expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
 
   // Spending per category this month
@@ -835,16 +839,20 @@ export default function App() {
     const d = desc || "Gasto";
     const pm = pendingExpPm || null;
     const when = parseDateInput(dateStr !== undefined ? dateStr : pendingExpDate) || new Date();
-    setData(p => ({ ...p, expenses: [...p.expenses, { id: genId(), amount: a, description: d, date: when.toISOString(), month: monthLabelOf(when), category: slimCat(cat), subcategory: (sub !== undefined ? sub : pendingExpSub) || null, paymentMethodId: pm }], ...(pm ? { lastPaymentMethodId: pm } : {}) }));
-    showToast((cat ? cat.emoji + " " : "") + d + " " + fmtWith(a, data.currency) + " registrado");
+    // Solo se guarda `currency` si es en dolares: los soles siguen sin campo,
+    // igual que todo lo registrado antes de F10.
+    const card = (dataRef.current.paymentMethods || []).find(m => m.id === pm);
+    const esUsd = pendingExpCur === "USD" && hasLine(card, "USD");
+    setData(p => ({ ...p, expenses: [...p.expenses, { id: genId(), amount: a, description: d, date: when.toISOString(), month: monthLabelOf(when), category: slimCat(cat), subcategory: (sub !== undefined ? sub : pendingExpSub) || null, paymentMethodId: pm, ...(esUsd ? { currency: "USD" } : {}) }], ...(pm ? { lastPaymentMethodId: pm } : {}) }));
+    showToast((cat ? cat.emoji + " " : "") + d + " " + fmtWith(a, esUsd ? "USD" : data.currency) + " registrado");
     setShowCatPicker(false); setShowAddModal(false);
-    setPendingExpAmt(""); setPendingExpDesc(""); setPendingExpCat(null); setPendingExpPm(null); setPendingExpDate(toDateInput()); setPendingExpSub(null);
+    setPendingExpAmt(""); setPendingExpDesc(""); setPendingExpCat(null); setPendingExpPm(null); setPendingExpDate(toDateInput()); setPendingExpSub(null); setPendingExpCur("PEN");
     setManAmt(""); setManDesc("");
   };
 
   const openCatPicker = (amt, desc) => {
     setPendingExpAmt(String(amt)); setPendingExpDesc(desc || "Gasto");
-    setPendingExpCat(null); setPendingExpSub(null); setPendingExpPm(getDefaultPaymentMethodId(dataRef.current));
+    setPendingExpCat(null); setPendingExpSub(null); setPendingExpPm(getDefaultPaymentMethodId(dataRef.current)); setPendingExpCur("PEN");
     setPendingExpDate(toDateInput()); // hoy por defecto
     setShowAddModal(false); setShowCatPicker(true);
   };
@@ -895,7 +903,7 @@ export default function App() {
       {confirm && <ConfirmModal confirm={confirm} setConfirm={setConfirm} />}
       {tab === "home" && (
         <Home
-          fmt={fmt} curMonth={curMonth} todayTotal={todayTotal} recentExp={recentExp} budgetAlerts={budgetAlerts}
+          fmt={fmt} curMonth={curMonth} todayTotal={todayTotal} todayTotalUSD={todayTotalUSD} recentExp={recentExp} budgetAlerts={budgetAlerts}
           inboxItems={inboxItems} setShowInbox={setShowInbox}
           editExpId={editExpId} setEditExpId={setEditExpId} editExpDesc={editExpDesc} setEditExpDesc={setEditExpDesc}
           editExpAmt={editExpAmt} setEditExpAmt={setEditExpAmt} editExpDate={editExpDate} setEditExpDate={setEditExpDate}
@@ -997,7 +1005,7 @@ export default function App() {
 
       {/* Category picker modal */}
       {showCatPicker && (
-        <CatPickerModal setShowCatPicker={setShowCatPicker} pendingExpAmt={pendingExpAmt} pendingExpDesc={pendingExpDesc} pendingExpCat={pendingExpCat} setPendingExpCat={setPendingExpCat} pendingExpPm={pendingExpPm} setPendingExpPm={setPendingExpPm} pendingExpDate={pendingExpDate} setPendingExpDate={setPendingExpDate} pendingExpSub={pendingExpSub} setPendingExpSub={setPendingExpSub} registerExpense={registerExpense} />
+        <CatPickerModal setShowCatPicker={setShowCatPicker} pendingExpAmt={pendingExpAmt} pendingExpDesc={pendingExpDesc} pendingExpCat={pendingExpCat} setPendingExpCat={setPendingExpCat} pendingExpPm={pendingExpPm} setPendingExpPm={setPendingExpPm} pendingExpDate={pendingExpDate} setPendingExpDate={setPendingExpDate} pendingExpSub={pendingExpSub} setPendingExpSub={setPendingExpSub} pendingExpCur={pendingExpCur} setPendingExpCur={setPendingExpCur} registerExpense={registerExpense} />
       )}
       {showNotifPanel && (
         <NotifPanel setShowNotifPanel={setShowNotifPanel} budgetAlerts={budgetAlerts} />

@@ -4,6 +4,7 @@ import { MONTHS_SHORT, DAYS } from "../../lib/dates";
 import { genId, fmtWith } from "../../lib/format";
 import { useStore } from "../../state/store";
 import { PaymentMethodPicker } from "./PaymentMethodPicker";
+import { hasLine, curOf } from "../../lib/cycles";
 import { CategoryPicker } from "./CategoryPicker";
 
 // Toast global — antes inline en GastosApp.
@@ -89,7 +90,7 @@ export function CatDetailSheet({ selectedCatDetail, setSelectedCatDetail, fmt })
                       <div style={{ fontSize: 14, fontWeight: 500, color: C.black }}>{e.description}</div>
                       <div style={{ fontSize: 11, color: C.muted }}>{DAYS[dt.getDay()].toLowerCase().slice(0,3)}, {dt.getDate()} {MONTHS_SHORT[dt.getMonth()].toLowerCase()}. {dt.getFullYear()}</div>
                     </div>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: C.orange }}>-{fmt(e.amount)}</div>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: C.orange }}>-{curOf(e) === "USD" ? fmtWith(e.amount, "USD") : fmt(e.amount)}</div>
                   </div>
                 );
               })}
@@ -200,15 +201,38 @@ export function NameSetupScreen({ nameSetupValue, setNameSetupValue, setShowName
   );
 }
 
-export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc, pendingExpCat, setPendingExpCat, pendingExpPm, setPendingExpPm, pendingExpDate, setPendingExpDate, pendingExpSub, setPendingExpSub, registerExpense }) {
+export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc, pendingExpCat, setPendingExpCat, pendingExpPm, setPendingExpPm, pendingExpDate, setPendingExpDate, pendingExpSub, setPendingExpSub, pendingExpCur, setPendingExpCur, registerExpense }) {
   const data = useStore(s => s.data);
+  // Selector de moneda (F10): solo tiene sentido si el medio de pago elegido es
+  // una tarjeta con línea en dólares. Por defecto, soles.
+  const pmSel = (data.paymentMethods || []).find(m => m.id === pendingExpPm);
+  const puedeUsd = hasLine(pmSel, "USD");
+  const cur = puedeUsd && pendingExpCur === "USD" ? "USD" : "PEN";
+  // Si cambia a un medio sin dólares, el gasto vuelve a soles solo.
+  const elegirPm = (id) => {
+    setPendingExpPm(id);
+    const nuevo = (data.paymentMethods || []).find(m => m.id === id);
+    if (!hasLine(nuevo, "USD") && setPendingExpCur) setPendingExpCur("PEN");
+  };
   return (
         <div style={{ position: "fixed", inset: 0, zIndex: 310 }} onClick={() => setShowCatPicker(false)}>
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
           <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", padding: "16px 24px 40px", maxHeight: "80vh", overflowY: "auto", animation: "slideUp 0.3s ease" }}>
             <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
             <div style={{ fontSize: 20, fontWeight: 800, color: C.black, marginBottom: 4 }}>¿En qué categoría?</div>
-            <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>{pendingExpDesc} · {fmtWith(pendingExpAmt, data.currency)}</div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: puedeUsd ? 12 : 20 }}>{pendingExpDesc} · {fmtWith(pendingExpAmt, cur === "USD" ? "USD" : data.currency)}</div>
+            {/* Moneda del gasto: aparece solo si la tarjeta elegida maneja dólares */}
+            {puedeUsd && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", flex: 1 }}>Moneda del gasto</div>
+                {[{ id: "PEN", label: "S/" }, { id: "USD", label: "US$" }].map(o => {
+                  const sel = cur === o.id;
+                  return (
+                    <button key={o.id} onClick={() => setPendingExpCur(o.id)} style={{ padding: "7px 16px", borderRadius: 20, border: "2px solid", borderColor: sel ? C.purple : "#E0DCD4", background: sel ? C.purple + "1A" : "#fff", color: sel ? C.purple : C.black, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{o.label}</button>
+                  );
+                })}
+              </div>
+            )}
             <div style={{ marginBottom: 20 }}>
               <CategoryPicker
                 value={pendingExpCat}
@@ -229,7 +253,7 @@ export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc
             </div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Medio de pago</div>
             <div style={{ marginBottom: 22 }}>
-              <PaymentMethodPicker value={pendingExpPm} onChange={setPendingExpPm} />
+              <PaymentMethodPicker value={pendingExpPm} onChange={elegirPm} />
             </div>
             <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, pendingExpCat, pendingExpDate, pendingExpSub)} disabled={!pendingExpCat} style={{ width: "100%", padding: 16, borderRadius: 14, background: pendingExpCat ? C.purple : "#D4D0C8", color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: pendingExpCat ? "pointer" : "default", fontFamily: "inherit", marginBottom: 10, transition: "background 0.2s" }}>Confirmar gasto</button>
             <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, null, pendingExpDate, null)} style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Sin categoría</button>
