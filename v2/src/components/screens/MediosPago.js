@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { C, FONT_TITLE, cardStyle, inputStyle, usageColor } from "../../theme";
 import { PlusIcon } from "../shared/icons";
 import { subStyle, subHeader } from "../shared/subnav";
@@ -33,6 +33,14 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
   const [editNameVal, setEditNameVal] = useState("");
   const [cardForm, setCardForm] = useState(null); // null | {id, name, cutoffDay, paymentDay, creditLine, color}
   const [formError, setFormError] = useState("");
+  // El formulario se dibuja DEBAJO de la lista de tarjetas: con varias tarjetas
+  // queda fuera de pantalla y parece que el botón no hiciera nada. Al abrirlo,
+  // la pantalla baja sola hasta él.
+  const formRef = useRef(null);
+  useEffect(() => {
+    if (!cardForm || !formRef.current) return;
+    formRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [cardForm && cardForm.id, cardForm === null]);
   const [payCardId, setPayCardId] = useState(null); // TC que se está pagando
   const [payAmt, setPayAmt] = useState("");
   const [payCur, setPayCur] = useState("PEN"); // moneda del pago (F10): son dos deudas distintas
@@ -287,7 +295,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
 
         {/* Formulario crear/editar tarjeta */}
         {cardForm ? (
-          <div style={{ ...cardStyle, padding: 18, marginBottom: 10, animation: "slideUp 0.25s ease" }}>
+          <div ref={formRef} style={{ ...cardStyle, padding: 18, marginBottom: 10, animation: "slideUp 0.25s ease" }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.black, marginBottom: 12 }}>{cardForm.id ? "Editar tarjeta" : "Nueva tarjeta"}</div>
             <input type="text" placeholder="Nombre (ej: Visa BCP)" value={cardForm.name} onChange={e => setCardForm(f => ({ ...f, name: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 10 }} />
             <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>

@@ -1,8 +1,38 @@
 import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { PlusIcon, TrashIcon } from "../shared/icons";
 import { useStore } from "../../state/store";
-import { ordenaPorDia, diaDeIngreso } from "../../lib/ingresos";
+import { ordenaPorDia, diaDeIngreso, fechaDeIngreso } from "../../lib/ingresos";
+import { parseEtiqueta } from "../../lib/mesNuevo";
+import { toDateInput, diasEnMes, fechaDelDiaEnMes } from "../../lib/dates";
 import { TraerFijosButton } from "../shared/MesNuevoSheet";
+
+// El selector se acota al mes de esa fila: un ingreso de septiembre entra en
+// septiembre. Si ya tenía día pero no fecha (registros viejos), se propone ese
+// mismo día dentro del mes.
+const rangoDelMes = (curMonth) => {
+  const p = parseEtiqueta(curMonth);
+  if (!p) return null;
+  const primero = new Date(p.anio, p.mes, 1, 12, 0, 0, 0);
+  const ultimo = new Date(p.anio, p.mes, diasEnMes(p.anio, p.mes), 12, 0, 0, 0);
+  return { min: toDateInput(primero), max: toDateInput(ultimo), ref: primero };
+};
+
+const valorInicialFecha = (i, curMonth) => {
+  const exacta = fechaDeIngreso(i);
+  if (exacta) return toDateInput(exacta);
+  const r = rangoDelMes(curMonth);
+  const dia = diaDeIngreso(i);
+  if (!r || dia === null) return "";
+  const proyectada = fechaDelDiaEnMes(dia, r.ref);
+  return proyectada ? toDateInput(proyectada) : "";
+};
+
+const etiquetaFecha = (i, curMonth) => {
+  const exacta = fechaDeIngreso(i);
+  if (exacta) return "📅 Entra el " + exacta.toLocaleDateString("es-PE", { day: "numeric", month: "short" });
+  const dia = diaDeIngreso(i);
+  return dia !== null ? "📅 Entra el " + dia : "📅 Sin fecha";
+};
 
 export default function Ingresos({
   fmt, curMonth, traerFijosDe, onTraerFijos,
@@ -73,14 +103,14 @@ export default function Ingresos({
                   {/* F14: el día en que entra, con el mismo patrón de edición en línea */}
                   {editIncomeDayId === i.id ? (
                     <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8 }}>
-                      <input type="number" inputMode="numeric" min={1} max={31} value={editIncomeDayVal} onChange={e => setEditIncomeDayVal(e.target.value)} placeholder="Día" autoFocus style={{ ...inputStyle, padding: "6px 10px", fontSize: 14, color: C.black, width: 80 }} />
+                      <input type="date" value={editIncomeDayVal} onChange={e => setEditIncomeDayVal(e.target.value)} autoFocus {...(rangoDelMes(curMonth) ? { min: rangoDelMes(curMonth).min, max: rangoDelMes(curMonth).max } : {})} style={{ ...inputStyle, padding: "6px 10px", fontSize: 14, color: C.black, width: "auto", flex: 1, minWidth: 0 }} />
                       <button onClick={() => saveIncomeDay(i.id)} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>OK</button>
                       <button onClick={() => { setEditIncomeDayId(null); setEditIncomeDayVal(""); }} style={{ background: "none", border: "none", color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
                     </div>
                   ) : (
-                    <div onClick={() => { setEditIncomeDayId(i.id); setEditIncomeDayVal(diaDeIngreso(i) !== null ? String(diaDeIngreso(i)) : ""); }} style={{ cursor: "pointer", marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, background: diaDeIngreso(i) !== null ? "#E8F5EE" : "#F2F0EA", borderRadius: 20, padding: "3px 10px" }}>
+                    <div onClick={() => { setEditIncomeDayId(i.id); setEditIncomeDayVal(valorInicialFecha(i, curMonth)); }} style={{ cursor: "pointer", marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, background: diaDeIngreso(i) !== null ? "#E8F5EE" : "#F2F0EA", borderRadius: 20, padding: "3px 10px" }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: diaDeIngreso(i) !== null ? C.green : C.muted }}>
-                        {diaDeIngreso(i) !== null ? `📅 Entra el ${diaDeIngreso(i)}` : "📅 Sin fecha"}
+                        {etiquetaFecha(i, curMonth)}
                       </span>
                     </div>
                   )}

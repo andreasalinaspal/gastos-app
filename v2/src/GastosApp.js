@@ -629,13 +629,22 @@ export default function App() {
   const saveFixedIncomeName = (id) => { setData(p => ({ ...p, incomeFixed: p.incomeFixed.map(i => i.id === id ? { ...i, name: editFixedIncomeNameVal } : i) })); setEditFixedIncomeName(null); setEditFixedIncomeNameVal(""); };
   // F14: el día en que entra el ingreso. Opcional — si lo dejó vacío, el ingreso
   // simplemente no tiene fecha y la app no se inventa ninguna.
+  // Se elige con un selector de fecha (la fecha real de ese mes). Se guarda la
+  // fecha Y el día: la fecha es lo que ella ve, el día es lo que permite
+  // proyectar el ingreso a los meses siguientes para los avisos de vencimiento.
   const saveIncomeDay = (id) => {
-    const raw = editIncomeDayVal.trim();
-    const dia = raw === "" ? null : normalizaDiaDelMes(raw);
-    if (raw !== "" && dia === null) { showToast("El día tiene que estar entre 1 y 31"); return; }
-    setData(p => ({ ...p, incomeFixed: p.incomeFixed.map(i => i.id === id ? { ...i, day: dia } : i) }));
+    const raw = (editIncomeDayVal || "").trim();
+    if (raw === "") {
+      setData(p => ({ ...p, incomeFixed: p.incomeFixed.map(i => i.id === id ? { ...i, date: null, day: null } : i) }));
+      setEditIncomeDayId(null); setEditIncomeDayVal("");
+      showToast("Ingreso sin fecha");
+      return;
+    }
+    const fecha = parseDateInput(raw);
+    if (!fecha) { showToast("Esa fecha no es válida"); return; }
+    setData(p => ({ ...p, incomeFixed: p.incomeFixed.map(i => i.id === id ? { ...i, date: fecha.toISOString(), day: fecha.getDate() } : i) }));
     setEditIncomeDayId(null); setEditIncomeDayVal("");
-    showToast(dia ? `Entra el ${dia} de cada mes` : "Ingreso sin fecha");
+    showToast("Entra el " + fecha.toLocaleDateString("es-PE", { day: "numeric", month: "long" }));
   };
   const addFixedIncome = () => {
     if (!newFixedIncomeName.trim()) return;

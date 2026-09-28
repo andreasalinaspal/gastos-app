@@ -7,7 +7,24 @@ import { fechaDelDiaEnMes, normalizaDiaDelMes } from "./dates";
 
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 
-export const diaDeIngreso = (i) => normalizaDiaDelMes(i && i.day);
+// El día en que entra. Se elige con un selector de fecha (`date`, la fecha real
+// de ESE mes, que puede correrse si cae domingo o feriado), y de ahí se deriva
+// el día para poder proyectar a los meses siguientes. `day` solo vale como
+// respaldo de los ingresos registrados antes de que existiera el selector.
+export const diaDeIngreso = (i) => {
+  if (i && i.date) {
+    const d = new Date(i.date);
+    if (!isNaN(d.getTime())) return d.getDate();
+  }
+  return normalizaDiaDelMes(i && i.day);
+};
+
+// La fecha concreta que ella eligió para ese mes, si la hay.
+export const fechaDeIngreso = (i) => {
+  if (!i || !i.date) return null;
+  const d = new Date(i.date);
+  return isNaN(d.getTime()) ? null : d;
+};
 
 // Ordena los ingresos fijos como un calendario del mes: por día, y los que no
 // tienen día al final (sin reordenar entre ellos).
