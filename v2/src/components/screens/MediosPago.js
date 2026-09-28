@@ -3,7 +3,8 @@ import { C, FONT_TITLE, cardStyle, inputStyle, usageColor } from "../../theme";
 import { PlusIcon } from "../shared/icons";
 import { subStyle, subHeader } from "../shared/subnav";
 import { genId, fmtWith } from "../../lib/format";
-import { getCycleFor, getLineUsage, getNextPayment, cardCurrencies, hasLine, buildStatementEntry } from "../../lib/cycles";
+import { getCycleFor, getLineUsage, getSharedUsage, getNextPayment, cardCurrencies, hasLine, buildStatementEntry } from "../../lib/cycles";
+import { tasaVigente, textoTasa } from "../../lib/fx";
 import { useStore } from "../../state/store";
 import { pmEmoji } from "../shared/PaymentMethodPicker";
 import { StatementBanner, StatementSheet, StatementDiffNote, nextPaymentSourceLabel } from "../shared/StatementSheet";
@@ -20,7 +21,7 @@ const hintStyle = { fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom
 // 6 colores de la paleta para identificar tarjetas.
 const CARD_COLORS = [C.purple, C.purpleLight, C.orange, C.green, C.greenLight, C.black];
 
-const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", openingBalance: "", usdOn: false, usdCreditLine: "", usdOpeningBalance: "", usdRate: "", cycleBudget: "", color: CARD_COLORS[0] };
+const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", openingBalance: "", usdOn: false, usdOpeningBalance: "", usdRate: "", cycleBudget: "", color: CARD_COLORS[0] };
 
 // Nombre en criollo de cada moneda, para etiquetas y avisos.
 export const CUR_LABEL = { PEN: "soles", USD: "dólares" };
@@ -79,7 +80,6 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
       id: card.id, name: card.name, cutoffDay: String(card.cutoffDay), paymentDay: String(card.paymentDay),
       creditLine: String(pen.creditLine || ""), openingBalance: pen.openingBalance ? String(pen.openingBalance) : "",
       usdOn: !!usd,
-      usdCreditLine: usd ? String(usd.creditLine || "") : "",
       usdOpeningBalance: usd && usd.openingBalance ? String(usd.openingBalance) : "",
       usdRate: card.usdRate ? String(card.usdRate) : "",
       cycleBudget: card.cycleBudget ? String(card.cycleBudget) : "", color: card.color || CARD_COLORS[0],
@@ -110,7 +110,9 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
     const openingBalance = cardForm.openingBalance === "" ? 0 : Number(cardForm.openingBalance);
     if (!Number.isFinite(openingBalance) || openingBalance < 0) { setFormError("Lo consumido hoy no puede ser negativo"); return; }
     if (openingBalance > creditLine) { setFormError("Lo consumido hoy no puede pasar la línea de crédito"); return; }
-    // Línea en dólares (F10): opcional y totalmente aparte de la de soles.
+    // Dólares (F18): NO es una línea aparte. El banco da una sola línea en soles
+    // y las compras en dólares se descuentan de ahí a su tipo de cambio. Acá solo
+    // se guarda la DEUDA en dólares, que es lo que se paga por separado.
     let usdLine = null;
     // Tipo de cambio de su banco (F12): opcional. Pisa al de SUNAT solo para
     // esta tarjeta, y solo sirve si la tarjeta maneja dólares.
@@ -121,12 +123,12 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
       usdRate = r;
     }
     if (cardForm.usdOn) {
-      const usdCredit = Number(cardForm.usdCreditLine);
-      if (!usdCredit || usdCredit <= 0) { setFormError("Ingresa tu línea en dólares, o apaga esa sección"); return; }
       const usdOpening = cardForm.usdOpeningBalance === "" ? 0 : Number(cardForm.usdOpeningBalance);
       if (!Number.isFinite(usdOpening) || usdOpening < 0) { setFormError("Lo consumido en dólares no puede ser negativo"); return; }
-      if (usdOpening > usdCredit) { setFormError("Lo consumido en dólares no puede pasar tu línea en dólares"); return; }
-      usdLine = { creditLine: usdCredit, openingBalance: usdOpening };
+      // creditLine 0 a propósito: los dólares no tienen cupo propio. Si una tarjeta
+      // vieja lo tenía guardado, acá queda en cero y el disponible pasa a salir de
+      // la línea única, que es como funciona de verdad.
+      usdLine = { creditLine: 0, openingBalance: usdOpening };
     }
     if (cardForm.id) {
       // Si cambia lo consumido, es una foto NUEVA de la deuda: desde hoy Qori suma
@@ -207,6 +209,10 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
             next: getNextPayment(card, data.expenses, data.cardPayments, new Date(), cur, data.cardStatements),
           }));
           const conDeuda = usos.filter(u => u.usage.balance > 0);
+          // F18: el disponible es UNO, de la línea única. Lo consumido en dólares
+          // ocupa esa misma línea convertido a soles.
+          const vigente = tasaVigente(card, data);
+          const compartido = getSharedUsage(card, data.expenses, data.cardPayments, vigente && vigente.tasa);
           return (
           <div key={card.id} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -214,59 +220,83 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 600, color: C.black }}>{card.name}</div>
                 <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-                  corte {card.cutoffDay} · pago {card.paymentDay} · línea {usos.map(u => fmtCur(u.usage.creditLine, u.cur)).join(" y ")}
+                  corte {card.cutoffDay} · pago {card.paymentDay} · línea {fmt(compartido.creditLine)}
                 </div>
               </div>
               <button onClick={() => openEditCard(card)} style={{ background: C.purpleSoft, color: C.purple, border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Editar</button>
               <button onClick={() => archiveCard(card)} style={{ background: "#F0EDE4", color: "#666", border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Archivar</button>
             </div>
-            {/* Disponible: el número que mira antes de gastar. Una línea por moneda,
-                cada una con su semáforo. Nunca se suman ni se convierten. */}
-            {usos.map(({ cur, usage, next }) => {
-              const barColor = usageColor(usage.pct);
-              // Línea sin cupo declarado (p. ej. registró deuda en dólares sin saber
-              // su línea): se muestra el saldo, no un "de US$0" ni una barra vacía.
-              const sinCupo = !usage.creditLine;
+            {/* DISPONIBLE (F18): uno solo, de la línea única. Es el número que mira
+                antes de gastar. Si hay deuda en dólares, ocupa esta misma línea
+                convertida a soles, y se dice con qué tipo de cambio se estimó. */}
+            {(() => {
+              const barColor = usageColor(compartido.pct);
+              const sinCupo = !compartido.creditLine;
               return (
-                <div key={cur} style={{ background: C.beige, borderRadius: 12, padding: "10px 14px", marginTop: 10 }}>
+                <div style={{ background: C.beige, borderRadius: 12, padding: "10px 14px", marginTop: 10 }}>
                   <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
                     <div>
                       <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>
-                        {sinCupo ? "Deuda" : "Disponible"}{curs.length > 1 ? " en " + CUR_LABEL[cur] : ""}
+                        {sinCupo ? "Deuda" : "Disponible"}
                       </div>
                       <div style={{ fontFamily: FONT_TITLE, fontSize: 24, fontWeight: 900, color: C.black, letterSpacing: -0.5, lineHeight: 1.15 }}>
                         {sinCupo
-                          ? fmtCur(usage.balance, cur)
-                          : <>{fmtCur(usage.available, cur)} <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>de {fmtCur(usage.creditLine, cur)}</span></>}
+                          ? fmt(compartido.usado)
+                          : <>{fmt(compartido.available)} <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>de {fmt(compartido.creditLine)}</span></>}
                       </div>
                     </div>
-                    {!sinCupo && <div style={{ fontSize: 13, fontWeight: 800, color: barColor, whiteSpace: "nowrap" }}>{Math.round(usage.pct)}% usado</div>}
+                    {!sinCupo && <div style={{ fontSize: 13, fontWeight: 800, color: barColor, whiteSpace: "nowrap" }}>{Math.round(compartido.pct)}% usado</div>}
                   </div>
                   {sinCupo ? (
                     <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6, lineHeight: 1.45 }}>
-                      Sin línea declarada en {CUR_LABEL[cur]}. Agrégala al editar la tarjeta para ver cuánto te queda disponible.
+                      Sin línea declarada. Agrégala al editar la tarjeta para ver cuánto te queda disponible.
                     </div>
                   ) : (
                     <div style={{ height: 6, background: "#E4E0D6", borderRadius: 99, overflow: "hidden", marginTop: 8 }}>
-                      <div style={{ height: "100%", width: `${Math.min(Math.round(usage.pct), 100)}%`, background: barColor, borderRadius: 99 }} />
+                      <div style={{ height: "100%", width: `${Math.min(Math.round(compartido.pct), 100)}%`, background: barColor, borderRadius: 99 }} />
                     </div>
                   )}
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
-                    {next.status === "por-vencer"
-                      ? <>Próximo pago: <strong style={{ color: C.black }}>{fmtCur(next.amount, cur)}</strong> el {fmtLong(next.dueDate)} <span style={{ fontSize: 11 }}>· {nextPaymentSourceLabel(next.source)}</span></>
-                      : <>Próximo pago: <strong style={{ color: C.green }}>al día ✅</strong></>}
-                    {/* Cuánto sería ese pago en soles: informativo, nunca se suma. */}
-                    {cur === "USD" && next.status === "por-vencer" && (
-                      <EquivalenteSoles montoUSD={next.amount} card={card} data={data} nota />
-                    )}
-                  </div>
-                  <StatementDiffNote next={next} fmt={fmt} currency={cur} />
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                    Saldo vivo: <strong style={{ color: usage.balance > 0 ? C.orange : C.green }}>{fmtCur(usage.balance, cur)}</strong>
-                  </div>
+                  {/* De qué está hecho lo usado, cuando hay dos monedas en juego */}
+                  {compartido.tieneUsd && (
+                    <div style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.45 }}>
+                      Usado: {fmt(compartido.balancePEN)} en soles
+                      {compartido.faltaTasa
+                        ? <> · {fmtCur(compartido.balanceUSD, "USD")} en dólares <strong style={{ color: C.orange }}>sin contar</strong> (falta el tipo de cambio)</>
+                        : <> + {fmtCur(compartido.balanceUSD, "USD")} en dólares (≈{fmt(compartido.usdEnSoles)})</>}
+                      <div style={{ marginTop: 2 }}>
+                        {compartido.faltaTasa
+                          ? "Pon el tipo de cambio de tu banco al editar la tarjeta para que el disponible salga completo."
+                          : "Tu banco convierte cada compra en dólares a soles y te la descuenta de esta línea, así que el disponible es aproximado: acá se estimó con " + textoTasa(vigente).replace(/^tipo/, "el tipo") + "."}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
-            })}
+            })()}
+            {/* LO QUE SE PAGA: esto sí va por moneda. El banco cobra dos montos y
+                los dólares se pagan en dólares. */}
+            {usos.map(({ cur, usage, next }) => (
+              <div key={cur} style={{ background: C.beige, borderRadius: 12, padding: "10px 14px", marginTop: 8 }}>
+                {curs.length > 1 && (
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>
+                    Pago en {CUR_LABEL[cur]}
+                  </div>
+                )}
+                <div style={{ fontSize: 12, color: C.muted }}>
+                  {next.status === "por-vencer"
+                    ? <>Próximo pago: <strong style={{ color: C.black }}>{fmtCur(next.amount, cur)}</strong> el {fmtLong(next.dueDate)} <span style={{ fontSize: 11 }}>· {nextPaymentSourceLabel(next.source)}</span></>
+                    : <>Próximo pago: <strong style={{ color: C.green }}>al día ✅</strong></>}
+                  {/* Cuánto sería ese pago en soles: informativo, nunca se suma. */}
+                  {cur === "USD" && next.status === "por-vencer" && (
+                    <EquivalenteSoles montoUSD={next.amount} card={card} data={data} nota />
+                  )}
+                </div>
+                <StatementDiffNote next={next} fmt={fmt} currency={cur} />
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                  Saldo vivo: <strong style={{ color: usage.balance > 0 ? C.orange : C.green }}>{fmtCur(usage.balance, cur)}</strong>
+                </div>
+              </div>
+            ))}
             {/* Si ya cerró un ciclo y no registró lo que cobró el banco, Qori lo pide */}
             <StatementBanner
               card={card} expenses={data.expenses} statements={data.cardStatements}
@@ -314,20 +344,21 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
                 ? <>Cierra el <strong style={{ color: C.black }}>{cardForm.cutoffDay}</strong> y lo pagas el <strong style={{ color: C.black }}>{cardForm.paymentDay}</strong> del mes siguiente.</>
                 : "El corte es cuando el banco cierra tu cuenta del mes; el pago, la fecha límite para pagarla."}
             </div>
-            <div style={labelStyle}>Línea de crédito en soles (S/)</div>
-            <input type="number" inputMode="decimal" placeholder="Ej: 3000" value={cardForm.creditLine} onChange={e => setCardForm(f => ({ ...f, creditLine: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />
-            <div style={hintStyle}>El máximo que el banco te deja gastar en soles con esta tarjeta.</div>
+            <div style={labelStyle}>Línea de crédito (S/)</div>
+            <input type="number" inputMode="decimal" placeholder="Ej: 6000" value={cardForm.creditLine} onChange={e => setCardForm(f => ({ ...f, creditLine: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />
+            <div style={hintStyle}>El máximo que el banco te deja gastar con esta tarjeta, tal como te lo dice: una sola línea en soles. Si compras en dólares, sale de esta misma línea.</div>
             <div style={labelStyle}>Cuánto tienes consumido hoy (S/)</div>
             <input type="number" inputMode="decimal" placeholder="Ej: 0" value={cardForm.openingBalance} onChange={e => setCardForm(f => ({ ...f, openingBalance: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />
             <div style={hintStyle}>Lo que ya debes en soles ahora mismo. Qori parte de ahí y le suma lo que registres.</div>
 
-            {/* Línea en dólares: opcional y claramente aparte. Si no la llena, la
-                tarjeta funciona exactamente como antes. */}
+            {/* Dólares (F18): no es un cupo aparte, es la MISMA línea usada en otra
+                moneda. Acá solo se declara la deuda en dólares, porque esa sí se
+                paga por separado. */}
             <div style={{ background: C.beige, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.black }}>¿Tu tarjeta también maneja dólares?</div>
-                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2, lineHeight: 1.45 }}>Es una línea aparte, con su propia deuda y su propio pago. Si no la usas, déjalo apagado.</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.black }}>¿Compras en dólares con esta tarjeta?</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 2, lineHeight: 1.45 }}>Sale de la misma línea de arriba: el banco lo convierte a soles y te lo descuenta de ahí. Lo que sí es aparte es el pago, porque los dólares los pagas en dólares.</div>
                 </div>
                 <button
                   onClick={() => setCardForm(f => ({ ...f, usdOn: !f.usdOn }))}
@@ -339,11 +370,9 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
               </div>
               {cardForm.usdOn && (
                 <div style={{ marginTop: 12 }}>
-                  <div style={labelStyle}>Línea de crédito en dólares (US$)</div>
-                  <input type="number" inputMode="decimal" placeholder="Ej: 1000" value={cardForm.usdCreditLine} onChange={e => setCardForm(f => ({ ...f, usdCreditLine: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 10, background: "#fff" }} />
-                  <div style={labelStyle}>Cuánto tienes consumido hoy en dólares (US$)</div>
+                  <div style={labelStyle}>Cuánto debes hoy en dólares (US$)</div>
                   <input type="number" inputMode="decimal" placeholder="Ej: 0" value={cardForm.usdOpeningBalance} onChange={e => setCardForm(f => ({ ...f, usdOpeningBalance: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6, background: "#fff" }} />
-                  <div style={hintStyle}>Qori nunca suma ni convierte tus soles y tus dólares: te los muestra lado a lado.</div>
+                  <div style={hintStyle}>Lo que ya debes en dólares ahora mismo. Para pagarlo se queda en dólares; para el disponible se convierte a soles, porque ocupa tu línea.</div>
                   {/* Override del tipo de cambio (F12): el de SUNAT es solo una
                       referencia; el que manda es el que el banco le aplicó a ella. */}
                   <div style={labelStyle}>Tipo de cambio de tu banco (opcional)</div>

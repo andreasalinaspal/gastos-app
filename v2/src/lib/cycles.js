@@ -185,6 +185,50 @@ export function getLineUsage(card, expenses, cardPayments, currency = "PEN") {
   return { balance, pct, available, creditLine: line.creditLine, currency: cur };
 }
 
+// Uso de la LÍNEA COMPARTIDA (F18).
+//
+// Cómo funciona de verdad una tarjeta acá: el banco da UNA sola línea, en soles
+// (ej. IBK, S/6,000). Dentro de esa línea ella puede comprar en dólares, y el
+// banco convierte con SU tipo de cambio y le descuenta los soles equivalentes.
+// No hay un cupo aparte en dólares.
+//
+// Lo que sí queda separado es la DEUDA: el estado de cuenta trae dos montos y
+// ella paga los soles en soles y los dólares en dólares. Por eso `getLineUsage`
+// sigue existiendo por moneda — pero el DISPONIBLE es uno solo y sale de acá.
+//
+// `tasa` es el tipo de cambio con que se estima lo consumido en dólares (el de
+// su banco si lo puso, si no el referencial). Sin tasa y con deuda en dólares no
+// se inventa nada: `faltaTasa` avisa que el disponible está incompleto.
+// → { creditLine, balancePEN, balanceUSD, usdEnSoles, usado, available, pct,
+//     tieneUsd, faltaTasa, aproximado }
+export function getSharedUsage(card, expenses, cardPayments, tasa = null) {
+  const pen = getLineUsage(card, expenses, cardPayments, "PEN");
+  const usd = hasLine(card, "USD")
+    ? getLineUsage(card, expenses, cardPayments, "USD")
+    : { balance: 0 };
+  const creditLine = pen.creditLine;
+  const t = Number(tasa);
+  const tasaOk = Number.isFinite(t) && t > 0;
+  const balanceUSD = usd.balance;
+  const tieneUsd = balanceUSD > 0;
+  const usdEnSoles = tieneUsd && tasaOk ? Math.round(balanceUSD * t * 100) / 100 : 0;
+  const usado = pen.balance + usdEnSoles;
+  return {
+    creditLine,
+    balancePEN: pen.balance,
+    balanceUSD,
+    usdEnSoles,
+    usado,
+    available: creditLine ? Math.max(0, creditLine - usado) : 0,
+    pct: creditLine ? (usado / creditLine) * 100 : 0,
+    tieneUsd,
+    faltaTasa: tieneUsd && !tasaOk,
+    // El banco aplica su propio tipo de cambio a cada compra, en la fecha de cada
+    // compra: mientras haya deuda en dólares, el disponible es una estimación.
+    aproximado: tieneUsd,
+  };
+}
+
 // ── Estados de cuenta oficiales (F10) ────────────────────────────────────────
 // `cardStatements` = [{ id, cardId, cycleKey, currency, amount, dueDate, registeredAt }].
 // El monto del banco se REGISTRA, no se calcula: el banco cobra intereses,

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { C, FONT_TITLE, cardStyle } from "../../theme";
 import { subStyle } from "../shared/subnav";
-import { getCycleFor, getLineUsage, getNextPayment, cardCurrencies, curOf } from "../../lib/cycles";
+import { getCycleFor, getSharedUsage, getNextPayment, cardCurrencies, curOf } from "../../lib/cycles";
+import { tasaVigente } from "../../lib/fx";
 import { StatementBanner, StatementSheet, StatementDiffNote, nextPaymentSourceLabel } from "../shared/StatementSheet";
 import { buildCatMap } from "../../state/selectors";
 import { useStore } from "../../state/store";
@@ -85,7 +86,10 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
     ? getNextPayment(card, allExps, allPayments, now ? new Date(now) : new Date(), activeCur, data.cardStatements)
     : null;
 
-  const lineUsage = getLineUsage(card, allExps, allPayments, activeCur);
+  // F18: la regla del 30% se mide sobre la línea ÚNICA, no por moneda: el banco
+  // da un solo cupo y las compras en dólares también lo ocupan.
+  const vigente = tasaVigente(card, data);
+  const lineUsage = getSharedUsage(card, allExps, allPayments, vigente && vigente.tasa);
   const linePct = lineUsage.pct;
   const linePctRound = Math.round(linePct);
   const lineColor = linePct < 30 ? C.green : linePct <= 60 ? C.orange : "#C0392B";
@@ -102,7 +106,7 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
         </div>
       </div>
 
-      {/* Selector de moneda (F10): solo si la tarjeta maneja las dos líneas.
+      {/* Selector de moneda (F10): solo si la tarjeta maneja las dos monedas.
           Cambia TODO el contenido de la pantalla; nunca mezcla los números. */}
       {curs.length > 1 && (
         <div style={{ display: "flex", background: "#E8E4DA", borderRadius: 12, padding: 4, margin: "0 16px 10px" }}>
@@ -216,7 +220,7 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
       <div onClick={() => setShowRule30(true)} style={{ ...cardStyle, margin: "10px 16px", padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ width: 10, height: 10, borderRadius: "50%", background: lineColor, flexShrink: 0 }} />
         <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: C.black }}>
-          Uso de tu línea{curs.length > 1 ? " en " + CUR_LABEL[activeCur] : ""}: <span style={{ fontFamily: FONT_TITLE, fontWeight: 900, color: lineColor }}>{linePctRound}%</span> <span style={{ color: C.muted, fontWeight: 500 }}>· {lineZone}</span>
+          Uso de tu línea: <span style={{ fontFamily: FONT_TITLE, fontWeight: 900, color: lineColor }}>{linePctRound}%</span> <span style={{ color: C.muted, fontWeight: 500 }}>· {lineZone}</span>
         </div>
         <div style={{ fontSize: 13, color: C.muted }}>¿Por qué? ›</div>
       </div>
@@ -230,8 +234,13 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
             <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
             <div style={{ fontFamily: FONT_TITLE, fontSize: 24, fontWeight: 900, color: C.black, fontStyle: "italic", marginBottom: 14 }}>La regla del 30%</div>
             <div style={{ fontSize: 14, color: C.black, lineHeight: 1.65, marginBottom: 12 }}>
-              Usar tu tarjeta está bien, pero cuánto usas de tu línea importa. Si tu línea es de {fmtCur(lineUsage.creditLine)} y debes {fmtCur(Math.round(lineUsage.creditLine / 2))}, estás usando el 50% — aunque pagues todo puntual.
+              Usar tu tarjeta está bien, pero cuánto usas de tu línea importa. Si tu línea es de {fmt(lineUsage.creditLine)} y debes {fmt(Math.round(lineUsage.creditLine / 2))}, estás usando el 50% — aunque pagues todo puntual.
             </div>
+            {lineUsage.tieneUsd && (
+              <div style={{ fontSize: 14, color: C.black, lineHeight: 1.65, marginBottom: 12 }}>
+                Tu banco te da <strong>una sola línea</strong>, en soles. Lo que compras en dólares también sale de ahí: el banco lo convierte con su tipo de cambio y te lo descuenta del mismo cupo. Por eso este porcentaje junta tus soles y tus dólares, aunque después los pagues por separado.
+              </div>
+            )}
             <div style={{ fontSize: 14, color: C.black, lineHeight: 1.65, marginBottom: 12 }}>
               Los bancos y las centrales de riesgo revisan ese porcentaje cada mes. Andar siempre cerca del tope da la señal de que dependes de la tarjeta para llegar a fin de mes, y eso baja tu score crediticio aunque nunca te atrases.
             </div>

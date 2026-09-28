@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getCycleFor, getCycleSpend, getLineUsage, getNextPayment, getUpcomingTotal, getCardLine, cardCurrencies, hasLine, getStatementPrompt, findStatement, getClosedCycle, curOf, buildStatementEntry } from "./cycles";
+import { getCycleFor, getCycleSpend, getLineUsage, getSharedUsage, getNextPayment, getUpcomingTotal, getCardLine, cardCurrencies, hasLine, getStatementPrompt, findStatement, getClosedCycle, curOf, buildStatementEntry } from "./cycles";
 
 const card = (over = {}) => ({
   id: "card-1", type: "credito", name: "Visa BCP",
@@ -432,6 +432,84 @@ describe("getLineUsage por moneda", () => {
 
   it("sin moneda explícita se comporta como antes (soles)", () => {
     expect(getLineUsage(c, expenses, payments)).toEqual(getLineUsage(c, expenses, payments, "PEN"));
+  });
+});
+
+// ── F18: la línea es UNA, compartida entre monedas ──
+//
+// Cómo funciona de verdad: el banco da una sola línea en soles (IBK, S/6,000) y
+// las compras en dólares salen de ahí, convertidas a su tipo de cambio. Antes esto
+// estaba mal modelado como dos cupos independientes.
+
+describe("getSharedUsage", () => {
+  // Línea única de S/6,000, sin cupo propio en dólares (creditLine 0 a propósito).
+  const c = card({
+    openingDate: new Date(2026, 8, 1).toISOString(),
+    lines: { PEN: { creditLine: 6000, openingBalance: 1000 }, USD: { creditLine: 0, openingBalance: 200 } },
+  });
+  const expenses = [
+    { id: "e1", amount: 500, paymentMethodId: "card-1", date: new Date(2026, 8, 10).toISOString() },
+    { id: "e2", amount: 100, paymentMethodId: "card-1", date: new Date(2026, 8, 12).toISOString(), currency: "USD" },
+  ];
+
+  it("lo consumido en dólares ocupa la misma línea, convertido a soles", () => {
+    const u = getSharedUsage(c, expenses, [], 4);
+    expect(u.balancePEN).toBe(1500); // 1000 + 500
+    expect(u.balanceUSD).toBe(300);  // 200 + 100
+    expect(u.usdEnSoles).toBe(1200); // 300 × 4
+    expect(u.usado).toBe(2700);
+    expect(u.available).toBe(3300);  // 6000 − 2700
+    expect(u.creditLine).toBe(6000);
+    expect(u.pct).toBeCloseTo(45);
+  });
+
+  it("marca el disponible como aproximado cuando hay deuda en dólares", () => {
+    expect(getSharedUsage(c, expenses, [], 4).aproximado).toBe(true);
+    expect(getSharedUsage(c, expenses, [], 4).tieneUsd).toBe(true);
+  });
+
+  it("sin dólares se comporta como la línea en soles de siempre", () => {
+    const soloSoles = card({ creditLine: 6000, openingBalance: 1000 });
+    const u = getSharedUsage(soloSoles, [expenses[0]], [], 4);
+    expect(u.usado).toBe(1500);
+    expect(u.available).toBe(4500);
+    expect(u.tieneUsd).toBe(false);
+    expect(u.aproximado).toBe(false);
+    expect(u.faltaTasa).toBe(false);
+  });
+
+  it("sin tipo de cambio no inventa la conversión: avisa con faltaTasa", () => {
+    const u = getSharedUsage(c, expenses, [], null);
+    expect(u.faltaTasa).toBe(true);
+    expect(u.usdEnSoles).toBe(0);
+    expect(u.usado).toBe(1500);   // solo los soles
+    expect(u.balanceUSD).toBe(300); // la deuda en dólares sigue reportada
+  });
+
+  it("una tasa inválida se trata como si no hubiera", () => {
+    for (const t of [0, -3, "x", NaN, undefined]) {
+      expect(getSharedUsage(c, expenses, [], t).faltaTasa).toBe(true);
+    }
+  });
+
+  it("pagar en dólares libera línea", () => {
+    const antes = getSharedUsage(c, expenses, [], 4).available;
+    const despues = getSharedUsage(c, expenses, [{ id: "p1", cardId: "card-1", amount: 300, currency: "USD" }], 4).available;
+    expect(despues).toBe(antes + 1200); // 300 × 4
+  });
+
+  it("no da disponible negativo aunque se pase de la línea", () => {
+    const chica = card({ lines: { PEN: { creditLine: 1000, openingBalance: 0 }, USD: { creditLine: 0, openingBalance: 500 } } });
+    const u = getSharedUsage(chica, [], [], 4);
+    expect(u.usado).toBe(2000);
+    expect(u.available).toBe(0);
+    expect(u.pct).toBe(200);
+  });
+
+  it("sin línea declarada no divide por cero", () => {
+    const u = getSharedUsage(card({ creditLine: 0 }), expenses, [], 4);
+    expect(u.pct).toBe(0);
+    expect(u.available).toBe(0);
   });
 });
 

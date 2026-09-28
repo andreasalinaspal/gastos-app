@@ -62,7 +62,9 @@ export function migrateData(data) {
   // v4: dos líneas por tarjeta (soles y dólares). La línea plana `creditLine`/
   // `openingBalance` que ya existía SIEMPRE fue en soles, así que se copia a
   // `lines.PEN` sin borrar los campos viejos (quedan como estaban por compatibilidad).
-  // La línea en dólares NO se inventa: aparece solo si la usuaria la configura.
+  // El bloque de dólares NO se inventa: aparece solo si la usuaria lo activa.
+  // (F18: ese bloque guarda la DEUDA en dólares, no un cupo aparte — la línea
+  // de crédito es una sola y vive en `lines.PEN`.)
   const cardsNeedLines = out.paymentMethods.some(
     m => m && m.type === "credito" && !(m.lines && m.lines.PEN)
   );

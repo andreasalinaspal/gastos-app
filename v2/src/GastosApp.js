@@ -486,7 +486,7 @@ export default function App() {
   useEffect(() => {
     if (authPhase !== "app" || fxPedido.current) return;
     if (isLoadingUserData.current) return;
-    // Sin una sola línea en dólares no hace falta molestar a nadie.
+    // Si ninguna tarjeta maneja dólares no hace falta molestar a nadie.
     if (!(data.paymentMethods || []).some(m => hasLine(m, "USD"))) return;
     // Si el último conocido es de hace menos de 6 horas, ese vale.
     const guardado = data.fx && data.fx.actualizadoEn ? new Date(data.fx.actualizadoEn) : null;

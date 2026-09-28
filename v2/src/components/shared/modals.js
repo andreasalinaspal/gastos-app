@@ -207,7 +207,7 @@ export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc
   const data = useStore(s => s.data);
   const kb = useKeyboardInset();
   // Selector de moneda (F10): solo tiene sentido si el medio de pago elegido es
-  // una tarjeta con línea en dólares. Por defecto, soles.
+  // una tarjeta que maneja dólares. Por defecto, soles.
   const pmSel = (data.paymentMethods || []).find(m => m.id === pendingExpPm);
   const puedeUsd = hasLine(pmSel, "USD");
   const cur = puedeUsd && pendingExpCur === "USD" ? "USD" : "PEN";
