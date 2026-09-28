@@ -2,7 +2,7 @@ import { useState } from "react";
 import { C, FONT_TITLE, cardStyle } from "../../theme";
 import { subStyle } from "../shared/subnav";
 import { getCycleFor, getSharedUsage, getLineUsage, getBalanceBreakdown, getNextPayment, cardCurrencies, curOf, buildStatementEntry } from "../../lib/cycles";
-import { tasaVigente } from "../../lib/fx";
+import { tasaVigente, textoTasa } from "../../lib/fx";
 import { StatementBanner, StatementSheet, StatementDiffNote, nextPaymentSourceLabel } from "../shared/StatementSheet";
 import { buildCatMap } from "../../state/selectors";
 import { useStore } from "../../state/store";
@@ -295,12 +295,29 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast,
       </div>
 
       {/* Footer: uso de línea → abre sheet educativo de la regla del 30% */}
-      <div onClick={() => setShowRule30(true)} style={{ ...cardStyle, margin: "10px 16px", padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ width: 10, height: 10, borderRadius: "50%", background: lineColor, flexShrink: 0 }} />
-        <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: C.black }}>
-          Uso de tu línea: <span style={{ fontFamily: FONT_TITLE, fontWeight: 900, color: lineColor }}>{linePctRound}%</span> <span style={{ color: C.muted, fontWeight: 500 }}>· {lineZone}</span>
+      <div onClick={() => setShowRule30(true)} style={{ ...cardStyle, margin: "10px 16px", padding: "14px 16px", cursor: "pointer" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: lineColor, flexShrink: 0 }} />
+          <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: C.black }}>
+            Uso de tu línea: <span style={{ fontFamily: FONT_TITLE, fontWeight: 900, color: lineColor }}>{linePctRound}%</span> <span style={{ color: C.muted, fontWeight: 500 }}>· {lineZone}</span>
+          </div>
+          <div style={{ fontSize: 13, color: C.muted }}>¿Por qué? ›</div>
         </div>
-        <div style={{ fontSize: 13, color: C.muted }}>¿Por qué? ›</div>
+        {/* De qué está hecho ese porcentaje cuando hay dólares de por medio (F18).
+            Vive acá desde F19: la lista de Medios de pago ya no da este detalle. */}
+        {lineUsage.tieneUsd && (
+          <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45, marginTop: 9, paddingTop: 9, borderTop: "1px solid #F0EDE4" }}>
+            Ocupado: {fmt(lineUsage.balancePEN)} en soles
+            {lineUsage.faltaTasa
+              ? <> · {fmtWith(lineUsage.balanceUSD, "USD")} en dólares <strong style={{ color: C.orange }}>sin contar</strong> (falta el tipo de cambio)</>
+              : <> + {fmtWith(lineUsage.balanceUSD, "USD")} en dólares (≈{fmt(lineUsage.usdEnSoles)}) = {fmt(lineUsage.usado)} de {fmt(lineUsage.creditLine)}</>}
+            <div style={{ marginTop: 2 }}>
+              {lineUsage.faltaTasa
+                ? "Pon el tipo de cambio de tu banco al editar la tarjeta para que el disponible salga completo."
+                : "Tu banco convierte cada compra en dólares a soles y te la descuenta de esta misma línea, así que esto es aproximado: se estimó con " + textoTasa(vigente, now ? new Date(now) : undefined).replace(/^tipo/, "el tipo") + "."}
+            </div>
+          </div>
+        )}
       </div>
       <div style={{ height: "calc(30px + env(safe-area-inset-bottom, 20px))" }} />
 
