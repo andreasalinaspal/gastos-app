@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "./supabase";
 import { C, FONT_TITLE, FONT_BODY } from "./theme";
 import { HomeIcon, CalIcon, WalletIcon, GearIcon, PlusIcon } from "./components/shared/icons";
-import { MONTHS, getCurrentMonthLabel, getMonthLabel } from "./lib/dates";
+import { MONTHS, getCurrentMonthLabel, getMonthLabel, monthLabelOf, toDateInput, parseDateInput } from "./lib/dates";
 import { genId, fmtWith } from "./lib/format";
 import { DEFAULT_CATS_GASTOS, DEFAULT_CATS_INGRESOS, initData } from "./constants";
 import { parseAmount, extractDescription } from "./lib/voice";
@@ -108,6 +108,7 @@ export default function App() {
   const [pendingExpDesc, setPendingExpDesc] = useState("");
   const [pendingExpCat, setPendingExpCat] = useState(null);
   const [pendingExpPm, setPendingExpPm] = useState(null); // paymentMethodId en el flujo de registro
+  const [pendingExpDate, setPendingExpDate] = useState(toDateInput()); // fecha del gasto al registrar (hoy por defecto)
   const [editExpPm, setEditExpPm] = useState(undefined); // paymentMethodId en edición (undefined = sin tocar)
   const [scanPm, setScanPm] = useState(null); // medio de pago global para los gastos escaneados
 
@@ -751,20 +752,23 @@ export default function App() {
     }
   };
 
-  const registerExpense = (amt, desc, cat) => {
+  // dateStr: value de <input type="date"> (yyyy-mm-dd). Si no llega, usa la del modal.
+  const registerExpense = (amt, desc, cat, dateStr) => {
     const a = Number(amt); if (!a || a <= 0) return;
     const d = desc || "Gasto";
     const pm = pendingExpPm || null;
-    setData(p => ({ ...p, expenses: [...p.expenses, { id: genId(), amount: a, description: d, date: new Date().toISOString(), month: curMonth, category: cat || null, paymentMethodId: pm }], ...(pm ? { lastPaymentMethodId: pm } : {}) }));
+    const when = parseDateInput(dateStr !== undefined ? dateStr : pendingExpDate) || new Date();
+    setData(p => ({ ...p, expenses: [...p.expenses, { id: genId(), amount: a, description: d, date: when.toISOString(), month: monthLabelOf(when), category: cat || null, paymentMethodId: pm }], ...(pm ? { lastPaymentMethodId: pm } : {}) }));
     showToast((cat ? cat.emoji + " " : "") + d + " " + fmtWith(a, data.currency) + " registrado");
     setShowCatPicker(false); setShowAddModal(false);
-    setPendingExpAmt(""); setPendingExpDesc(""); setPendingExpCat(null); setPendingExpPm(null);
+    setPendingExpAmt(""); setPendingExpDesc(""); setPendingExpCat(null); setPendingExpPm(null); setPendingExpDate(toDateInput());
     setManAmt(""); setManDesc("");
   };
 
   const openCatPicker = (amt, desc) => {
     setPendingExpAmt(String(amt)); setPendingExpDesc(desc || "Gasto");
     setPendingExpCat(null); setPendingExpPm(getDefaultPaymentMethodId(dataRef.current));
+    setPendingExpDate(toDateInput()); // hoy por defecto
     setShowAddModal(false); setShowCatPicker(true);
   };
 
@@ -910,7 +914,7 @@ export default function App() {
 
       {/* Category picker modal */}
       {showCatPicker && (
-        <CatPickerModal setShowCatPicker={setShowCatPicker} pendingExpAmt={pendingExpAmt} pendingExpDesc={pendingExpDesc} pendingExpCat={pendingExpCat} setPendingExpCat={setPendingExpCat} pendingExpPm={pendingExpPm} setPendingExpPm={setPendingExpPm} registerExpense={registerExpense} />
+        <CatPickerModal setShowCatPicker={setShowCatPicker} pendingExpAmt={pendingExpAmt} pendingExpDesc={pendingExpDesc} pendingExpCat={pendingExpCat} setPendingExpCat={setPendingExpCat} pendingExpPm={pendingExpPm} setPendingExpPm={setPendingExpPm} pendingExpDate={pendingExpDate} setPendingExpDate={setPendingExpDate} registerExpense={registerExpense} />
       )}
       {showNotifPanel && (
         <NotifPanel setShowNotifPanel={setShowNotifPanel} budgetAlerts={budgetAlerts} />

@@ -194,7 +194,7 @@ export function NameSetupScreen({ nameSetupValue, setNameSetupValue, setShowName
   );
 }
 
-export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc, pendingExpCat, setPendingExpCat, pendingExpPm, setPendingExpPm, registerExpense }) {
+export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc, pendingExpCat, setPendingExpCat, pendingExpPm, setPendingExpPm, pendingExpDate, setPendingExpDate, registerExpense }) {
   const data = useStore(s => s.data);
   return (
         <div style={{ position: "fixed", inset: 0, zIndex: 310 }} onClick={() => setShowCatPicker(false)}>
@@ -210,12 +210,22 @@ export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc
                 </button>
               ))}
             </div>
+            {/* Fecha — compacta, en la misma tira que el medio de pago */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>Fecha</div>
+              <input
+                type="date"
+                value={pendingExpDate}
+                onChange={e => setPendingExpDate(e.target.value)}
+                style={{ ...inputStyle, width: "auto", flex: "0 1 auto", padding: "8px 12px", fontSize: 14, color: C.black }}
+              />
+            </div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Medio de pago</div>
             <div style={{ marginBottom: 22 }}>
               <PaymentMethodPicker value={pendingExpPm} onChange={setPendingExpPm} />
             </div>
-            <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, pendingExpCat)} disabled={!pendingExpCat} style={{ width: "100%", padding: 16, borderRadius: 14, background: pendingExpCat ? C.purple : "#D4D0C8", color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: pendingExpCat ? "pointer" : "default", fontFamily: "inherit", marginBottom: 10, transition: "background 0.2s" }}>Confirmar gasto</button>
-            <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, null)} style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Sin categoría</button>
+            <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, pendingExpCat, pendingExpDate)} disabled={!pendingExpCat} style={{ width: "100%", padding: 16, borderRadius: 14, background: pendingExpCat ? C.purple : "#D4D0C8", color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: pendingExpCat ? "pointer" : "default", fontFamily: "inherit", marginBottom: 10, transition: "background 0.2s" }}>Confirmar gasto</button>
+            <button onClick={() => registerExpense(pendingExpAmt, pendingExpDesc, null, pendingExpDate)} style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Sin categoría</button>
           </div>
         </div>
   );
