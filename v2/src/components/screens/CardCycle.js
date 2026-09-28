@@ -1,9 +1,14 @@
 import { useState } from "react";
 import { C, FONT_TITLE, cardStyle } from "../../theme";
 import { subStyle } from "../shared/subnav";
-import { getCycleFor, getLineUsage } from "../../lib/cycles";
+import { getCycleFor, getLineUsage, cardCurrencies, curOf } from "../../lib/cycles";
 import { buildCatMap } from "../../state/selectors";
 import { useStore } from "../../state/store";
+import { fmtWith } from "../../lib/format";
+
+// Etiquetas de moneda: los dólares siempre con US$, nunca con el símbolo global.
+const CUR_LABEL = { PEN: "soles", USD: "dólares" };
+const CUR_SYMBOL = { PEN: "S/", USD: "US$" };
 
 const fmtDay = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "short" });
 
@@ -16,16 +21,23 @@ const fmtDay = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "sh
 export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, cardPayments, now, budgets, screenId, topSlot }) {
   const data = useStore(s => s.data);
   const [showRule30, setShowRule30] = useState(false);
+  // Moneda que se está mirando (F10). La tarjeta del simulador tiene una sola
+  // moneda, así que el selector ni aparece y todo funciona igual que antes.
+  const [cur, setCur] = useState("PEN");
 
   const allExps = expenses ?? data.expenses ?? [];
   const allPayments = cardPayments ?? data.cardPayments ?? [];
   const catBudgets = budgets ?? data.budgets;
   const cycle = getCycleFor(card, now ? new Date(now) : new Date());
   const accent = card.color || C.purple;
+  const curs = cardCurrencies(card);
+  const activeCur = curs.includes(cur) ? cur : "PEN";
+  const fmtCur = (n) => (activeCur === "USD" ? fmtWith(n, "USD") : fmt(n));
 
-  // Gastos de la tarjeta dentro del ciclo actual
+  // Gastos de la tarjeta dentro del ciclo actual, EN LA MONEDA ACTIVA.
   const cycleExps = allExps.filter(e => {
     if (!e || e.paymentMethodId !== card.id || !e.date) return false;
+    if (curOf(e) !== activeCur) return false;
     const d = new Date(e.date);
     const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     return day >= cycle.start && day <= cycle.end;
@@ -36,7 +48,8 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
   const daysLeft = cycle.totalDays - cycle.dayOfCycle;
 
   // Presupuesto del ciclo (opcional en la tarjeta)
-  const budget = Number(card.cycleBudget) || 0;
+  // El presupuesto por ciclo se define en soles: en la vista de dólares no aplica.
+  const budget = activeCur === "PEN" ? Number(card.cycleBudget) || 0 : 0;
   const budgetPct = budget > 0 ? Math.round((cycleSpend / budget) * 100) : 0; // A: % del presupuesto usado
   const onPace = budgetPct <= cyclePct + 5;
 
@@ -47,7 +60,8 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
   // Alertas proyectivas: categorías con presupuesto mensual cuyo ritmo proyecta sobrepaso antes del corte
   const cycleCatSpend = {};
   cycleExps.forEach(e => { if (e.category?.id) cycleCatSpend[e.category.id] = (cycleCatSpend[e.category.id] || 0) + (Number(e.amount) || 0); });
-  const projAlerts = (data.categories?.gastos || [])
+  // Los presupuestos por categoría son en soles: no se proyectan sobre dólares.
+  const projAlerts = activeCur !== "PEN" ? [] : (data.categories?.gastos || [])
     .filter(cat => catBudgets?.[cat.id] > 0 && cycleCatSpend[cat.id] > 0)
     .map(cat => {
       const limit = catBudgets[cat.id];
@@ -60,7 +74,8 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
     .slice(0, 2);
 
   // Uso de línea (footer educativo)
-  const { pct: linePct } = getLineUsage(card, allExps, allPayments);
+  const lineUsage = getLineUsage(card, allExps, allPayments, activeCur);
+  const linePct = lineUsage.pct;
   const linePctRound = Math.round(linePct);
   const lineColor = linePct < 30 ? C.green : linePct <= 60 ? C.orange : "#C0392B";
   const lineZone = linePct < 30 ? "zona saludable (<30%)" : linePct <= 60 ? "zona media (30–60%)" : "zona de riesgo (>60%)";
@@ -75,6 +90,18 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
           <div style={{ fontSize: 13, fontWeight: 700, color: accent, marginTop: 2 }}>{fmtDay(cycle.start)} – {fmtDay(cycle.end)}</div>
         </div>
       </div>
+
+      {/* Selector de moneda (F10): solo si la tarjeta maneja las dos líneas.
+          Cambia TODO el contenido de la pantalla; nunca mezcla los números. */}
+      {curs.length > 1 && (
+        <div style={{ display: "flex", background: "#E8E4DA", borderRadius: 12, padding: 4, margin: "0 16px 10px" }}>
+          {curs.map(c => (
+            <button key={c} onClick={() => setCur(c)} style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: activeCur === c ? 800 : 500, color: activeCur === c ? C.black : C.muted, background: activeCur === c ? "#fff" : "transparent", boxShadow: activeCur === c ? "0 1px 4px rgba(0,0,0,0.08)" : "none", transition: "all 0.2s" }}>
+              {CUR_SYMBOL[c]} {CUR_LABEL[c]}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Slot extra (F3): banner/panel del simulador; null para tarjetas reales */}
       {topSlot}
@@ -93,9 +120,9 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
 
       {/* Gasto acumulado del ciclo vs presupuesto del ciclo */}
       <div style={{ background: accent, borderRadius: 16, margin: "0 16px 12px", padding: "18px 18px" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Gasto del ciclo</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Gasto del ciclo{curs.length > 1 ? " en " + CUR_LABEL[activeCur] : ""}</div>
         <div style={{ fontFamily: FONT_TITLE, fontSize: 34, fontWeight: 900, color: "#fff", letterSpacing: -0.5 }}>
-          {fmt(cycleSpend)}{budget > 0 && <span style={{ fontSize: 17, fontWeight: 600, opacity: 0.65 }}> / {fmt(budget)}</span>}
+          {fmtCur(cycleSpend)}{budget > 0 && <span style={{ fontSize: 17, fontWeight: 600, opacity: 0.65 }}> / {fmtCur(budget)}</span>}
         </div>
         {budget > 0 ? (
           <>
@@ -125,10 +152,10 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
       ))}
 
       {/* Desglose por categoría dentro del ciclo */}
-      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "6px 20px 8px" }}>Gastos del ciclo por categoría</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "6px 20px 8px" }}>Gastos del ciclo por categoría{curs.length > 1 ? " · " + CUR_LABEL[activeCur] : ""}</div>
       <div style={{ padding: "0 16px", flex: 1 }}>
         {catMap.length === 0 && (
-          <div style={{ ...cardStyle, textAlign: "center", color: C.muted, fontSize: 13, padding: 24 }}>Aún no hay gastos con esta tarjeta en el ciclo actual</div>
+          <div style={{ ...cardStyle, textAlign: "center", color: C.muted, fontSize: 13, padding: 24 }}>Aún no hay gastos {curs.length > 1 ? "en " + CUR_LABEL[activeCur] + " " : ""}con esta tarjeta en el ciclo actual</div>
         )}
         {catMap.map((cat, i) => {
           const pct = Math.round((cat.amount / maxCat) * 100);
@@ -137,7 +164,7 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                 <div style={{ fontSize: 20 }}>{cat.emoji}</div>
                 <div style={{ flex: 1, fontSize: 14, fontWeight: 600, color: C.black }}>{cat.name}</div>
-                <div style={{ fontFamily: FONT_TITLE, fontSize: 15, fontWeight: 900, color: C.black }}>{fmt(cat.amount)}</div>
+                <div style={{ fontFamily: FONT_TITLE, fontSize: 15, fontWeight: 900, color: C.black }}>{fmtCur(cat.amount)}</div>
               </div>
               <div style={{ height: 6, background: "#F0EDE4", borderRadius: 3, overflow: "hidden" }}>
                 <div style={{ height: "100%", width: `${pct}%`, background: i === 0 ? accent : C.orange, borderRadius: 3, transition: "width 0.4s ease" }} />
@@ -151,7 +178,7 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
       <div onClick={() => setShowRule30(true)} style={{ ...cardStyle, margin: "10px 16px", padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ width: 10, height: 10, borderRadius: "50%", background: lineColor, flexShrink: 0 }} />
         <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: C.black }}>
-          Uso de tu línea: <span style={{ fontFamily: FONT_TITLE, fontWeight: 900, color: lineColor }}>{linePctRound}%</span> <span style={{ color: C.muted, fontWeight: 500 }}>· {lineZone}</span>
+          Uso de tu línea{curs.length > 1 ? " en " + CUR_LABEL[activeCur] : ""}: <span style={{ fontFamily: FONT_TITLE, fontWeight: 900, color: lineColor }}>{linePctRound}%</span> <span style={{ color: C.muted, fontWeight: 500 }}>· {lineZone}</span>
         </div>
         <div style={{ fontSize: 13, color: C.muted }}>¿Por qué? ›</div>
       </div>
@@ -165,7 +192,7 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
             <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
             <div style={{ fontFamily: FONT_TITLE, fontSize: 24, fontWeight: 900, color: C.black, fontStyle: "italic", marginBottom: 14 }}>La regla del 30%</div>
             <div style={{ fontSize: 14, color: C.black, lineHeight: 1.65, marginBottom: 12 }}>
-              Usar tu tarjeta está bien, pero cuánto usas de tu línea importa. Si tu línea es de {fmt(card.creditLine)} y debes {fmt(Math.round((card.creditLine || 0) / 2))}, estás usando el 50% — aunque pagues todo puntual.
+              Usar tu tarjeta está bien, pero cuánto usas de tu línea importa. Si tu línea es de {fmtCur(lineUsage.creditLine)} y debes {fmtCur(Math.round(lineUsage.creditLine / 2))}, estás usando el 50% — aunque pagues todo puntual.
             </div>
             <div style={{ fontSize: 14, color: C.black, lineHeight: 1.65, marginBottom: 12 }}>
               Los bancos y las centrales de riesgo revisan ese porcentaje cada mes. Andar siempre cerca del tope da la señal de que dependes de la tarjeta para llegar a fin de mes, y eso baja tu score crediticio aunque nunca te atrases.

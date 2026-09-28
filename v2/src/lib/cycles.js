@@ -85,12 +85,17 @@ export function getCardLine(card, currency = "PEN") {
     return {
       creditLine: Number(line.creditLine) || 0,
       openingBalance: Number(line.openingBalance) || 0,
+      // Cada línea puede tener su propia foto de la deuda: activar la línea en
+      // dólares hoy no debe borrar el historial en soles. Sin fecha propia, vale
+      // la de la tarjeta.
+      openingDate: line.openingDate || card.openingDate || null,
     };
   }
   if (cur === "USD") return null;
   return {
     creditLine: Number(card.creditLine) || 0,
     openingBalance: Number(card.openingBalance) || 0,
+    openingDate: card.openingDate || null,
   };
 }
 
@@ -116,9 +121,11 @@ export function getCycleSpend(expenses, card, cycleKey, currency = "PEN") {
 // `openingDate` marca el momento en que la usuaria declaró su deuda previa
 // (`openingBalance`), así que los gastos ANTERIORES a esa fecha ya están dentro
 // de ese saldo y no se vuelven a sumar. Sin openingDate → cuenta todo el historial.
-function openingCutoff(card) {
-  if (!card || !card.openingDate) return null;
-  const d = new Date(card.openingDate);
+function openingCutoff(card, currency = "PEN") {
+  const line = getCardLine(card, currency);
+  const raw = line ? line.openingDate : card && card.openingDate;
+  if (!raw) return null;
+  const d = new Date(raw);
   return isNaN(d) ? null : startOfDay(d);
 }
 
@@ -126,7 +133,7 @@ function openingCutoff(card) {
 // `until` (inclusive, opcional).
 function spentSince(card, expenses, until, currency = "PEN") {
   const cur = normCur(currency);
-  const from = openingCutoff(card);
+  const from = openingCutoff(card, cur);
   const to = until ? startOfDay(until) : null;
   return (expenses || []).reduce((sum, e) => {
     if (!e || e.paymentMethodId !== card.id) return sum;
@@ -146,7 +153,7 @@ function openingAt(card, until, currency = "PEN") {
   const line = getCardLine(card, currency);
   const opening = line ? line.openingBalance : 0;
   if (!opening) return 0;
-  const from = openingCutoff(card);
+  const from = openingCutoff(card, currency);
   if (from && until && from > startOfDay(until)) return 0;
   return opening;
 }
@@ -276,10 +283,10 @@ export function getUpcomingTotal(cards, expenses, cardPayments, now = new Date()
 export function getStatementPrompt(card, expenses, statements, now = new Date()) {
   if (!card || card.type !== "credito" || card.archived) return null;
   const closed = getClosedCycle(card, now);
-  const opening = openingCutoff(card);
-  if (opening && opening > closed.end) return null; // la tarjeta se registró después del corte
   const missing = [];
   for (const cur of cardCurrencies(card)) {
+    const opening = openingCutoff(card, cur);
+    if (opening && opening > closed.end) continue; // esa línea se declaró después del corte
     if (findStatement(statements, card.id, closed.key, cur)) continue;
     const estimateGross = openingAt(card, closed.end, cur) + spentSince(card, expenses, closed.end, cur);
     if (estimateGross > 0) missing.push({ currency: cur, estimateGross });

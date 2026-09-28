@@ -369,18 +369,18 @@ describe("getCardLine / cardCurrencies", () => {
   const dosMonedas = card({ lines: { PEN: { creditLine: 3000, openingBalance: 500 }, USD: { creditLine: 1000, openingBalance: 100 } } });
 
   it("lee la línea de cada moneda", () => {
-    expect(getCardLine(dosMonedas, "PEN")).toEqual({ creditLine: 3000, openingBalance: 500 });
-    expect(getCardLine(dosMonedas, "USD")).toEqual({ creditLine: 1000, openingBalance: 100 });
+    expect(getCardLine(dosMonedas, "PEN")).toMatchObject({ creditLine: 3000, openingBalance: 500 });
+    expect(getCardLine(dosMonedas, "USD")).toMatchObject({ creditLine: 1000, openingBalance: 100 });
   });
 
   it("sin `lines` cae a los campos planos como soles (tarjeta pre-v4 / simulador)", () => {
     const plana = card({ creditLine: 2000, openingBalance: 300 });
-    expect(getCardLine(plana, "PEN")).toEqual({ creditLine: 2000, openingBalance: 300 });
+    expect(getCardLine(plana, "PEN")).toMatchObject({ creditLine: 2000, openingBalance: 300 });
     expect(getCardLine(plana, "USD")).toBe(null);
   });
 
   it("sin moneda pedida asume soles", () => {
-    expect(getCardLine(dosMonedas)).toEqual({ creditLine: 3000, openingBalance: 500 });
+    expect(getCardLine(dosMonedas)).toMatchObject({ creditLine: 3000, openingBalance: 500 });
   });
 
   it("cardCurrencies: soles primero, dólares solo si está configurado", () => {
@@ -596,5 +596,33 @@ describe("getStatementPrompt", () => {
 
   it("una tarjeta archivada no se pide", () => {
     expect(getStatementPrompt(card({ archived: true, openingDate: new Date(2026, 7, 1).toISOString() }), expenses, [], NOW)).toBe(null);
+  });
+});
+
+describe("openingDate por línea", () => {
+  // Activar la línea en dólares HOY no puede borrar el historial en soles.
+  const c = card({
+    openingDate: new Date(2026, 7, 1).toISOString(),
+    lines: {
+      PEN: { creditLine: 3000, openingBalance: 850, openingDate: new Date(2026, 7, 1).toISOString() },
+      USD: { creditLine: 800, openingBalance: 200, openingDate: new Date(2026, 8, 27).toISOString() },
+    },
+  });
+  const expenses = [
+    { id: "e1", amount: 300, paymentMethodId: "card-1", date: new Date(2026, 8, 10).toISOString() },
+    { id: "e2", amount: 90, paymentMethodId: "card-1", date: new Date(2026, 8, 10).toISOString(), currency: "USD" }, // anterior a la foto en dólares
+  ];
+
+  it("los soles siguen contando desde SU fecha", () => {
+    expect(getLineUsage(c, expenses, [], "PEN").balance).toBe(1150); // 850 + 300
+  });
+
+  it("los dólares parten de su propia foto e ignoran lo anterior a ella", () => {
+    expect(getLineUsage(c, expenses, [], "USD").balance).toBe(200); // el gasto del 10 sep ya está dentro
+  });
+
+  it("sin fecha propia, la línea usa la fecha de la tarjeta", () => {
+    const vieja = card({ openingDate: new Date(2026, 8, 20).toISOString(), lines: { PEN: { creditLine: 3000, openingBalance: 100 } } });
+    expect(getLineUsage(vieja, expenses, [], "PEN").balance).toBe(100); // el gasto del 10 sep queda antes de la foto
   });
 });

@@ -126,6 +126,19 @@ export default function Home({
                       <div style={{ height: "100%", width: `${Math.min(Math.round(pct), 100)}%`, background: usageColor(pct), borderRadius: 99 }} />
                     </div>
                     <div style={{ fontSize: 10.5, fontWeight: 600, color: C.muted, marginTop: 5, whiteSpace: "nowrap" }}>{Math.round(pct)}% usado · día {cycle.dayOfCycle}/{cycle.totalDays}</div>
+                    {/* Línea en dólares (F10): va aparte, debajo, nunca sumada a los soles */}
+                    {cardCurrencies(card).includes("USD") && (() => {
+                      const usd = getLineUsage(card, data.expenses, data.cardPayments, "USD");
+                      return (
+                        <div style={{ marginTop: 7, paddingTop: 6, borderTop: "1px solid #EDE9E0" }}>
+                          <div style={{ fontSize: 9.5, fontWeight: 700, color: C.muted, letterSpacing: 0.6, textTransform: "uppercase" }}>En dólares</div>
+                          <div style={{ fontFamily: FONT_TITLE, fontSize: 14, fontWeight: 900, color: C.black, letterSpacing: -0.3 }}>{fmtWith(usd.available, "USD")}</div>
+                          <div style={{ height: 4, background: "#F0EDE4", borderRadius: 99, overflow: "hidden", marginTop: 5 }}>
+                            <div style={{ height: "100%", width: `${Math.min(Math.round(usd.pct), 100)}%`, background: usageColor(usd.pct), borderRadius: 99 }} />
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
