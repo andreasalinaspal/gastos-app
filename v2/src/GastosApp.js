@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "./supabase";
 import { C, FONT_TITLE, FONT_BODY } from "./theme";
 import { HomeIcon, CalIcon, WalletIcon, GearIcon, PlusIcon } from "./components/shared/icons";
-import { MONTHS, getCurrentMonthLabel, getMonthLabel, monthLabelOf, toDateInput, parseDateInput } from "./lib/dates";
+import { MONTHS, getCurrentMonthLabel, getMonthLabel, monthLabelOf, toDateInput, parseDateInput, scanDateToInput } from "./lib/dates";
 import { genId, fmtWith } from "./lib/format";
 import { DEFAULT_CATS_GASTOS, DEFAULT_CATS_INGRESOS, initData } from "./constants";
 import { parseAmount, extractDescription } from "./lib/voice";
@@ -564,7 +564,9 @@ export default function App() {
       const result = await response.json();
       if (result.expenses && result.expenses.length > 0) {
         setScanPm(getDefaultPaymentMethodId(dataRef.current));
-        setScanResults(result.expenses);
+        // La fecha detectada se normaliza a yyyy-mm-dd para que sea editable
+        // en la hoja de confirmación antes de registrar.
+        setScanResults(result.expenses.map(r => ({ ...r, date: scanDateToInput(r.date) })));
       } else {
         showToast("No se encontraron gastos en la imagen");
       }
@@ -578,35 +580,25 @@ export default function App() {
   const confirmScanResults = () => {
     if (!scanResults) return;
     const newExpenses = scanResults.map(r => {
-      let parsedDate = null;
-      if (r.date) {
-        try {
-          const d = new Date(r.date + "T12:00:00");
-          if (!isNaN(d.getTime())) parsedDate = d;
-        } catch (e) {}
-        if (!parsedDate) {
-          try {
-            const d = new Date(r.date);
-            if (!isNaN(d.getTime())) parsedDate = d;
-          } catch (e) {}
-        }
-        // Force current year for dates parsed without year
-        if (parsedDate) {
-          parsedDate.setFullYear(new Date().getFullYear());
-        }
-      }
+      // r.date ya viene normalizada a yyyy-mm-dd y la usuaria pudo corregirla
+      // en la hoja, así que se respeta tal cual: nada de forzar el año.
+      const when = parseDateInput(r.date) || new Date();
       return {
         id: genId(),
         amount: Number(r.amount) || 0,
         description: r.description || "Gasto escaneado",
-        date: parsedDate ? parsedDate.toISOString() : new Date().toISOString(),
-        month: parsedDate ? MONTHS[parsedDate.getMonth()] + " " + parsedDate.getFullYear() : curMonth,
+        date: when.toISOString(),
+        month: monthLabelOf(when),
         paymentMethodId: scanPm || null,
       };
     });
     setData(p => ({ ...p, expenses: [...p.expenses, ...newExpenses], ...(scanPm ? { lastPaymentMethodId: scanPm } : {}) }));
     showToast(newExpenses.length + " gastos registrados");
     setScanResults(null);
+  };
+
+  const updateScanItem = (idx, patch) => {
+    setScanResults(prev => prev.map((r, i) => i === idx ? { ...r, ...patch } : r));
   };
 
   const removeScanItem = (idx) => {
@@ -838,7 +830,7 @@ export default function App() {
       <style>{sharedStyle}</style>
       {toast && <Toast toast={toast} />}
       {scanResults && (
-        <ScanResultsSheet scanResults={scanResults} setScanResults={setScanResults} removeScanItem={removeScanItem} confirmScanResults={confirmScanResults} scanPm={scanPm} setScanPm={setScanPm} />
+        <ScanResultsSheet scanResults={scanResults} setScanResults={setScanResults} removeScanItem={removeScanItem} updateScanItem={updateScanItem} confirmScanResults={confirmScanResults} scanPm={scanPm} setScanPm={setScanPm} />
       )}
       {confirm && <ConfirmModal confirm={confirm} setConfirm={setConfirm} />}
       {tab === "home" && (

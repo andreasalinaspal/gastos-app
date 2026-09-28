@@ -11,20 +11,25 @@ export function Toast({ toast }) {
   return <div style={{ position: "fixed", top: 60, left: "50%", transform: "translateX(-50%)", zIndex: 500, background: C.black, color: "#fff", padding: "10px 24px", borderRadius: 12, fontSize: 14, fontWeight: 600, animation: "slideUp 0.3s ease", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>{toast}</div>;
 }
 
-export function ScanResultsSheet({ scanResults, setScanResults, removeScanItem, confirmScanResults, scanPm, setScanPm }) {
+export function ScanResultsSheet({ scanResults, setScanResults, removeScanItem, updateScanItem, confirmScanResults, scanPm, setScanPm }) {
   const data = useStore(s => s.data);
   return (
         <div style={{ position: "fixed", inset: 0, zIndex: 400, display: "flex", flexDirection: "column", background: C.beige, overflow: "auto" }}>
           <div style={{ padding: "48px 24px 16px" }}>
             <h2 style={{ fontSize: 28, fontWeight: 900, color: C.black, fontStyle: "italic", margin: 0 }}>Gastos detectados</h2>
-            <p style={{ fontSize: 14, color: C.muted, marginTop: 6 }}>{scanResults.length} movimientos encontrados. Elimina los que no quieras registrar.</p>
+            <p style={{ fontSize: 14, color: C.muted, marginTop: 6 }}>{scanResults.length} movimientos encontrados. Corrige la fecha si hace falta y elimina los que no quieras registrar.</p>
           </div>
           <div style={{ flex: 1, padding: "0 20px", overflowY: "auto" }}>
             {scanResults.map((r, i) => (
               <div key={i} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, display: "flex", alignItems: "center" }}>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>{r.description}</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>{r.date || "Sin fecha"}</div>
+                  <input
+                    type="date"
+                    value={r.date || ""}
+                    onChange={e => updateScanItem(i, { date: e.target.value })}
+                    style={{ ...inputStyle, width: "auto", marginTop: 4, padding: "5px 8px", fontSize: 12, color: C.black, background: "#fff" }}
+                  />
                 </div>
                 <span style={{ fontSize: 17, fontWeight: 600, color: C.orange, marginRight: 10 }}>{fmtWith(r.amount, data.currency)}</span>
                 <button onClick={() => removeScanItem(i)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><TrashIcon color="#ccc" /></button>

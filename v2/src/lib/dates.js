@@ -23,3 +23,20 @@ export function parseDateInput(value) {
   const d = new Date(value + "T12:00:00");
   return isNaN(d.getTime()) ? null : d;
 }
+
+// Normaliza la fecha que detecta el escaneo a un value de <input type="date">.
+// El recibo puede traer la fecha sin año ("14 mar"), en cuyo caso se asume el
+// año actual — pero la usuaria la ve en el input y puede corregirla antes de
+// registrar, en vez de que la app decida en silencio.
+export function scanDateToInput(raw, hoy = new Date()) {
+  if (!raw) return toDateInput(hoy);
+  const intentos = [String(raw) + "T12:00:00", String(raw)];
+  for (const intento of intentos) {
+    const d = new Date(intento);
+    if (!isNaN(d.getTime())) {
+      if (!/\d{4}/.test(String(raw))) d.setFullYear(hoy.getFullYear());
+      return toDateInput(d);
+    }
+  }
+  return toDateInput(hoy);
+}
