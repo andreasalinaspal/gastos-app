@@ -4,6 +4,7 @@ import { genId, fmtWith } from "../../lib/format";
 import { getStatementPrompt } from "../../lib/cycles";
 import { useStore } from "../../state/store";
 import { useKeyboardInset, sheetStyle } from "../../lib/useKeyboardInset";
+import { EquivalenteSoles } from "./Equivalente";
 
 // Registro del estado de cuenta del banco (F10).
 //
@@ -77,14 +78,16 @@ export function StatementBanner({ card, expenses, statements, now, onOpen, compa
 export function StatementSheet({ card, prompt, fmt, onClose, showToast }) {
   const kb = useKeyboardInset();
   const setData = useStore(s => s.setData);
+  const data = useStore(s => s.data);
   // Si ya había un monto registrado para ese ciclo y moneda, viene prellenado
   // para poder corregirlo en vez de duplicarlo.
   const [amounts, setAmounts] = useState(() =>
     Object.fromEntries(prompt.missing.map(m => [m.currency, m.registrado != null ? String(m.registrado) : ""]))
   );
-  // Fecha de vencimiento por moneda, todas prellenadas con la calculada del ciclo.
+  // Fecha de vencimiento por moneda: la que ella ya había registrado para esa
+  // moneda si la hubo, y si no la calculada del ciclo.
   const [dues, setDues] = useState(() =>
-    Object.fromEntries(prompt.missing.map(m => [m.currency, toDateInput(prompt.cycle.paymentDate)]))
+    Object.fromEntries(prompt.missing.map(m => [m.currency, toDateInput(m.dueDate || prompt.cycle.paymentDate)]))
   );
   const [error, setError] = useState("");
   // Con una sola moneda la hoja se ve igual que antes: sin tarjetas ni etiquetas
@@ -148,6 +151,14 @@ export function StatementSheet({ card, prompt, fmt, onClose, showToast }) {
             <div style={{ fontSize: 12, color: C.muted, marginTop: 5 }}>
               Qori estimaba {fmtCurWith(Math.round(m.estimateGross * 100) / 100, m.currency, fmt)} con los gastos que registraste.
             </div>
+            {/* Equivalente en soles de lo que debe en dólares: informativo, nunca
+                se suma a ningún total en soles. */}
+            {m.currency === "USD" && (
+              <EquivalenteSoles
+                montoUSD={amounts.USD !== "" ? Number(amounts.USD) : m.estimateGross}
+                card={card} data={data} nota
+              />
+            )}
             {/* Fecha propia de esta moneda: el banco puede vencerte los dólares otro día. */}
             <div style={{ ...labelCss, marginTop: 12 }}>
               Fecha de vencimiento{multi ? " de tus " + CUR_LABEL[m.currency] : ""}

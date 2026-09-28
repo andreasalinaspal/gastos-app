@@ -5,6 +5,8 @@ import { getMonthData } from "../../state/selectors";
 import { useStore } from "../../state/store";
 import { fmtWith } from "../../lib/format";
 import { nextPaymentSourceLabel } from "../shared/StatementSheet";
+import { EquivalenteSoles } from "../shared/Equivalente";
+import { tasaVigente } from "../../lib/fx";
 
 const fmtLong = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "long" });
 
@@ -24,7 +26,7 @@ export function plazoLabel(days) {
 }
 
 // Una tarjeta dentro de la lista de un bloque de moneda.
-function CardRow({ it, fmtC, onOpen }) {
+function CardRow({ it, fmtC, onOpen, equivData }) {
   const accent = it.card.color || C.purple;
   const pend = it.status === "por-vencer";
   return (
@@ -46,6 +48,12 @@ function CardRow({ it, fmtC, onOpen }) {
           )}
         </div>
       </div>
+      {/* Solo en el bloque de dólares: cuánto sería ese pago en soles. Va en su
+          propia línea para no apretar el nombre de la tarjeta. Informativo — no
+          entra en ningún total. */}
+      {equivData && pend && (
+        <EquivalenteSoles montoUSD={it.amount} card={it.card} data={equivData} style={{ textAlign: "right", marginTop: 6 }} />
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
         <div style={{ flex: 1, height: 5, background: "#F0EDE4", borderRadius: 99, overflow: "hidden" }}>
           <div style={{ height: "100%", width: `${Math.min(Math.round(it.pct), 100)}%`, background: usageColor(it.pct), borderRadius: 99 }} />
@@ -69,6 +77,8 @@ export function ProximosPagosScreen({ subScreen, setSubScreen, fmt }) {
   const sobra = totalInc - totalFijosAll - total30;
   const alcanza = sobra >= 0;
   const proximo = items.find(i => i.status === "por-vencer") || items[0];
+  // ¿Hay algún tipo de cambio que mostrar? Sin ninguno no se habla de él.
+  const hayTasa = tasaVigente(null, data) !== null;
 
   return (
     <div style={subStyle(subScreen, "proximos-pagos")}>
@@ -151,14 +161,23 @@ export function ProximosPagosScreen({ subScreen, setSubScreen, fmt }) {
                 <div style={{ background: C.green, borderRadius: 18, padding: "18px 20px" }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.6)", letterSpacing: 1.4, textTransform: "uppercase" }}>Vence en los próximos 30 días</div>
                   <div style={{ fontFamily: FONT_TITLE, fontSize: 38, fontWeight: 900, color: "#fff", letterSpacing: -1.2, lineHeight: 1.1, marginTop: 4 }}>{fmtUsd(usd.total30)}</div>
+                  {/* Equivalente del total en dólares: solo para tenerlo. Sigue
+                      sin entrar en la cuenta de soles de arriba. */}
+                  <EquivalenteSoles
+                    montoUSD={usd.total30} card={null} data={data}
+                    style={{ color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 6 }}
+                  />
                   <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 1.5 }}>
-                    Esta deuda se paga aparte, en dólares. <strong>No está incluida</strong> en la cuenta de arriba: Qori no convierte monedas ni se inventa un tipo de cambio.
+                    Esta deuda se paga aparte, en dólares. <strong>No está incluida</strong> en la cuenta de arriba.
+                    {hayTasa
+                      ? " El equivalente en soles es referencial: tu banco aplica su propio tipo de cambio a las compras con tarjeta."
+                      : " Qori no convierte monedas ni se inventa un tipo de cambio."}
                   </div>
                 </div>
               </div>
               <div style={{ padding: "0 16px" }}>
                 {usd.items.map(it => (
-                  <CardRow key={it.card.id} it={it} fmtC={fmtUsd} onOpen={() => setSubScreen("card-" + it.card.id)} />
+                  <CardRow key={it.card.id} it={it} fmtC={fmtUsd} equivData={data} onOpen={() => setSubScreen("card-" + it.card.id)} />
                 ))}
               </div>
             </>

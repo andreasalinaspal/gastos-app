@@ -7,6 +7,7 @@ import { getCycleFor, getLineUsage, getNextPayment, cardCurrencies, hasLine, bui
 import { useStore } from "../../state/store";
 import { pmEmoji } from "../shared/PaymentMethodPicker";
 import { StatementBanner, StatementSheet, StatementDiffNote, nextPaymentSourceLabel } from "../shared/StatementSheet";
+import { EquivalenteSoles } from "../shared/Equivalente";
 
 const fmtDay = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "short" });
 const fmtLong = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "long" });
@@ -19,7 +20,7 @@ const hintStyle = { fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom
 // 6 colores de la paleta para identificar tarjetas.
 const CARD_COLORS = [C.purple, C.purpleLight, C.orange, C.green, C.greenLight, C.black];
 
-const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", openingBalance: "", usdOn: false, usdCreditLine: "", usdOpeningBalance: "", cycleBudget: "", color: CARD_COLORS[0] };
+const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", openingBalance: "", usdOn: false, usdCreditLine: "", usdOpeningBalance: "", usdRate: "", cycleBudget: "", color: CARD_COLORS[0] };
 
 // Nombre en criollo de cada moneda, para etiquetas y avisos.
 export const CUR_LABEL = { PEN: "soles", USD: "dólares" };
@@ -72,6 +73,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
       usdOn: !!usd,
       usdCreditLine: usd ? String(usd.creditLine || "") : "",
       usdOpeningBalance: usd && usd.openingBalance ? String(usd.openingBalance) : "",
+      usdRate: card.usdRate ? String(card.usdRate) : "",
       cycleBudget: card.cycleBudget ? String(card.cycleBudget) : "", color: card.color || CARD_COLORS[0],
     });
   };
@@ -102,6 +104,14 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
     if (openingBalance > creditLine) { setFormError("Lo consumido hoy no puede pasar la línea de crédito"); return; }
     // Línea en dólares (F10): opcional y totalmente aparte de la de soles.
     let usdLine = null;
+    // Tipo de cambio de su banco (F12): opcional. Pisa al de SUNAT solo para
+    // esta tarjeta, y solo sirve si la tarjeta maneja dólares.
+    let usdRate = null;
+    if (cardForm.usdOn && cardForm.usdRate !== "") {
+      const r = Number(cardForm.usdRate);
+      if (!Number.isFinite(r) || r <= 0) { setFormError("El tipo de cambio de tu banco tiene que ser mayor a 0"); return; }
+      usdRate = r;
+    }
     if (cardForm.usdOn) {
       const usdCredit = Number(cardForm.usdCreditLine);
       if (!usdCredit || usdCredit <= 0) { setFormError("Ingresa tu línea en dólares, o apaga esa sección"); return; }
@@ -126,7 +136,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
         PEN: { creditLine, openingBalance, openingDate: penCambio ? ahora : (prevPen.openingDate || prev.openingDate || ahora) },
         ...(usdLine ? { USD: { ...usdLine, openingDate: usdCambio || !prevUsd ? ahora : (prevUsd.openingDate || prev.openingDate || ahora) } } : {}),
       };
-      const patch = { name, cutoffDay, paymentDay, creditLine, cycleBudget, color: cardForm.color, lines };
+      const patch = { name, cutoffDay, paymentDay, creditLine, cycleBudget, color: cardForm.color, lines, usdRate };
       if (penCambio) {
         patch.openingBalance = openingBalance; // campos planos: se mantienen por compatibilidad
         patch.openingDate = ahora;
@@ -139,7 +149,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
         PEN: { creditLine, openingBalance, openingDate: ahora },
         ...(usdLine ? { USD: { ...usdLine, openingDate: ahora } } : {}),
       };
-      setData(p => ({ ...p, paymentMethods: [...p.paymentMethods, { id: genId(), type: "credito", name, cutoffDay, paymentDay, creditLine, openingBalance, lines, openingDate: ahora, cycleBudget, color: cardForm.color, archived: false }] }));
+      setData(p => ({ ...p, paymentMethods: [...p.paymentMethods, { id: genId(), type: "credito", name, cutoffDay, paymentDay, creditLine, openingBalance, lines, usdRate, openingDate: ahora, cycleBudget, color: cardForm.color, archived: false }] }));
       showToast("Tarjeta " + name + " agregada");
     }
     setCardForm(null); setFormError("");
@@ -226,6 +236,10 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
                     {next.status === "por-vencer"
                       ? <>Próximo pago: <strong style={{ color: C.black }}>{fmtCur(next.amount, cur)}</strong> el {fmtLong(next.dueDate)} <span style={{ fontSize: 11 }}>· {nextPaymentSourceLabel(next.source)}</span></>
                       : <>Próximo pago: <strong style={{ color: C.green }}>al día ✅</strong></>}
+                    {/* Cuánto sería ese pago en soles: informativo, nunca se suma. */}
+                    {cur === "USD" && next.status === "por-vencer" && (
+                      <EquivalenteSoles montoUSD={next.amount} card={card} data={data} nota />
+                    )}
                   </div>
                   <StatementDiffNote next={next} fmt={fmt} currency={cur} />
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
@@ -310,7 +324,12 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
                   <input type="number" inputMode="decimal" placeholder="Ej: 1000" value={cardForm.usdCreditLine} onChange={e => setCardForm(f => ({ ...f, usdCreditLine: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 10, background: "#fff" }} />
                   <div style={labelStyle}>Cuánto tienes consumido hoy en dólares (US$)</div>
                   <input type="number" inputMode="decimal" placeholder="Ej: 0" value={cardForm.usdOpeningBalance} onChange={e => setCardForm(f => ({ ...f, usdOpeningBalance: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6, background: "#fff" }} />
-                  <div style={{ ...hintStyle, marginBottom: 0 }}>Qori nunca suma ni convierte tus soles y tus dólares: te los muestra lado a lado.</div>
+                  <div style={hintStyle}>Qori nunca suma ni convierte tus soles y tus dólares: te los muestra lado a lado.</div>
+                  {/* Override del tipo de cambio (F12): el de SUNAT es solo una
+                      referencia; el que manda es el que el banco le aplicó a ella. */}
+                  <div style={labelStyle}>Tipo de cambio de tu banco (opcional)</div>
+                  <input type="number" inputMode="decimal" step="0.001" placeholder="Ej: 3.78" value={cardForm.usdRate} onChange={e => setCardForm(f => ({ ...f, usdRate: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6, background: "#fff" }} />
+                  <div style={{ ...hintStyle, marginBottom: 0 }}>Si tu estado de cuenta muestra el tipo de cambio que te aplicaron, ponlo acá y Qori lo usa en vez del de SUNAT.</div>
                 </div>
               )}
             </div>

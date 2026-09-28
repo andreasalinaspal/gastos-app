@@ -299,16 +299,20 @@ export function getStatementPrompt(card, expenses, statements, now = new Date())
 // a que Qori se lo pida. A diferencia de getStatementPrompt, aquí no se filtra
 // nada: ofrece todas las monedas de la tarjeta, aunque el ciclo esté vacío o ya
 // tenga un monto registrado (en ese caso viene prellenado para corregirlo).
-// → { cycle, missing: [{ currency, estimateGross, registrado }] }
+// → { cycle, missing: [{ currency, estimateGross, registrado, dueDate }] }
+// `dueDate` (F12) es la fecha que ella ya había registrado para ESA moneda, si
+// la hubo: al entrar a corregir el monto no se le pierde la fecha que puso.
 export function buildStatementEntry(card, expenses, statements, now = new Date()) {
   if (!card || card.type !== "credito") return null;
   const closed = getClosedCycle(card, now);
   const missing = cardCurrencies(card).map(cur => {
     const previo = findStatement(statements, card.id, closed.key, cur);
+    const dueDate = previo && previo.dueDate ? new Date(previo.dueDate) : null;
     return {
       currency: cur,
       estimateGross: openingAt(card, closed.end, cur) + spentSince(card, expenses, closed.end, cur),
       registrado: previo ? previo.amount : null,
+      dueDate: dueDate && !isNaN(dueDate) ? dueDate : null,
     };
   });
   return missing.length ? { cycle: closed, missing } : null;

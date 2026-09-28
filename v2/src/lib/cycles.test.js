@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getCycleFor, getCycleSpend, getLineUsage, getNextPayment, getUpcomingTotal, getCardLine, cardCurrencies, hasLine, getStatementPrompt, findStatement, getClosedCycle, curOf } from "./cycles";
+import { getCycleFor, getCycleSpend, getLineUsage, getNextPayment, getUpcomingTotal, getCardLine, cardCurrencies, hasLine, getStatementPrompt, findStatement, getClosedCycle, curOf, buildStatementEntry } from "./cycles";
 
 const card = (over = {}) => ({
   id: "card-1", type: "credito", name: "Visa BCP",
@@ -654,5 +654,40 @@ describe("openingDate por línea", () => {
   it("sin fecha propia, la línea usa la fecha de la tarjeta", () => {
     const vieja = card({ openingDate: new Date(2026, 8, 20).toISOString(), lines: { PEN: { creditLine: 3000, openingBalance: 100 } } });
     expect(getLineUsage(vieja, expenses, [], "PEN").balance).toBe(100); // el gasto del 10 sep queda antes de la foto
+  });
+});
+
+// F12: al reabrir "Lo que debo" para corregir un monto, la fecha que ella puso
+// para ESA moneda no se pierde.
+describe("buildStatementEntry — fecha ya registrada por moneda", () => {
+  const c = card({ lines: { PEN: { creditLine: 3000, openingBalance: 0 }, USD: { creditLine: 1000, openingBalance: 0 } } });
+  const expenses = [
+    { id: "e1", amount: 200, paymentMethodId: "card-1", date: new Date(2026, 8, 10).toISOString() },
+    { id: "e2", amount: 80, paymentMethodId: "card-1", date: new Date(2026, 8, 11).toISOString(), currency: "USD" },
+  ];
+
+  it("devuelve la dueDate de cada moneda por separado", () => {
+    const sts = [
+      { id: "s1", cardId: "card-1", cycleKey: "2026-09-25", currency: "PEN", amount: 210, dueDate: new Date(2026, 9, 15).toISOString() },
+      { id: "s2", cardId: "card-1", cycleKey: "2026-09-25", currency: "USD", amount: 85, dueDate: new Date(2026, 9, 28).toISOString() },
+    ];
+    const entry = buildStatementEntry(c, expenses, sts, NOW);
+    const pen = entry.missing.find(m => m.currency === "PEN");
+    const usd = entry.missing.find(m => m.currency === "USD");
+    expect(ymd(pen.dueDate)).toBe("2026-10-15");
+    expect(ymd(usd.dueDate)).toBe("2026-10-28");
+    expect(pen.registrado).toBe(210);
+    expect(usd.registrado).toBe(85);
+  });
+
+  it("sin nada registrado la fecha viene null y la hoja usa la calculada", () => {
+    const entry = buildStatementEntry(c, expenses, [], NOW);
+    expect(entry.missing.every(m => m.dueDate === null)).toBe(true);
+    expect(entry.missing.every(m => m.registrado === null)).toBe(true);
+  });
+
+  it("una dueDate ilegible no rompe nada", () => {
+    const sts = [{ id: "s1", cardId: "card-1", cycleKey: "2026-09-25", currency: "PEN", amount: 210, dueDate: "qué fecha" }];
+    expect(buildStatementEntry(c, expenses, sts, NOW).missing.find(m => m.currency === "PEN").dueDate).toBe(null);
   });
 });

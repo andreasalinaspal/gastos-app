@@ -6,6 +6,7 @@ import { StatementBanner, StatementSheet, StatementDiffNote, nextPaymentSourceLa
 import { buildCatMap } from "../../state/selectors";
 import { useStore } from "../../state/store";
 import { fmtWith } from "../../lib/format";
+import { EquivalenteSoles } from "../shared/Equivalente";
 
 // Etiquetas de moneda: los dólares siempre con US$, nunca con el símbolo global.
 const CUR_LABEL = { PEN: "soles", USD: "dólares" };
@@ -132,6 +133,11 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
             {next.status === "por-vencer"
               ? <>Próximo pago: <strong style={{ color: C.black }}>{fmtCur(next.amount)}</strong> el {fmtDay(next.dueDate)} · {nextPaymentSourceLabel(next.source)}</>
               : <>Próximo pago: <strong style={{ color: C.green }}>al día ✅</strong></>}
+            {/* Cuánto sería ese pago en soles. Solo para tenerlo: no entra en
+                ninguna cuenta en soles. */}
+            {activeCur === "USD" && next.status === "por-vencer" && (
+              <EquivalenteSoles montoUSD={next.amount} card={card} data={data} nota hoy={now ? new Date(now) : undefined} />
+            )}
           </div>
         )}
         {esReal && <StatementDiffNote next={next} fmt={fmt} currency={activeCur} />}
