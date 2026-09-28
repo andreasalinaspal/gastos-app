@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "./supabase";
 import { C, FONT_TITLE, FONT_BODY } from "./theme";
 import { HomeIcon, CalIcon, WalletIcon, GearIcon, PlusIcon } from "./components/shared/icons";
-import { MONTHS, getCurrentMonthLabel, getMonthLabel, monthLabelOf, toDateInput, parseDateInput, scanDateToInput } from "./lib/dates";
+import { MONTHS, getCurrentMonthLabel, getMonthLabel, monthLabelOf, toDateInput, parseDateInput, scanDateToInput, normalizaDiaDelMes } from "./lib/dates";
 import { genId, fmtWith } from "./lib/format";
 import { DEFAULT_CATS_GASTOS, DEFAULT_CATS_INGRESOS, initData } from "./constants";
 import { parseAmount, extractDescription } from "./lib/voice";
@@ -68,6 +68,9 @@ export default function App() {
   const [editFixedExpTypeVal, setEditFixedExpTypeVal] = useState("");
   const [showAddFixedIncome, setShowAddFixedIncome] = useState(false);
   const [newFixedIncomeName, setNewFixedIncomeName] = useState("");
+  const [newFixedIncomeDay, setNewFixedIncomeDay] = useState(""); // F14: día opcional
+  const [editIncomeDayId, setEditIncomeDayId] = useState(null);
+  const [editIncomeDayVal, setEditIncomeDayVal] = useState("");
   const [confirm, setConfirm] = useState(null); // { message, onConfirm }
   const [editExpId, setEditExpId] = useState(null);
   const [editExpAmt, setEditExpAmt] = useState("");
@@ -580,12 +583,25 @@ export default function App() {
   const saveFixedExpType = (id, type) => { setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, type } : f) })); setEditFixedExpType(null); };
   const deleteFixedIncome = (id) => setConfirm({ message: "¿Eliminar este ingreso fijo?", onConfirm: () => { setData(p => ({ ...p, incomeFixed: p.incomeFixed.filter(i => i.id !== id) })); showToast("Ingreso fijo eliminado"); }});
   const saveFixedIncomeName = (id) => { setData(p => ({ ...p, incomeFixed: p.incomeFixed.map(i => i.id === id ? { ...i, name: editFixedIncomeNameVal } : i) })); setEditFixedIncomeName(null); setEditFixedIncomeNameVal(""); };
+  // F14: el día en que entra el ingreso. Opcional — si lo dejó vacío, el ingreso
+  // simplemente no tiene fecha y la app no se inventa ninguna.
+  const saveIncomeDay = (id) => {
+    const raw = editIncomeDayVal.trim();
+    const dia = raw === "" ? null : normalizaDiaDelMes(raw);
+    if (raw !== "" && dia === null) { showToast("El día tiene que estar entre 1 y 31"); return; }
+    setData(p => ({ ...p, incomeFixed: p.incomeFixed.map(i => i.id === id ? { ...i, day: dia } : i) }));
+    setEditIncomeDayId(null); setEditIncomeDayVal("");
+    showToast(dia ? `Entra el ${dia} de cada mes` : "Ingreso sin fecha");
+  };
   const addFixedIncome = () => {
     if (!newFixedIncomeName.trim()) return;
     const n = newFixedIncomeName.trim();
-    setConfirm({ message: `¿Agregar "${n}" como ingreso fijo?`, onConfirm: () => {
-      setData(p => ({ ...p, incomeFixed: [...p.incomeFixed, { id: genId(), name: n, amount: 0, month: curMonth }] }));
-      setNewFixedIncomeName(""); setShowAddFixedIncome(false);
+    const raw = newFixedIncomeDay.trim();
+    const dia = raw === "" ? null : normalizaDiaDelMes(raw);
+    if (raw !== "" && dia === null) { showToast("El día tiene que estar entre 1 y 31"); return; }
+    setConfirm({ message: dia ? `¿Agregar "${n}" como ingreso fijo que entra el ${dia}?` : `¿Agregar "${n}" como ingreso fijo?`, onConfirm: () => {
+      setData(p => ({ ...p, incomeFixed: [...p.incomeFixed, { id: genId(), name: n, amount: 0, month: curMonth, day: dia }] }));
+      setNewFixedIncomeName(""); setNewFixedIncomeDay(""); setShowAddFixedIncome(false);
       showToast("Ingreso fijo agregado");
     }});
   };
@@ -961,6 +977,8 @@ export default function App() {
           editIncomeId={editIncomeId} setEditIncomeId={setEditIncomeId} editIncomeAmt={editIncomeAmt} setEditIncomeAmt={setEditIncomeAmt} saveIncomeAmt={saveIncomeAmt}
           editFixedIncomeName={editFixedIncomeName} setEditFixedIncomeName={setEditFixedIncomeName} editFixedIncomeNameVal={editFixedIncomeNameVal} setEditFixedIncomeNameVal={setEditFixedIncomeNameVal} saveFixedIncomeName={saveFixedIncomeName}
           showAddFixedIncome={showAddFixedIncome} setShowAddFixedIncome={setShowAddFixedIncome} newFixedIncomeName={newFixedIncomeName} setNewFixedIncomeName={setNewFixedIncomeName} addFixedIncome={addFixedIncome} deleteFixedIncome={deleteFixedIncome}
+          newFixedIncomeDay={newFixedIncomeDay} setNewFixedIncomeDay={setNewFixedIncomeDay}
+          editIncomeDayId={editIncomeDayId} setEditIncomeDayId={setEditIncomeDayId} editIncomeDayVal={editIncomeDayVal} setEditIncomeDayVal={setEditIncomeDayVal} saveIncomeDay={saveIncomeDay}
           showAddExtra={showAddExtra} setShowAddExtra={setShowAddExtra} newExtraName={newExtraName} setNewExtraName={setNewExtraName} newExtraAmt={newExtraAmt} setNewExtraAmt={setNewExtraAmt} addExtra={addExtra} deleteExtra={deleteExtra}
           editExtraId={editExtraId} setEditExtraId={setEditExtraId} editExtraName={editExtraName} setEditExtraName={setEditExtraName} editExtraAmt={editExtraAmt} setEditExtraAmt={setEditExtraAmt}
           editExtraCategory={editExtraCategory} setEditExtraCategory={setEditExtraCategory} saveExtraEdit={saveExtraEdit}

@@ -1,12 +1,15 @@
 import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { PlusIcon, TrashIcon } from "../shared/icons";
 import { useStore } from "../../state/store";
+import { ordenaPorDia, diaDeIngreso } from "../../lib/ingresos";
 
 export default function Ingresos({
   fmt, curMonth,
   editIncomeId, setEditIncomeId, editIncomeAmt, setEditIncomeAmt, saveIncomeAmt,
   editFixedIncomeName, setEditFixedIncomeName, editFixedIncomeNameVal, setEditFixedIncomeNameVal, saveFixedIncomeName,
   showAddFixedIncome, setShowAddFixedIncome, newFixedIncomeName, setNewFixedIncomeName, addFixedIncome, deleteFixedIncome,
+  newFixedIncomeDay, setNewFixedIncomeDay,
+  editIncomeDayId, setEditIncomeDayId, editIncomeDayVal, setEditIncomeDayVal, saveIncomeDay,
   showAddExtra, setShowAddExtra, newExtraName, setNewExtraName, newExtraAmt, setNewExtraAmt, addExtra, deleteExtra,
   editExtraId, setEditExtraId, editExtraName, setEditExtraName, editExtraAmt, setEditExtraAmt,
   editExtraCategory, setEditExtraCategory, saveExtraEdit,
@@ -28,14 +31,20 @@ export default function Ingresos({
           </div>
           {showAddFixedIncome && (
             <div style={{ ...cardStyle, padding: 16, marginBottom: 12, animation: "slideUp 0.2s ease" }}>
-              <input type="text" placeholder="Nombre (ej: Sueldo empresa)" value={newFixedIncomeName} onChange={e => setNewFixedIncomeName(e.target.value)} style={{ ...inputStyle, marginBottom: 12, color: C.black }} />
+              <input type="text" placeholder="Nombre (ej: Sueldo empresa)" value={newFixedIncomeName} onChange={e => setNewFixedIncomeName(e.target.value)} style={{ ...inputStyle, marginBottom: 10, color: C.black }} />
+              {/* F14: día en que entra. Opcional a propósito: puede registrar hoy
+                  un ingreso que entra en otra fecha, o no saber todavía cuándo. */}
+              <input type="number" inputMode="numeric" min={1} max={31} placeholder="¿Qué día entra? (opcional)" value={newFixedIncomeDay} onChange={e => setNewFixedIncomeDay(e.target.value)} style={{ ...inputStyle, marginBottom: 6, color: C.black }} />
+              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 12 }}>Día del mes, del 1 al 31. Si todavía no lo sabes, déjalo vacío y se lo pones después.</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={addFixedIncome} style={{ flex: 1, padding: 12, borderRadius: 12, background: C.green, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Agregar</button>
-                <button onClick={() => { setShowAddFixedIncome(false); setNewFixedIncomeName(""); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: "#E0DCD4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                <button onClick={() => { setShowAddFixedIncome(false); setNewFixedIncomeName(""); setNewFixedIncomeDay(""); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: "#E0DCD4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
               </div>
             </div>
           )}
-          {data.incomeFixed.filter(i => i.month === curMonth).map(i => (
+          {/* Ordenados por día (F14): la lista se lee como el calendario del mes.
+              Los que todavía no tienen fecha quedan al final. */}
+          {ordenaPorDia(data.incomeFixed.filter(i => i.month === curMonth)).map(i => (
             <div key={i.id} style={{ ...cardStyle, padding: "16px", marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ flex: 1 }}>
@@ -48,6 +57,20 @@ export default function Ingresos({
                     <div onClick={() => { setEditFixedIncomeName(i.id); setEditFixedIncomeNameVal(i.name); }} style={{ cursor: "pointer" }}>
                       <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>{i.name}</div>
                       <div style={{ fontSize: 12, color: C.muted }}>Mensual fijo · toca para editar</div>
+                    </div>
+                  )}
+                  {/* F14: el día en que entra, con el mismo patrón de edición en línea */}
+                  {editIncomeDayId === i.id ? (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8 }}>
+                      <input type="number" inputMode="numeric" min={1} max={31} value={editIncomeDayVal} onChange={e => setEditIncomeDayVal(e.target.value)} placeholder="Día" autoFocus style={{ ...inputStyle, padding: "6px 10px", fontSize: 14, color: C.black, width: 80 }} />
+                      <button onClick={() => saveIncomeDay(i.id)} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>OK</button>
+                      <button onClick={() => { setEditIncomeDayId(null); setEditIncomeDayVal(""); }} style={{ background: "none", border: "none", color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                    </div>
+                  ) : (
+                    <div onClick={() => { setEditIncomeDayId(i.id); setEditIncomeDayVal(diaDeIngreso(i) !== null ? String(diaDeIngreso(i)) : ""); }} style={{ cursor: "pointer", marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, background: diaDeIngreso(i) !== null ? "#E8F5EE" : "#F2F0EA", borderRadius: 20, padding: "3px 10px" }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: diaDeIngreso(i) !== null ? C.green : C.muted }}>
+                        {diaDeIngreso(i) !== null ? `📅 Entra el ${diaDeIngreso(i)}` : "📅 Sin fecha"}
+                      </span>
                     </div>
                   )}
                 </div>
