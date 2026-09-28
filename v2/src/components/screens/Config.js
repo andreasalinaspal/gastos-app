@@ -3,6 +3,7 @@ import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { initData } from "../../constants";
 import { migrateData } from "../../lib/migrate";
 import { loadLastSyncAt } from "../../lib/localSession";
+import { LESSONS } from "../../content/lessons";
 import { useStore } from "../../state/store";
 
 const cfgRowStyle = { display: "flex", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #F0EDE4", cursor: "pointer", gap: 14 };
@@ -107,6 +108,30 @@ export default function Config({ fmt, curMonth, setSubScreen, setConfirm, showTo
               <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Medios de pago</div>
               <div style={{ fontSize: 12, color: C.muted }}>
                 {(() => { const n = (data.paymentMethods || []).filter(m => m.type === "credito" && !m.archived).length; return n === 1 ? "1 tarjeta de crédito activa" : `${n} tarjetas de crédito activas`; })()}
+              </div>
+            </div>
+            <span style={{ fontSize: 20, color: C.muted }}>›</span>
+          </div>
+        </div>
+        {/* Aprender — educación crediticia y simulador, fuera del Inicio para no recargarlo */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "14px 20px 8px" }}>Aprender</div>
+        <div style={{ ...cardStyle, marginBottom: 12, overflow: "hidden", padding: 0 }}>
+          <div onClick={() => setSubScreen("aprende")} style={cfgRowStyle}>
+            <span style={{ fontSize: 22 }}>📚</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Aprende</div>
+              <div style={{ fontSize: 12, color: C.muted }}>
+                {(data.education?.completedLessons || []).length} de {LESSONS.length} lecciones · historial crediticio sin floro
+              </div>
+            </div>
+            <span style={{ fontSize: 20, color: C.muted }}>›</span>
+          </div>
+          <div onClick={() => setSubScreen("simulador")} style={{ ...cfgRowStyle, borderBottom: "none" }}>
+            <span style={{ fontSize: 22 }}>🎮</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Practica con una tarjeta</div>
+              <div style={{ fontSize: 12, color: C.muted }}>
+                {data.education?.simulatorState ? `Score simulado: ${data.education.simulatorState.score}/100` : "Una tarjeta de mentira para aprender sin riesgo"}
               </div>
             </div>
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
