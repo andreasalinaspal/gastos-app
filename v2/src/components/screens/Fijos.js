@@ -4,6 +4,7 @@ import { CheckIcon, PlusIcon, TrashIcon } from "../shared/icons";
 import { subStyle, subHeader } from "../shared/subnav";
 import { genId } from "../../lib/format";
 import { buildCatMap, getMonthData } from "../../state/selectors";
+import { getMonthLabel, getMonthShort } from "../../lib/dates";
 import { useStore } from "../../state/store";
 
 const typeLabel = (t) => t === "manual" ? "Lo pago yo" : t === "debito" ? "Debito automatico" : "Descuento sueldo";
@@ -281,21 +282,46 @@ export function PresupuestosScreen({ subScreen, setSubScreen, fmt, catSpend }) {
 
 export function AllCatsScreen({ subScreen, setSubScreen, fmt, setSelectedCatDetail }) {
   const data = useStore(s => s.data);
+  // Por mes: el total histórico no dice nada sobre cómo se repartió el gasto.
+  const [monthOff, setMonthOff] = useState(0);
+  const tabs = [
+    { label: "Este mes", val: 0 },
+    { label: getMonthShort(-1).split(" ")[0], val: -1 },
+    { label: getMonthShort(-2).split(" ")[0], val: -2 },
+    { label: "Todo", val: "all" },
+  ];
+  const exps = monthOff === "all"
+    ? data.expenses
+    : data.expenses.filter(e => e.month === getMonthLabel(monthOff));
+  const cats = buildCatMap(exps);
+  const total = cats.reduce((s, c) => s + c.amount, 0);
+  const max = cats[0]?.amount || 1;
+  const rotulo = monthOff === "all" ? "Todo el histórico" : getMonthLabel(monthOff);
+
   return (
       <div style={subStyle(subScreen, "all-cats")}>
         {subHeader("Categorías", () => setSubScreen(null))}
+        <div style={{ display: "flex", gap: 0, padding: "0 16px", marginBottom: 14, overflowX: "auto" }}>
+          {tabs.map(t => (
+            <button key={t.label} onClick={() => setMonthOff(t.val)} style={{ padding: "8px 14px", fontSize: 13, fontWeight: monthOff === t.val ? 700 : 500, color: monthOff === t.val ? C.purple : C.muted, background: "none", border: "none", borderBottom: monthOff === t.val ? "2.5px solid " + C.purple : "2.5px solid transparent", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>{t.label}</button>
+          ))}
+        </div>
         <div style={{ padding: "0 16px" }}>
-          <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Total histórico por categoría</div>
-          {buildCatMap(data.expenses).map((cat, i) => {
-            const max = buildCatMap(data.expenses)[0]?.amount || 1;
+          <div style={{ ...cardStyle, padding: "16px 18px", marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>{rotulo}</div>
+            <div style={{ fontFamily: FONT_TITLE, fontSize: 30, fontWeight: 900, color: C.black, marginTop: 2 }}>{fmt(total)}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{exps.length} gasto{exps.length !== 1 ? "s" : ""} en {cats.length} categoría{cats.length !== 1 ? "s" : ""}</div>
+          </div>
+          {cats.map((cat, i) => {
             const pct = Math.round((cat.amount / max) * 100);
+            const share = total > 0 ? Math.round((cat.amount / total) * 100) : 0;
             return (
               <div key={cat.name} onClick={() => setSelectedCatDetail(cat)} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
                   <div style={{ width: 40, height: 40, borderRadius: 12, background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{cat.emoji}</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{cat.name}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{cat.expenses.length} registro{cat.expenses.length !== 1 ? "s" : ""}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{cat.expenses.length} registro{cat.expenses.length !== 1 ? "s" : ""} · {share}% del total</div>
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 800, color: C.orange }}>-{fmt(cat.amount)}</div>
                 </div>
@@ -305,9 +331,10 @@ export function AllCatsScreen({ subScreen, setSubScreen, fmt, setSelectedCatDeta
               </div>
             );
           })}
-          {buildCatMap(data.expenses).length === 0 && <div style={{ textAlign: "center", color: C.muted, fontSize: 14, padding: 40 }}>Sin registros aún</div>}
+          {cats.length === 0 && <div style={{ textAlign: "center", color: C.muted, fontSize: 14, padding: 40 }}>Sin gastos en {rotulo.toLowerCase()}</div>}
           <div style={{ height: "calc(40px + env(safe-area-inset-bottom, 20px))" }} />
         </div>
       </div>
   );
 }
+
