@@ -65,8 +65,11 @@ export default function Ingresos({
               <input type="text" placeholder="Nombre (ej: Sueldo empresa)" value={newFixedIncomeName} onChange={e => setNewFixedIncomeName(e.target.value)} style={{ ...inputStyle, marginBottom: 10, color: C.black }} />
               {/* F14: día en que entra. Opcional a propósito: puede registrar hoy
                   un ingreso que entra en otra fecha, o no saber todavía cuándo. */}
-              <input type="number" inputMode="numeric" min={1} max={31} placeholder="¿Qué día entra? (opcional)" value={newFixedIncomeDay} onChange={e => setNewFixedIncomeDay(e.target.value)} style={{ ...inputStyle, marginBottom: 6, color: C.black }} />
-              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 12 }}>Día del mes, del 1 al 31. Si todavía no lo sabes, déjalo vacío y se lo pones después.</div>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 4 }}>¿Qué día entra? (opcional)</div>
+                <input type="date" value={newFixedIncomeDay} onChange={e => setNewFixedIncomeDay(e.target.value)} {...(rangoDelMes(curMonth) ? { min: rangoDelMes(curMonth).min, max: rangoDelMes(curMonth).max } : {})} style={{ ...inputStyle, color: C.black }} />
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 12 }}>La fecha de este mes en que te entra. Cada mes la confirmas por si cae distinto. Si todavía no la sabes, déjala vacía y se la pones después.</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={addFixedIncome} style={{ flex: 1, padding: 12, borderRadius: 12, background: C.green, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Agregar</button>
                 <button onClick={() => { setShowAddFixedIncome(false); setNewFixedIncomeName(""); setNewFixedIncomeDay(""); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: "#E0DCD4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>

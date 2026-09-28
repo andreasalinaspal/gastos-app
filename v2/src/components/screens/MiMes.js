@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { TrashIcon } from "../shared/icons";
 import { MONTHS_SHORT, DAYS, getMonthShort } from "../../lib/dates";
@@ -16,6 +17,9 @@ export default function MiMes({
   saveExpenseEdit, deleteExpense,
 }) {
   const data = useStore(s => s.data);
+  // Los registros se leen de lo más nuevo a lo más viejo, que es lo que se
+  // quiere ver primero; el orden inverso queda a un toque.
+  const [ordenRegistros, setOrdenRegistros] = useState("nuevo");
     const mtabs = [{ label: "Este mes", val: 0 }, { label: getMonthShort(-1), val: -1 }, { label: getMonthShort(-2), val: -2 }, { label: "Historico", val: "hist" }];
     const d = monthTab === "hist" ? getMonthData(0) : getMonthData(monthTab);
     const isNeg = d.balance < 0;
@@ -97,9 +101,23 @@ export default function MiMes({
               </div>
             </div>
             <div style={{ padding: "0 24px" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1.5, marginBottom: 12, textTransform: "uppercase" }}>Registros del mes</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase" }}>Registros del mes</div>
+                {d.exps.length > 1 && (
+                  <button
+                    onClick={() => setOrdenRegistros(o => (o === "nuevo" ? "antiguo" : "nuevo"))}
+                    title={ordenRegistros === "nuevo" ? "Mostrando primero los más nuevos" : "Mostrando primero los más antiguos"}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "#fff", border: "1.5px solid #E0DCD4", borderRadius: 20, padding: "5px 11px", fontSize: 11.5, fontWeight: 700, color: C.purple, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+                  >
+                    {ordenRegistros === "nuevo" ? "↓ Recientes" : "↑ Antiguos"}
+                  </button>
+                )}
+              </div>
               {d.exps.length === 0 && <div style={{ ...cardStyle, textAlign: "center", color: C.muted, fontSize: 14, padding: 24 }}>Sin gastos registrados</div>}
-              {d.exps.map(e => { const dt = new Date(e.date); return (
+              {[...d.exps].sort((a, b) => {
+                const diff = new Date(b.date) - new Date(a.date);
+                return ordenRegistros === "nuevo" ? diff : -diff;
+              }).map(e => { const dt = new Date(e.date); return (
                 <div key={e.id} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10 }}>
                   {editExpId === e.id ? (
                     <div>

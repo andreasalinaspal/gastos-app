@@ -649,14 +649,16 @@ export default function App() {
   const addFixedIncome = () => {
     if (!newFixedIncomeName.trim()) return;
     const n = newFixedIncomeName.trim();
-    const raw = newFixedIncomeDay.trim();
-    const dia = raw === "" ? null : normalizaDiaDelMes(raw);
-    if (raw !== "" && dia === null) { showToast("El día tiene que estar entre 1 y 31"); return; }
-    setConfirm({ message: dia ? `¿Agregar "${n}" como ingreso fijo que entra el ${dia}?` : `¿Agregar "${n}" como ingreso fijo?`, onConfirm: () => {
+    const raw = (newFixedIncomeDay || "").trim();
+    const fecha = raw === "" ? null : parseDateInput(raw);
+    if (raw !== "" && !fecha) { showToast("Esa fecha no es válida"); return; }
+    const dia = fecha ? fecha.getDate() : null;
+    const cuando = fecha ? fecha.toLocaleDateString("es-PE", { day: "numeric", month: "long" }) : null;
+    setConfirm({ message: cuando ? `¿Agregar "${n}" como ingreso fijo que entra el ${cuando}?` : `¿Agregar "${n}" como ingreso fijo?`, onConfirm: () => {
       // Los ingresos fijos van una fila por mes: si no escribió día, se hereda
       // el que ella ya le había puesto a ESE mismo ingreso en otro mes, para que
       // el dato no se pierda al cambiar de mes.
-      setData(p => ({ ...p, incomeFixed: [...p.incomeFixed, { id: genId(), name: n, amount: 0, month: curMonth, day: dia !== null ? dia : diaHeredado(p.incomeFixed, n) }] }));
+      setData(p => ({ ...p, incomeFixed: [...p.incomeFixed, { id: genId(), name: n, amount: 0, month: curMonth, date: fecha ? fecha.toISOString() : null, day: dia !== null ? dia : diaHeredado(p.incomeFixed, n) }] }));
       setNewFixedIncomeName(""); setNewFixedIncomeDay(""); setShowAddFixedIncome(false);
       showToast("Ingreso fijo agregado");
     }});

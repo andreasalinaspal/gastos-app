@@ -107,7 +107,7 @@ export function aplicarPlantilla(data, mesActual, seleccion) {
     const name = String((i && i.name) || "").trim();
     if (!name || yaIng.has(clave(name))) continue;
     yaIng.add(clave(name));
-    nuevosIng.push({ id: genId(), name, amount: Number(i.amount) || 0, month: mesActual, day: normalizaDiaDelMes(i.day) });
+    nuevosIng.push({ id: genId(), name, amount: Number(i.amount) || 0, month: mesActual, date: i.date || null, day: normalizaDiaDelMes(i.day) });
   }
 
   const yaFij = new Set(filasDelMes(data.fixed, mesActual).map(f => clave(f.name)));

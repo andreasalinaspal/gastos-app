@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { C, FONT_TITLE, inputStyle } from "../../theme";
 import { useKeyboardInset, sheetStyle } from "../../lib/useKeyboardInset";
+import { parseEtiqueta } from "../../lib/mesNuevo";
+import { toDateInput, diasEnMes, fechaDelDiaEnMes } from "../../lib/dates";
 
 // F15: la hoja que pregunta, al empezar el mes, cuáles fijos siguen.
 //
@@ -29,7 +31,7 @@ function Switch({ on, onToggle, label }) {
 
 const labelCss = { fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 };
 
-function Fila({ fila, onToggle, onMonto, onDia, conDia }) {
+function Fila({ fila, onToggle, onMonto, onDia, conDia, rango }) {
   const on = fila.on;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 0", borderBottom: "1px solid #F0EDE4", opacity: on ? 1 : 0.5 }}>
@@ -38,11 +40,12 @@ function Fila({ fila, onToggle, onMonto, onDia, conDia }) {
         <div style={{ fontSize: 14.5, fontWeight: 600, color: C.black, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fila.name}</div>
         {conDia && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
-            <span style={{ fontSize: 11.5, color: C.muted }}>Entra el día</span>
+            <span style={{ fontSize: 11.5, color: C.muted }}>Entra el</span>
             <input
-              type="number" inputMode="numeric" min={1} max={31} placeholder="—"
+              type="date"
               value={fila.day} onChange={e => onDia(e.target.value)} disabled={!on}
-              style={{ ...inputStyle, width: 62, padding: "4px 8px", fontSize: 13, color: C.black, textAlign: "center" }}
+              {...(rango ? { min: rango.min, max: rango.max } : {})}
+              style={{ ...inputStyle, flex: 1, minWidth: 0, padding: "4px 8px", fontSize: 13, color: C.black }}
             />
           </div>
         )}
@@ -61,8 +64,21 @@ function Fila({ fila, onToggle, onMonto, onDia, conDia }) {
 // la hoja y marcan el mes como preguntado: no se insiste.
 export function MesNuevoSheet({ mesActual, mesOrigen, plantilla, fmt, onConfirm, onDismiss }) {
   const kb = useKeyboardInset();
+  // El día venía del mes anterior; acá se propone como fecha real del mes nuevo.
+  const rangoMes = (() => {
+    const p = parseEtiqueta(mesActual);
+    if (!p) return null;
+    const primero = new Date(p.anio, p.mes, 1, 12, 0, 0, 0);
+    const ultimo = new Date(p.anio, p.mes, diasEnMes(p.anio, p.mes), 12, 0, 0, 0);
+    return { min: toDateInput(primero), max: toDateInput(ultimo), ref: primero };
+  })();
+  const fechaPropuesta = (dia) => {
+    if (dia === null || dia === undefined || dia === "" || !rangoMes) return "";
+    const f = fechaDelDiaEnMes(dia, rangoMes.ref);
+    return f ? toDateInput(f) : "";
+  };
   const [ingresos, setIngresos] = useState(() =>
-    (plantilla.ingresos || []).map((i, k) => ({ key: "i" + k, on: true, name: i.name, amount: i.amount > 0 ? String(i.amount) : "", day: i.day !== null && i.day !== undefined ? String(i.day) : "" }))
+    (plantilla.ingresos || []).map((i, k) => ({ key: "i" + k, on: true, name: i.name, amount: i.amount > 0 ? String(i.amount) : "", day: fechaPropuesta(i.day) }))
   );
   const [gastos, setGastos] = useState(() =>
     (plantilla.gastos || []).map((g, k) => ({ key: "g" + k, on: true, name: g.name, type: g.type, amount: g.amount > 0 ? String(g.amount) : "" }))
@@ -76,7 +92,11 @@ export function MesNuevoSheet({ mesActual, mesOrigen, plantilla, fmt, onConfirm,
   const totalIng = ingresos.filter(f => f.on).reduce((s, f) => s + (Number(f.amount) || 0), 0);
 
   const confirmar = () => onConfirm({
-    ingresos: ingresos.filter(f => f.on).map(f => ({ name: f.name, amount: Number(f.amount) || 0, day: f.day })),
+    ingresos: ingresos.filter(f => f.on).map(f => {
+      const fecha = f.day ? new Date(f.day + "T12:00:00") : null;
+      const valida = fecha && !isNaN(fecha.getTime());
+      return { name: f.name, amount: Number(f.amount) || 0, day: valida ? fecha.getDate() : null, date: valida ? fecha.toISOString() : null };
+    }),
     gastos: gastos.filter(f => f.on).map(f => ({ name: f.name, type: f.type, amount: Number(f.amount) || 0 })),
   });
 
@@ -95,7 +115,7 @@ export function MesNuevoSheet({ mesActual, mesOrigen, plantilla, fmt, onConfirm,
           <div style={{ marginBottom: 18 }}>
             <div style={labelCss}>Ingresos fijos</div>
             {ingresos.map(f => (
-              <Fila key={f.key} fila={f} conDia
+              <Fila key={f.key} fila={f} conDia rango={rangoMes}
                 onToggle={() => patchIng(f.key, { on: !f.on })}
                 onMonto={v => patchIng(f.key, { amount: v })}
                 onDia={v => patchIng(f.key, { day: v })}
