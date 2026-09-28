@@ -1,8 +1,8 @@
-import { C, FONT_TITLE, inputStyle } from "../../theme";
+import { C, FONT_TITLE, inputStyle, usageColor } from "../../theme";
 import { TrashIcon } from "../shared/icons";
 import { getToday } from "../../lib/dates";
 import { buildCatMap } from "../../state/selectors";
-import { getCycleFor, getCycleSpend, getUpcomingTotal } from "../../lib/cycles";
+import { getCycleFor, getCycleSpend, getUpcomingTotal, getLineUsage } from "../../lib/cycles";
 import { plazoLabel } from "./ProximosPagos";
 import { useStore } from "../../state/store";
 import { PaymentMethodPicker, PmChip } from "../shared/PaymentMethodPicker";
@@ -97,31 +97,31 @@ export default function Home({
             </div>
           );
         })()}
-        {/* Tarjetas de crédito: saldo del ciclo + progreso → abre pantalla de ciclo */}
+        {/* Tarjetas de crédito: tira horizontal para no empujar los movimientos.
+            El número grande es el DISPONIBLE, que es lo que se mira antes de gastar. */}
         {creditCards.length > 0 && (
-          <div style={{ padding: "10px 20px 0" }}>
-            {creditCards.map(card => {
-              const cycle = getCycleFor(card, new Date());
-              const spend = getCycleSpend(data.expenses, card, cycle.key);
-              const accent = card.color || C.purple;
-              return (
-                <div key={card.id} onClick={() => setSubScreen("card-" + card.id)} style={{ background: "rgba(255,255,255,0.94)", borderRadius: 16, padding: "12px 16px", marginBottom: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 2px 10px rgba(0,0,0,0.12)" }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 12, background: accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>💳</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.black, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.name}</div>
-                      <div style={{ fontFamily: FONT_TITLE, fontSize: 16, fontWeight: 900, color: C.black, whiteSpace: "nowrap" }}>{fmt(spend)}</div>
+          <div style={{ padding: "10px 0 0" }}>
+            <div style={{ display: "flex", gap: 10, overflowX: "auto", padding: "0 20px 4px", WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory" }}>
+              {creditCards.map(card => {
+                const cycle = getCycleFor(card, new Date());
+                const { available, pct } = getLineUsage(card, data.expenses, data.cardPayments);
+                const accent = card.color || C.purple;
+                return (
+                  <div key={card.id} onClick={() => setSubScreen("card-" + card.id)} style={{ flex: "0 0 auto", width: 152, scrollSnapAlign: "start", background: "rgba(255,255,255,0.94)", borderRadius: 16, padding: "12px 14px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.12)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <div style={{ width: 26, height: 26, borderRadius: 8, background: accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>💳</div>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: C.black, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.name}</div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
-                      <div style={{ flex: 1, height: 5, background: "#F0EDE4", borderRadius: 99, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${Math.min(Math.round((cycle.dayOfCycle / cycle.totalDays) * 100), 100)}%`, background: accent, borderRadius: 99 }} />
-                      </div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, whiteSpace: "nowrap" }}>Día {cycle.dayOfCycle} de {cycle.totalDays}</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 0.8, textTransform: "uppercase" }}>Disponible</div>
+                    <div style={{ fontFamily: FONT_TITLE, fontSize: 19, fontWeight: 900, color: C.black, letterSpacing: -0.5, lineHeight: 1.2 }}>{fmt(available)}</div>
+                    <div style={{ height: 5, background: "#F0EDE4", borderRadius: 99, overflow: "hidden", marginTop: 7 }}>
+                      <div style={{ height: "100%", width: `${Math.min(Math.round(pct), 100)}%`, background: usageColor(pct), borderRadius: 99 }} />
                     </div>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: C.muted, marginTop: 5, whiteSpace: "nowrap" }}>{Math.round(pct)}% usado · día {cycle.dayOfCycle}/{cycle.totalDays}</div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
         {/* Recent expenses */}
