@@ -7,6 +7,8 @@ import { fmtWith } from "../../lib/format";
 import { nextPaymentSourceLabel } from "../shared/StatementSheet";
 import { EquivalenteSoles } from "../shared/Equivalente";
 import { tasaVigente } from "../../lib/fx";
+import { chequeoDeIngresos } from "../../lib/ingresos";
+import { getCurrentMonthLabel } from "../../lib/dates";
 
 const fmtLong = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "long" });
 
@@ -25,8 +27,44 @@ export function plazoLabel(days) {
   return "vence " + faltanLabel(days);
 }
 
+// ── F14: ¿le llega la plata antes del vencimiento? ───────────────────────────
+// No basta con que el mes cuadre: si la tarjeta vence ANTES de que le entre el
+// sueldo, el problema es de fecha, no de monto. Tono útil, nunca alarmista.
+const enMinuscula = (s) => { const t = String(s || "").trim(); return t ? t.charAt(0).toLowerCase() + t.slice(1) : t; };
+
+export function textoAviso(aviso, fmt) {
+  const dia = aviso.dueDate.getDate();
+  // Solo se nombra el próximo ingreso cuando cae en OTRO día del mes: si entra
+  // justo el día del vencimiento, decir "vence el 15 pero entra el 15" confunde.
+  if (aviso.siguiente && aviso.siguiente.day !== dia) {
+    const recibido = aviso.recibido > 0
+      ? `solo habrás recibido ${fmt(aviso.recibido)}`
+      : "todavía no habrás recibido ningún ingreso fijo";
+    return `Tu ${aviso.cardName} vence el ${dia} pero tu ${enMinuscula(aviso.siguiente.name)} entra el ${aviso.siguiente.day}. Para esa fecha ${recibido}.`;
+  }
+  return `Tu ${aviso.cardName} vence el ${dia} y para esa fecha habrás recibido ${fmt(aviso.recibido)} de los ${fmt(aviso.acumulado)} que vencen hasta ahí: te faltarían ${fmt(aviso.faltan)}.`;
+}
+
+export function textoResumen(chequeo) {
+  const n = chequeo.enRiesgo;
+  if (n === 0) return null;
+  const cuantos = n === 1 ? "Un pago vence" : `${n} pagos vencen`;
+  const principal = chequeo.principal;
+  return principal
+    ? `${cuantos} antes de que entre tu ${enMinuscula(principal.name)}.`
+    : `${cuantos} antes de que te entre la plata del mes.`;
+}
+
+function AvisoIngreso({ texto }) {
+  return (
+    <div style={{ marginTop: 10, background: "#FDF1EA", borderLeft: `3px solid ${C.orange}`, borderRadius: 8, padding: "9px 11px", fontSize: 12.5, lineHeight: 1.45, color: C.black, fontWeight: 500 }}>
+      <span style={{ marginRight: 5 }}>⏱</span>{texto}
+    </div>
+  );
+}
+
 // Una tarjeta dentro de la lista de un bloque de moneda.
-function CardRow({ it, fmtC, onOpen, equivData }) {
+function CardRow({ it, fmtC, onOpen, equivData, aviso }) {
   const accent = it.card.color || C.purple;
   const pend = it.status === "por-vencer";
   return (
@@ -60,6 +98,7 @@ function CardRow({ it, fmtC, onOpen, equivData }) {
         </div>
         <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, whiteSpace: "nowrap" }}>Te queda {fmtC(it.available)} de línea</div>
       </div>
+      {aviso && <AvisoIngreso texto={aviso} />}
     </div>
   );
 }
@@ -77,6 +116,15 @@ export function ProximosPagosScreen({ subScreen, setSubScreen, fmt }) {
   const sobra = totalInc - totalFijosAll - total30;
   const alcanza = sobra >= 0;
   const proximo = items.find(i => i.status === "por-vencer") || items[0];
+  // F14: el cruce entre el día en que entra su plata y el día en que vence cada
+  // tarjeta. Solo soles, igual que la cuenta de "¿te alcanza?".
+  const ingresosDelMes = (data.incomeFixed || []).filter(i => i.month === getCurrentMonthLabel());
+  const chequeo = chequeoDeIngresos(ingresosDelMes, items, now);
+  const avisoDe = (cardId) => {
+    const a = chequeo.avisos.find(x => x.cardId === cardId && !x.alcanza);
+    return a ? textoAviso(a, fmt) : null;
+  };
+  const resumen = textoResumen(chequeo);
   // ¿Hay algún tipo de cambio que mostrar? Sin ninguno no se habla de él.
   const hayTasa = tasaVigente(null, data) !== null;
 
@@ -142,13 +190,34 @@ export function ProximosPagosScreen({ subScreen, setSubScreen, fmt }) {
             </div>
           </div>
 
+          {/* F14: el resumen del cruce fecha de ingreso ↔ fecha de vencimiento.
+              Si todavía no le puso día a ningún ingreso no se inventa nada: se
+              le cuenta, una sola vez, para qué sirve ponerlo. */}
+          {resumen && (
+            <div style={{ padding: "0 16px 16px" }}>
+              <div style={{ ...cardStyle, padding: "14px 16px", borderLeft: `4px solid ${C.orange}` }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.black, lineHeight: 1.4 }}>⏱ {resumen}</div>
+                <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, marginTop: 5 }}>
+                  No es que no te alcance: es que la plata te entra después. Abajo te marco cuáles.
+                </div>
+              </div>
+            </div>
+          )}
+          {!chequeo.hayDias && items.some(i => i.status === "por-vencer") && (
+            <div style={{ padding: "0 16px 16px" }}>
+              <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, padding: "0 2px" }}>
+                📅 Ponle fecha a tus ingresos fijos en la pantalla <strong style={{ color: C.black }}>Ingresos</strong> y Qori te avisa si un pago vence antes de que te entre la plata.
+              </div>
+            </div>
+          )}
+
           {/* Detalle por tarjeta en soles, la más cercana a vencer primero */}
           <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "0 20px 8px" }}>
             Tarjeta por tarjeta{usd.items.length > 0 ? " · soles" : ""}
           </div>
           <div style={{ padding: "0 16px" }}>
             {items.map(it => (
-              <CardRow key={it.card.id} it={it} fmtC={fmt} onOpen={() => setSubScreen("card-" + it.card.id)} />
+              <CardRow key={it.card.id} it={it} fmtC={fmt} aviso={avisoDe(it.card.id)} onOpen={() => setSubScreen("card-" + it.card.id)} />
             ))}
           </div>
 
