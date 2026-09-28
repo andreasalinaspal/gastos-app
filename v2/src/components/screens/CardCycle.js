@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { C, FONT_TITLE, cardStyle } from "../../theme";
 import { subStyle } from "../shared/subnav";
-import { getCycleFor, getLineUsage, cardCurrencies, curOf } from "../../lib/cycles";
+import { getCycleFor, getLineUsage, getNextPayment, cardCurrencies, curOf } from "../../lib/cycles";
+import { StatementBanner, StatementSheet, StatementDiffNote, nextPaymentSourceLabel } from "../shared/StatementSheet";
 import { buildCatMap } from "../../state/selectors";
 import { useStore } from "../../state/store";
 import { fmtWith } from "../../lib/format";
@@ -24,7 +25,11 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
   // Moneda que se está mirando (F10). La tarjeta del simulador tiene una sola
   // moneda, así que el selector ni aparece y todo funciona igual que antes.
   const [cur, setCur] = useState("PEN");
+  const [stmt, setStmt] = useState(null); // hoja para registrar el monto del banco
 
+  // La pantalla es de una tarjeta REAL solo cuando lee del store. El simulador
+  // inyecta sus propios gastos: ahí no se piden estados de cuenta.
+  const esReal = expenses === undefined;
   const allExps = expenses ?? data.expenses ?? [];
   const allPayments = cardPayments ?? data.cardPayments ?? [];
   const catBudgets = budgets ?? data.budgets;
@@ -74,6 +79,11 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
     .slice(0, 2);
 
   // Uso de línea (footer educativo)
+  // Próximo pago del ciclo cerrado: el del banco si ya lo registró, si no el estimado.
+  const next = esReal
+    ? getNextPayment(card, allExps, allPayments, now ? new Date(now) : new Date(), activeCur, data.cardStatements)
+    : null;
+
   const lineUsage = getLineUsage(card, allExps, allPayments, activeCur);
   const linePct = lineUsage.pct;
   const linePctRound = Math.round(linePct);
@@ -116,7 +126,29 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
           <div style={{ height: "100%", width: `${Math.min(cyclePct, 100)}%`, background: accent, borderRadius: 99, transition: "width 0.4s ease" }} />
         </div>
         <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>Corte: {fmtDay(cycle.end)} · Pago: {fmtDay(cycle.paymentDate)}</div>
+        {/* Próximo pago del ciclo ya cerrado, diciendo de dónde sale el número */}
+        {esReal && next && (
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 6, paddingTop: 8, borderTop: "1px solid #F0EDE4" }}>
+            {next.status === "por-vencer"
+              ? <>Próximo pago: <strong style={{ color: C.black }}>{fmtCur(next.amount)}</strong> el {fmtDay(next.dueDate)} · {nextPaymentSourceLabel(next.source)}</>
+              : <>Próximo pago: <strong style={{ color: C.green }}>al día ✅</strong></>}
+          </div>
+        )}
+        {esReal && <StatementDiffNote next={next} fmt={fmt} currency={activeCur} />}
       </div>
+
+      {/* Cerró el ciclo y no sabemos qué cobró el banco: Qori lo pide */}
+      {esReal && (
+        <div style={{ padding: "0 16px" }}>
+          <StatementBanner
+            card={card} expenses={allExps} statements={data.cardStatements}
+            onOpen={(prompt) => setStmt(prompt)}
+          />
+        </div>
+      )}
+      {stmt && (
+        <StatementSheet card={card} prompt={stmt} fmt={fmt} onClose={() => setStmt(null)} />
+      )}
 
       {/* Gasto acumulado del ciclo vs presupuesto del ciclo */}
       <div style={{ background: accent, borderRadius: 16, margin: "0 16px 12px", padding: "18px 18px" }}>

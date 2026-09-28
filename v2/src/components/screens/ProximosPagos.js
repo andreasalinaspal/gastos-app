@@ -3,6 +3,8 @@ import { subStyle, subHeader } from "../shared/subnav";
 import { getUpcomingTotal } from "../../lib/cycles";
 import { getMonthData } from "../../state/selectors";
 import { useStore } from "../../state/store";
+import { fmtWith } from "../../lib/format";
+import { nextPaymentSourceLabel } from "../shared/StatementSheet";
 
 const fmtLong = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "long" });
 
@@ -21,12 +23,48 @@ export function plazoLabel(days) {
   return "vence " + faltanLabel(days);
 }
 
-// Pantalla "Próximos pagos" (F6): responde de un vistazo cuánto hay que pagar
-// y si el mes alcanza para cubrirlo.
+// Una tarjeta dentro de la lista de un bloque de moneda.
+function CardRow({ it, fmtC, onOpen }) {
+  const accent = it.card.color || C.purple;
+  const pend = it.status === "por-vencer";
+  return (
+    <div onClick={onOpen} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ width: 38, height: 38, borderRadius: 11, background: accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>💳</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{it.card.name}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+            {pend ? <>vence el {fmtLong(it.dueDate)} · <strong style={{ color: it.days <= 3 ? C.orange : C.muted }}>{faltanLabel(it.days)}</strong></> : "Sin deuda por vencer"}
+          </div>
+          {pend && <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{nextPaymentSourceLabel(it.source)}</div>}
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          {pend ? (
+            <div style={{ fontFamily: FONT_TITLE, fontSize: 20, fontWeight: 900, color: C.black, letterSpacing: -0.5 }}>{fmtC(it.amount)}</div>
+          ) : (
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>Al día ✅</div>
+          )}
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+        <div style={{ flex: 1, height: 5, background: "#F0EDE4", borderRadius: 99, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${Math.min(Math.round(it.pct), 100)}%`, background: usageColor(it.pct), borderRadius: 99 }} />
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, whiteSpace: "nowrap" }}>Te queda {fmtC(it.available)} de línea</div>
+      </div>
+    </div>
+  );
+}
+
+// Pantalla "Próximos pagos" (F6 + F10): cuánto hay que pagar, en soles y en
+// dólares POR SEPARADO, y si el mes alcanza para cubrir los soles.
 export function ProximosPagosScreen({ subScreen, setSubScreen, fmt }) {
   const data = useStore(s => s.data);
   const now = new Date();
-  const { total30, items } = getUpcomingTotal(data.paymentMethods, data.expenses, data.cardPayments, now, data.cardStatements).PEN;
+  const upcoming = getUpcomingTotal(data.paymentMethods, data.expenses, data.cardPayments, now, data.cardStatements);
+  const { total30, items } = upcoming.PEN;
+  const usd = upcoming.USD;
+  const fmtUsd = (n) => fmtWith(n, "USD");
   const { totalInc, totalFijosAll } = getMonthData(data, 0);
   const sobra = totalInc - totalFijosAll - total30;
   const alcanza = sobra >= 0;
@@ -86,43 +124,45 @@ export function ProximosPagosScreen({ subScreen, setSubScreen, fmt }) {
                   ? "Te alcanza para cubrir tus fijos y tus tarjetas este mes."
                   : `Te faltarían ${fmt(Math.abs(sobra))} para cubrir todo este mes. Baja lo que puedas de tus gastos con tarjeta o suma un ingreso extra antes del vencimiento.`}
               </div>
+              {usd.total30 > 0 && (
+                <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5, marginTop: 8, paddingTop: 8, borderTop: "1px solid #EDE9E0" }}>
+                  Esta cuenta es solo de soles. Tus <strong style={{ color: C.black }}>{fmtUsd(usd.total30)}</strong> en dólares se pagan aparte y no están incluidos acá.
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Detalle por tarjeta, la más cercana a vencer primero */}
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "0 20px 8px" }}>Tarjeta por tarjeta</div>
+          {/* Detalle por tarjeta en soles, la más cercana a vencer primero */}
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "0 20px 8px" }}>
+            Tarjeta por tarjeta{usd.items.length > 0 ? " · soles" : ""}
+          </div>
           <div style={{ padding: "0 16px" }}>
-            {items.map(it => {
-              const accent = it.card.color || C.purple;
-              const pend = it.status === "por-vencer";
-              return (
-                <div key={it.card.id} onClick={() => setSubScreen("card-" + it.card.id)} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 11, background: accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>💳</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{it.card.name}</div>
-                      <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-                        {pend ? <>vence el {fmtLong(it.dueDate)} · <strong style={{ color: it.days <= 3 ? C.orange : C.muted }}>{faltanLabel(it.days)}</strong></> : "Sin deuda por vencer"}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      {pend ? (
-                        <div style={{ fontFamily: FONT_TITLE, fontSize: 20, fontWeight: 900, color: C.black, letterSpacing: -0.5 }}>{fmt(it.amount)}</div>
-                      ) : (
-                        <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>Al día ✅</div>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-                    <div style={{ flex: 1, height: 5, background: "#F0EDE4", borderRadius: 99, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${Math.min(Math.round(it.pct), 100)}%`, background: usageColor(it.pct), borderRadius: 99 }} />
-                    </div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, whiteSpace: "nowrap" }}>Te queda {fmt(it.available)} de línea</div>
+            {items.map(it => (
+              <CardRow key={it.card.id} it={it} fmtC={fmt} onOpen={() => setSubScreen("card-" + it.card.id)} />
+            ))}
+          </div>
+
+          {/* Bloque de DÓLARES: aparte, con su propio total. No entra en la cuenta
+              de arriba porque se paga por separado y en dólares. */}
+          {usd.items.length > 0 && (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase", padding: "14px 20px 8px" }}>Tus dólares, aparte</div>
+              <div style={{ padding: "0 16px 14px" }}>
+                <div style={{ background: C.green, borderRadius: 18, padding: "18px 20px" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.6)", letterSpacing: 1.4, textTransform: "uppercase" }}>Vence en los próximos 30 días</div>
+                  <div style={{ fontFamily: FONT_TITLE, fontSize: 38, fontWeight: 900, color: "#fff", letterSpacing: -1.2, lineHeight: 1.1, marginTop: 4 }}>{fmtUsd(usd.total30)}</div>
+                  <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 1.5 }}>
+                    Esta deuda se paga aparte, en dólares. <strong>No está incluida</strong> en la cuenta de arriba: Qori no convierte monedas ni se inventa un tipo de cambio.
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+              <div style={{ padding: "0 16px" }}>
+                {usd.items.map(it => (
+                  <CardRow key={it.card.id} it={it} fmtC={fmtUsd} onOpen={() => setSubScreen("card-" + it.card.id)} />
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
       <div style={{ height: "calc(40px + env(safe-area-inset-bottom, 20px))" }} />

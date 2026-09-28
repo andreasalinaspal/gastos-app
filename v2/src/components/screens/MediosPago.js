@@ -6,6 +6,7 @@ import { genId, fmtWith } from "../../lib/format";
 import { getCycleFor, getLineUsage, getNextPayment, cardCurrencies, hasLine } from "../../lib/cycles";
 import { useStore } from "../../state/store";
 import { pmEmoji } from "../shared/PaymentMethodPicker";
+import { StatementBanner, StatementSheet, StatementDiffNote, nextPaymentSourceLabel } from "../shared/StatementSheet";
 
 const fmtDay = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "short" });
 const fmtLong = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "long" });
@@ -34,6 +35,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
   const [payCardId, setPayCardId] = useState(null); // TC que se está pagando
   const [payAmt, setPayAmt] = useState("");
   const [payCur, setPayCur] = useState("PEN"); // moneda del pago (F10): son dos deudas distintas
+  const [stmt, setStmt] = useState(null); // { card, prompt } → hoja de estado de cuenta
 
   // Formatea según la moneda del dato: los dólares SIEMPRE con US$, nunca con el
   // símbolo de la moneda global.
@@ -222,15 +224,21 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
                   </div>
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
                     {next.status === "por-vencer"
-                      ? <>Próximo pago: <strong style={{ color: C.black }}>{fmtCur(next.amount, cur)}</strong> el {fmtLong(next.dueDate)}</>
+                      ? <>Próximo pago: <strong style={{ color: C.black }}>{fmtCur(next.amount, cur)}</strong> el {fmtLong(next.dueDate)} <span style={{ fontSize: 11 }}>· {nextPaymentSourceLabel(next.source)}</span></>
                       : <>Próximo pago: <strong style={{ color: C.green }}>al día ✅</strong></>}
                   </div>
+                  <StatementDiffNote next={next} fmt={fmt} currency={cur} />
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
                     Saldo vivo: <strong style={{ color: usage.balance > 0 ? C.orange : C.green }}>{fmtCur(usage.balance, cur)}</strong>
                   </div>
                 </div>
               );
             })}
+            {/* Si ya cerró un ciclo y no registró lo que cobró el banco, Qori lo pide */}
+            <StatementBanner
+              card={card} expenses={data.expenses} statements={data.cardStatements}
+              onOpen={(prompt) => setStmt({ card, prompt })}
+            />
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
               <div style={{ flex: 1 }} />
               {conDeuda.length > 0 ? (
@@ -341,6 +349,11 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
         </>
       )}
       <div style={{ height: "calc(40px + env(safe-area-inset-bottom, 20px))" }} />
+
+      {/* Hoja para registrar el monto OFICIAL del banco (F10) */}
+      {stmt && (
+        <StatementSheet card={stmt.card} prompt={stmt.prompt} fmt={fmt} showToast={showToast} onClose={() => setStmt(null)} />
+      )}
 
       {/* Modal pagar tarjeta: liquidación de gastos ya registrados, NO crea gastos (P1) */}
       {payCardId && (() => {
