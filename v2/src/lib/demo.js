@@ -20,7 +20,8 @@ export function buildDemoData() {
   const cat = (name) => d.categories.gastos.find(c => c.name === name) || null;
 
   // Medios de pago: efectivo/débito vienen de initData; agregamos una TC de ejemplo
-  const card = { id: genId(), type: "credito", name: "Visa BCP", cutoffDay: 25, paymentDay: 15, creditLine: 3000, cycleBudget: 600, color: "#6C5CE7", archived: false };
+  // openingBalance/openingDate (F6): la deuda que la tarjeta ya traía cuando se registró.
+  const card = { id: genId(), type: "credito", name: "Visa BCP", cutoffDay: 25, paymentDay: 15, creditLine: 3000, cycleBudget: 600, color: "#6C5CE7", archived: false, openingBalance: 850, openingDate: daysAgo(40, 9).toISOString() };
   d.paymentMethods = [...d.paymentMethods, card];
   const efectivo = d.paymentMethods.find(m => m.type === "efectivo");
   const debito = d.paymentMethods.find(m => m.type === "debito");

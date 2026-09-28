@@ -6,6 +6,10 @@ import { genId } from "./format";
 // - Sin pérdida de datos: nunca elimina campos existentes, solo agrega faltantes.
 // - Los expenses históricos quedan SIN paymentMethodId (la UI los muestra como "sin medio").
 
+// Fecha de arranque para las TC que existían antes de v3: anterior a cualquier gasto,
+// así el saldo vivo sigue sumando todo el historial (no se pierde nada).
+export const LEGACY_OPENING_DATE = "1970-01-01T00:00:00.000Z";
+
 export function defaultPaymentMethods() {
   return [
     { id: genId(), type: "efectivo", name: "Efectivo" },
@@ -36,8 +40,27 @@ export function migrateData(data) {
     out.education = defaultEducation();
     changed = true;
   }
-  if (!(typeof out.schemaVersion === "number" && out.schemaVersion >= 2)) {
-    out.schemaVersion = 2;
+  // v3: deuda previa por tarjeta (F6). Las TC que ya existían nunca declararon deuda
+  // anterior, así que parten en 0 y su openingDate es LEGACY_OPENING_DATE (anterior a
+  // cualquier dato) para que todo su historial de gastos siga contando igual que antes.
+  const cardsNeedOpening = out.paymentMethods.some(
+    m => m && m.type === "credito" && (m.openingBalance === undefined || m.openingDate === undefined)
+  );
+  if (cardsNeedOpening) {
+    out.paymentMethods = out.paymentMethods.map(m => {
+      if (!m || m.type !== "credito") return m;
+      if (m.openingBalance !== undefined && m.openingDate !== undefined) return m;
+      return {
+        ...m,
+        openingBalance: m.openingBalance === undefined ? 0 : m.openingBalance,
+        openingDate: m.openingDate === undefined ? LEGACY_OPENING_DATE : m.openingDate,
+      };
+    });
+    changed = true;
+  }
+
+  if (!(typeof out.schemaVersion === "number" && out.schemaVersion >= 3)) {
+    out.schemaVersion = 3;
     changed = true;
   }
 

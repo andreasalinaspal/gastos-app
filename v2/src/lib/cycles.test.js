@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getCycleFor, getCycleSpend, getLineUsage } from "./cycles";
+import { getCycleFor, getCycleSpend, getLineUsage, getNextPayment, getUpcomingTotal } from "./cycles";
 
 const card = (over = {}) => ({
   id: "card-1", type: "credito", name: "Visa BCP",
@@ -182,5 +182,176 @@ describe("getLineUsage", () => {
     const payments = [{ id: "p1", cardId: "card-2", amount: 400 }];
     const u = getLineUsage(c, expenses, payments);
     expect(u.balance).toBe(500);
+  });
+});
+
+// ── F6: deuda previa (openingBalance/openingDate), disponible y próximos pagos ──
+
+const NOW = new Date(2026, 8, 27); // 27 sep 2026
+// Para una tarjeta de corte 25: ciclo actual 26 sep → 25 oct; ciclo cerrado 26 ago → 25 sep
+// (key 2026-09-25) y su pago vence el 15 oct 2026.
+
+describe("getLineUsage — deuda previa y disponible", () => {
+  const c = card({ creditLine: 3000, openingBalance: 1000, openingDate: new Date(2026, 8, 1).toISOString() });
+  const expenses = [
+    { id: "e0", amount: 300, paymentMethodId: "card-1", date: new Date(2026, 7, 20).toISOString() }, // antes de openingDate
+    { id: "e1", amount: 200, paymentMethodId: "card-1", date: new Date(2026, 8, 10).toISOString() },
+    { id: "e2", amount: 100, paymentMethodId: "card-1", date: new Date(2026, 8, 26).toISOString() },
+  ];
+
+  it("suma la deuda previa e ignora los gastos anteriores a openingDate", () => {
+    const u = getLineUsage(c, expenses, [{ id: "p1", cardId: "card-1", amount: 150 }]);
+    expect(u.balance).toBe(1150); // 1000 + 200 + 100 − 150
+    expect(u.available).toBe(1850);
+    expect(u.pct).toBeCloseTo(38.33, 1);
+  });
+
+  it("available = creditLine − balance y nunca es negativo", () => {
+    const chico = card({ creditLine: 500, openingBalance: 900, openingDate: new Date(2026, 8, 1).toISOString() });
+    const u = getLineUsage(chico, [], []);
+    expect(u.balance).toBe(900);
+    expect(u.available).toBe(0);
+  });
+
+  it("pagos mayores a la deuda dejan balance 0 y línea completa disponible", () => {
+    const u = getLineUsage(c, expenses, [{ id: "p1", cardId: "card-1", amount: 5000 }]);
+    expect(u.balance).toBe(0);
+    expect(u.available).toBe(3000);
+  });
+
+  it("sin openingBalance/openingDate se comporta como antes (todo el historial cuenta)", () => {
+    const u = getLineUsage(card({ creditLine: 1000 }), expenses, []);
+    expect(u.balance).toBe(600); // 300 + 200 + 100
+    expect(u.available).toBe(400);
+  });
+
+  it("creditLine 0 → pct y available en 0", () => {
+    const u = getLineUsage(card({ creditLine: 0 }), expenses, []);
+    expect(u.pct).toBe(0);
+    expect(u.available).toBe(0);
+  });
+});
+
+describe("getNextPayment", () => {
+  const c = card({ creditLine: 3000, openingBalance: 1000, openingDate: new Date(2026, 8, 1).toISOString() });
+  const expenses = [
+    { id: "e1", amount: 200, paymentMethodId: "card-1", date: new Date(2026, 8, 10).toISOString() }, // ciclo cerrado
+    { id: "e2", amount: 100, paymentMethodId: "card-1", date: new Date(2026, 8, 26).toISOString() }, // ciclo actual
+    { id: "e3", amount: 999, paymentMethodId: "card-2", date: new Date(2026, 8, 10).toISOString() }, // otra tarjeta
+  ];
+
+  it("cobra el estado de cuenta ya cerrado: deuda previa + gastos de ese ciclo", () => {
+    const n = getNextPayment(c, expenses, [], NOW);
+    expect(n.cycleKey).toBe("2026-09-25");
+    expect(ymd(n.dueDate)).toBe("2026-10-15");
+    expect(n.amount).toBe(1200); // 1000 previa + 200 del ciclo cerrado
+    expect(n.status).toBe("por-vencer");
+  });
+
+  it("no incluye los gastos del ciclo actual (aún no cierra)", () => {
+    const n = getNextPayment(c, expenses, [], NOW);
+    expect(n.amount).toBe(1200); // el gasto del 26 sep queda para el siguiente estado de cuenta
+  });
+
+  it("pago parcial deja el resto por vencer", () => {
+    const n = getNextPayment(c, expenses, [{ id: "p1", cardId: "card-1", amount: 500, cycleKey: "2026-09-25" }], NOW);
+    expect(n.amount).toBe(700);
+    expect(n.status).toBe("por-vencer");
+  });
+
+  it("pago total → al día con monto 0", () => {
+    const n = getNextPayment(c, expenses, [{ id: "p1", cardId: "card-1", amount: 1200, cycleKey: "2026-09-25" }], NOW);
+    expect(n.amount).toBe(0);
+    expect(n.status).toBe("al-dia");
+  });
+
+  it("los pagos de ciclos anteriores también descuentan; los de ciclos futuros no", () => {
+    const pagos = [
+      { id: "p1", cardId: "card-1", amount: 400, cycleKey: "2026-08-25" }, // ciclo anterior
+      { id: "p2", cardId: "card-1", amount: 999, cycleKey: "2026-10-25" }, // ciclo futuro
+    ];
+    expect(getNextPayment(c, expenses, pagos, NOW).amount).toBe(800);
+  });
+
+  it("nunca devuelve monto negativo", () => {
+    const n = getNextPayment(c, expenses, [{ id: "p1", cardId: "card-1", amount: 9000, cycleKey: "2026-09-25" }], NOW);
+    expect(n.amount).toBe(0);
+  });
+
+  it("sin gastos ni deuda previa → al día", () => {
+    const n = getNextPayment(card({ openingBalance: 0, openingDate: new Date(2026, 8, 1).toISOString() }), [], [], NOW);
+    expect(n.status).toBe("al-dia");
+    expect(n.amount).toBe(0);
+    expect(ymd(n.dueDate)).toBe("2026-10-15");
+  });
+
+  it("una deuda previa declarada DESPUÉS del corte cerrado no se cobra todavía", () => {
+    const reciente = card({ openingBalance: 500, openingDate: new Date(2026, 8, 26).toISOString() });
+    const n = getNextPayment(reciente, expenses, [], NOW);
+    expect(n.amount).toBe(0);
+    expect(n.status).toBe("al-dia");
+  });
+
+  it("ignora los pagos de otras tarjetas", () => {
+    const n = getNextPayment(c, expenses, [{ id: "p1", cardId: "card-2", amount: 9000, cycleKey: "2026-09-25" }], NOW);
+    expect(n.amount).toBe(1200);
+  });
+});
+
+describe("getUpcomingTotal", () => {
+  // Corte 25 / pago 15 → corte 25 sep, vence 15 oct.
+  // Corte 5 / pago 2 → corte 5 sep, vence 2 oct (el más cercano).
+  const bcp = card({ id: "card-1", name: "BCP", cutoffDay: 25, paymentDay: 15, creditLine: 3000 });
+  const ripley = card({ id: "card-2", name: "Ripley", cutoffDay: 5, paymentDay: 2, creditLine: 1000 });
+  const archivada = card({ id: "card-3", name: "Vieja", archived: true });
+  const efectivo = { id: "pm1", type: "efectivo", name: "Efectivo" };
+  const expenses = [
+    { id: "e1", amount: 300, paymentMethodId: "card-1", date: new Date(2026, 8, 10).toISOString() },
+    { id: "e2", amount: 120, paymentMethodId: "card-2", date: new Date(2026, 8, 5).toISOString() },
+    { id: "e3", amount: 500, paymentMethodId: "card-3", date: new Date(2026, 8, 5).toISOString() },
+  ];
+
+  it("ordena por fecha de vencimiento y suma el total", () => {
+    const up = getUpcomingTotal([bcp, ripley, archivada, efectivo], expenses, [], NOW);
+    expect(up.items).toHaveLength(2); // ignora archivadas y medios que no son TC
+    expect(up.items.map(i => i.card.name)).toEqual(["Ripley", "BCP"]);
+    expect(ymd(up.items[0].dueDate)).toBe("2026-10-02");
+    expect(ymd(up.items[1].dueDate)).toBe("2026-10-15");
+    expect(up.total).toBe(420);
+    expect(up.total30).toBe(420);
+  });
+
+  it("incluye días restantes y el disponible de cada tarjeta", () => {
+    const up = getUpcomingTotal([bcp, ripley], expenses, [], NOW);
+    expect(up.items[0].days).toBe(5); // 27 sep → 2 oct
+    expect(up.items[0].available).toBe(880); // 1000 − 120
+    expect(up.items[1].days).toBe(18);
+    expect(up.items[1].available).toBe(2700);
+  });
+
+  it("total30 excluye lo que vence más allá de 30 días", () => {
+    const lejana = card({ id: "card-4", name: "Lejana", cutoffDay: 25, paymentDay: 30, creditLine: 2000 });
+    const exps = [{ id: "e9", amount: 700, paymentMethodId: "card-4", date: new Date(2026, 8, 10).toISOString() }];
+    const up = getUpcomingTotal([lejana], exps, [], NOW);
+    expect(ymd(up.items[0].dueDate)).toBe("2026-10-30"); // 33 días
+    expect(up.items[0].days).toBe(33);
+    expect(up.total).toBe(700);
+    expect(up.total30).toBe(0);
+  });
+
+  it("todas al día → total 0 pero con su detalle", () => {
+    const pagos = [
+      { id: "p1", cardId: "card-1", amount: 300, cycleKey: "2026-09-25" },
+      { id: "p2", cardId: "card-2", amount: 120, cycleKey: "2026-09-05" },
+    ];
+    const up = getUpcomingTotal([bcp, ripley], expenses, pagos, NOW);
+    expect(up.total).toBe(0);
+    expect(up.items.every(i => i.status === "al-dia")).toBe(true);
+  });
+
+  it("sin tarjetas → total 0 y lista vacía", () => {
+    const up = getUpcomingTotal([], expenses, [], NOW);
+    expect(up.total).toBe(0);
+    expect(up.items).toEqual([]);
   });
 });
