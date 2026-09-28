@@ -2,7 +2,8 @@ import { C, FONT_TITLE, inputStyle } from "../../theme";
 import { TrashIcon } from "../shared/icons";
 import { getToday } from "../../lib/dates";
 import { buildCatMap } from "../../state/selectors";
-import { getCycleFor, getCycleSpend } from "../../lib/cycles";
+import { getCycleFor, getCycleSpend, getUpcomingTotal } from "../../lib/cycles";
+import { plazoLabel } from "./ProximosPagos";
 import { useStore } from "../../state/store";
 import { PaymentMethodPicker, PmChip } from "../shared/PaymentMethodPicker";
 import { LESSONS } from "../../content/lessons";
@@ -66,9 +67,29 @@ export default function Home({
             <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>Toca <strong style={{ color: "#fff" }}>+</strong> para registrar tu primer gasto</div>
           </div>
         )}
+        {/* Próximos pagos (F6): lo primero que ve si tiene TC — cuánto vence y cuándo */}
+        {creditCards.length > 0 && (() => {
+          const { total30, items } = getUpcomingTotal(data.paymentMethods, data.expenses, data.cardPayments, new Date());
+          const proximo = items.find(i => i.status === "por-vencer");
+          return (
+            <div style={{ padding: "18px 20px 0" }}>
+              <div onClick={() => setSubScreen("proximos-pagos")} style={{ background: "#fff", borderRadius: 18, padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 4px 18px rgba(0,0,0,0.18)" }}>
+                <div style={{ width: 44, height: 44, borderRadius: 13, background: proximo ? "#FDEDE0" : C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{proximo ? "📅" : "✅"}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.2, textTransform: "uppercase" }}>Próximos pagos</div>
+                  <div style={{ fontFamily: FONT_TITLE, fontSize: 24, fontWeight: 900, color: C.black, letterSpacing: -0.8, lineHeight: 1.2 }}>{fmt(total30)}</div>
+                  <div style={{ fontSize: 12, color: proximo ? C.orange : C.green, fontWeight: 600, marginTop: 2 }}>
+                    {proximo ? `El más cercano ${plazoLabel(proximo.days)}` : "Estás al día con tus tarjetas"}
+                  </div>
+                </div>
+                <div style={{ fontSize: 22, color: C.muted, flexShrink: 0 }}>›</div>
+              </div>
+            </div>
+          );
+        })()}
         {/* Tarjetas de crédito: saldo del ciclo + progreso → abre pantalla de ciclo */}
         {creditCards.length > 0 && (
-          <div style={{ padding: "18px 20px 0" }}>
+          <div style={{ padding: "10px 20px 0" }}>
             {creditCards.map(card => {
               const cycle = getCycleFor(card, new Date());
               const spend = getCycleSpend(data.expenses, card, cycle.key);

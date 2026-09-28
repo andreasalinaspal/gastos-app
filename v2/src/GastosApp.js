@@ -20,6 +20,7 @@ import { FijosScreen, CatsSubScreen, PresupuestosScreen, AllCatsScreen } from ".
 import Config from "./components/screens/Config";
 import { MediosPagoScreen } from "./components/screens/MediosPago";
 import { CardCycleScreen } from "./components/screens/CardCycle";
+import { ProximosPagosScreen } from "./components/screens/ProximosPagos";
 import { AprendeScreen } from "./components/screens/Aprende";
 import { SimuladorScreen } from "./components/screens/Simulador";
 import Onboarding from "./components/auth/Onboarding";
@@ -867,6 +868,8 @@ export default function App() {
       />
       {/* Medios de pago sub-screen */}
       <MediosPagoScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} showToast={showToast} setConfirm={setConfirm} />
+      {/* Próximos pagos: cuánto vence y si alcanza el mes (key `proximos-pagos`) */}
+      <ProximosPagosScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} />
       {/* Pantallas de ciclo por tarjeta de crédito activa (key `card-{id}`) */}
       {(data.paymentMethods || []).filter(m => m.type === "credito" && !m.archived).map(card => (
         <CardCycleScreen key={card.id} card={card} subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} />
