@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getCycleFor, getCycleSpend, getLineUsage, getSharedUsage, getNextPayment, getUpcomingTotal, getCardLine, cardCurrencies, hasLine, getStatementPrompt, findStatement, getClosedCycle, curOf, buildStatementEntry } from "./cycles";
+import { getCycleFor, getCycleSpend, getLineUsage, getSharedUsage, getBalanceBreakdown, getNextPayment, getUpcomingTotal, getCardLine, cardCurrencies, hasLine, getStatementPrompt, findStatement, getClosedCycle, curOf, buildStatementEntry } from "./cycles";
 
 const card = (over = {}) => ({
   id: "card-1", type: "credito", name: "Visa BCP",
@@ -510,6 +510,79 @@ describe("getSharedUsage", () => {
     const u = getSharedUsage(card({ creditLine: 0 }), expenses, [], 4);
     expect(u.pct).toBe(0);
     expect(u.available).toBe(0);
+  });
+});
+
+// ── F19: por qué el saldo no cuadra con lo que hay que pagar ──
+//
+// Su pregunta textual: "no cuadra el total de mi tarjeta y el disponible porque
+// estoy dentro de mi ciclo de facturación y estoy gastando". El desglose tiene
+// que SUMAR el saldo exacto siempre.
+
+describe("getBalanceBreakdown", () => {
+  // Corte 11, pago 5. "Hoy" = 28 set → el ciclo cerrado es el del 11 set y el
+  // abierto va del 12 set al 11 oct.
+  const c = card({
+    cutoffDay: 11, paymentDay: 5,
+    openingDate: new Date(2026, 7, 12).toISOString(),
+    lines: { PEN: { creditLine: 6000, openingBalance: 3735 } },
+  });
+  const hoy = new Date(2026, 8, 28);
+  const enCurso = [
+    { id: "e1", amount: 400, paymentMethodId: "card-1", date: new Date(2026, 8, 20).toISOString() },
+    { id: "e2", amount: 222.36, paymentMethodId: "card-1", date: new Date(2026, 8, 26).toISOString() },
+  ];
+  // El banco ya facturó S/3,735 del ciclo que cerró el 11 set.
+  const statements = [{ id: "s1", cardId: "card-1", cycleKey: "2026-09-11", currency: "PEN", amount: 3735, dueDate: new Date(2026, 9, 5).toISOString() }];
+
+  it("parte el saldo en lo ya facturado y lo del ciclo abierto", () => {
+    const d = getBalanceBreakdown(c, enCurso, [], hoy, "PEN", statements);
+    expect(d.saldo).toBeCloseTo(4357.36);
+    expect(d.facturado).toBe(3735);            // lo que vence el 5 oct
+    expect(d.cicloAbierto).toBeCloseTo(622.36); // lo gastado desde el corte
+    expect(d.diferencia).toBe(0);              // cuadra exacto
+    expect(d.source).toBe("banco");
+  });
+
+  it("solo cuenta los gastos posteriores al último corte", () => {
+    // El del 5 set cae en el ciclo que YA cerró: está dentro del estado de cuenta.
+    const conViejo = [...enCurso, { id: "e0", amount: 1000, paymentMethodId: "card-1", date: new Date(2026, 8, 5).toISOString() }];
+    const d = getBalanceBreakdown(c, conViejo, [], hoy, "PEN", statements);
+    expect(d.cicloAbierto).toBeCloseTo(622.36);
+  });
+
+  it("pagar el estado de cuenta deja solo lo del ciclo abierto", () => {
+    const pagos = [{ id: "p1", cardId: "card-1", amount: 3735, date: new Date(2026, 9, 1).toISOString() }];
+    const d = getBalanceBreakdown(c, enCurso, pagos, new Date(2026, 9, 2), "PEN", statements);
+    expect(d.facturado).toBe(0);
+    expect(d.status).toBe("al-dia");
+    expect(d.cicloAbierto).toBeCloseTo(622.36);
+    expect(d.diferencia).toBe(0);
+  });
+
+  it("avisa cuando el banco cobra más de lo registrado, en vez de cuadrarlo a la fuerza", () => {
+    // El banco facturó S/4,000 donde ella tenía registrados S/3,735.
+    const infladas = [{ id: "s2", cardId: "card-1", cycleKey: "2026-09-11", currency: "PEN", amount: 4000 }];
+    const d = getBalanceBreakdown(c, enCurso, [], hoy, "PEN", infladas);
+    expect(d.facturado).toBe(4000);
+    expect(d.cicloAbierto).toBeCloseTo(622.36);
+    expect(d.diferencia).toBe(-265); // 4357.36 − 4000 − 622.36
+  });
+
+  it("sin estado de cuenta usa el estimado y sigue cuadrando", () => {
+    const d = getBalanceBreakdown(c, enCurso, [], hoy, "PEN", null);
+    expect(d.source).toBe("estimado");
+    expect(d.facturado + d.cicloAbierto + d.diferencia).toBeCloseTo(d.saldo);
+  });
+
+  it("cada moneda se desglosa por su lado", () => {
+    const bi = card({
+      cutoffDay: 11, paymentDay: 5, openingDate: new Date(2026, 7, 12).toISOString(),
+      lines: { PEN: { creditLine: 6000, openingBalance: 100 }, USD: { creditLine: 0, openingBalance: 50 } },
+    });
+    const gastos = [{ id: "u1", amount: 20, paymentMethodId: "card-1", currency: "USD", date: new Date(2026, 8, 20).toISOString() }];
+    expect(getBalanceBreakdown(bi, gastos, [], hoy, "PEN", null).saldo).toBe(100);
+    expect(getBalanceBreakdown(bi, gastos, [], hoy, "USD", null).saldo).toBe(70);
   });
 });
 

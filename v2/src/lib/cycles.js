@@ -284,6 +284,56 @@ export function getNextPayment(card, expenses, cardPayments, now = new Date(), c
   };
 }
 
+// En qué está partido el saldo de una tarjeta, en UNA moneda (F19).
+//
+// La pregunta que responde, textual de la usuaria: "no cuadra el total de mi
+// tarjeta y el disponible porque estoy dentro de mi ciclo de facturación y estoy
+// gastando". Y tiene razón en que no cuadra, porque son dos cosas distintas:
+//
+//   saldo vivo  =  lo que el banco YA te facturó y aún no pagas
+//               +  lo que llevas gastado desde el último corte
+//
+// Lo primero es lo que vence en la fecha de pago. Lo segundo todavía no te lo
+// cobran: entra en el estado de cuenta del próximo corte. Pero las DOS cosas
+// ocupan tu línea desde el momento en que compras, que es justo lo que hace que
+// el disponible baje sin que suba lo que tienes que pagar este mes.
+//
+// Las dos partes son números REALES, cada uno de su fuente: lo facturado sale
+// del estado de cuenta (o del estimado) y el ciclo abierto, de sus gastos. No se
+// fuerza que cuadren. Cuando no cuadran, `diferencia` lo dice en vez de esconderlo:
+// casi siempre es el banco cobrando intereses, membresía o compras sin registrar.
+// → { saldo, facturado, cicloAbierto, diferencia, dueDate, source, status, currency }
+export function getBalanceBreakdown(card, expenses, cardPayments, now = new Date(), currency = "PEN", statements = null) {
+  const cur = normCur(currency);
+  const saldo = getLineUsage(card, expenses, cardPayments, cur).balance;
+  const next = getNextPayment(card, expenses, cardPayments, now, cur, statements);
+
+  // Gastos desde el último corte: lo que todavía no aparece en ningún estado de
+  // cuenta. Arranca en la foto de la deuda si esa foto es más reciente que el corte.
+  const cycle = getCycleFor(card, now);
+  const desde = openingCutoff(card, cur);
+  const from = desde && desde > cycle.start ? desde : cycle.start;
+  const hasta = startOfDay(now);
+  const cicloAbierto = (expenses || []).reduce((sum, e) => {
+    if (!e || e.paymentMethodId !== card.id || !e.date) return sum;
+    if (curOf(e) !== cur) return sum;
+    const d = startOfDay(new Date(e.date));
+    if (d < from || d > hasta) return sum;
+    return sum + (Number(e.amount) || 0);
+  }, 0);
+
+  return {
+    saldo,
+    facturado: next.amount,
+    cicloAbierto,
+    diferencia: Math.round((saldo - next.amount - cicloAbierto) * 100) / 100 + 0, // +0: evita el -0
+    dueDate: next.dueDate,
+    source: next.source,
+    status: next.status,
+    currency: cur,
+  };
+}
+
 // Panorama de próximos pagos (F10): SEPARADO por moneda. NUNCA un total mezclado
 // — son dos deudas distintas que se pagan aparte.
 // → { PEN: { total, total30, items }, USD: { ... } }

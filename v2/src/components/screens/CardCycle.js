@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { C, FONT_TITLE, cardStyle } from "../../theme";
 import { subStyle } from "../shared/subnav";
-import { getCycleFor, getSharedUsage, getNextPayment, cardCurrencies, curOf } from "../../lib/cycles";
+import { getCycleFor, getSharedUsage, getLineUsage, getBalanceBreakdown, getNextPayment, cardCurrencies, curOf, buildStatementEntry } from "../../lib/cycles";
 import { tasaVigente } from "../../lib/fx";
 import { StatementBanner, StatementSheet, StatementDiffNote, nextPaymentSourceLabel } from "../shared/StatementSheet";
 import { buildCatMap } from "../../state/selectors";
 import { useStore } from "../../state/store";
 import { fmtWith } from "../../lib/format";
 import { EquivalenteSoles } from "../shared/Equivalente";
+import { PayCardSheet } from "../shared/PayCardSheet";
 
 // Etiquetas de moneda: los dólares siempre con US$, nunca con el símbolo global.
 const CUR_LABEL = { PEN: "soles", USD: "dólares" };
@@ -21,13 +22,14 @@ const fmtDay = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "sh
 // para reusar la pantalla en el simulador; sin props se comporta igual que siempre
 // (lee del store y usa la fecha real). `screenId` y `topSlot` permiten montarla como
 // otra sub-pantalla con un banner/panel extra arriba.
-export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, cardPayments, now, budgets, screenId, topSlot }) {
+export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast, expenses, cardPayments, now, budgets, screenId, topSlot }) {
   const data = useStore(s => s.data);
   const [showRule30, setShowRule30] = useState(false);
   // Moneda que se está mirando (F10). La tarjeta del simulador tiene una sola
   // moneda, así que el selector ni aparece y todo funciona igual que antes.
   const [cur, setCur] = useState("PEN");
   const [stmt, setStmt] = useState(null); // hoja para registrar el monto del banco
+  const [pagando, setPagando] = useState(false); // hoja para pagar la tarjeta (F19)
 
   // La pantalla es de una tarjeta REAL solo cuando lee del store. El simulador
   // inyecta sus propios gastos: ahí no se piden estados de cuenta.
@@ -90,6 +92,13 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
   // da un solo cupo y las compras en dólares también lo ocupan.
   const vigente = tasaVigente(card, data);
   const lineUsage = getSharedUsage(card, allExps, allPayments, vigente && vigente.tasa);
+  // F19: en qué está partido el saldo de la moneda que está mirando, y si hay
+  // algo que pagar en CUALQUIER moneda (el botón de pagar es uno solo).
+  const desglose = esReal
+    ? getBalanceBreakdown(card, allExps, allPayments, now ? new Date(now) : new Date(), activeCur, data.cardStatements)
+    : null;
+  const hayDeuda = esReal && curs.some(c => getLineUsage(card, allExps, allPayments, c).balance > 0);
+
   const linePct = lineUsage.pct;
   const linePctRound = Math.round(linePct);
   const lineColor = linePct < 30 ? C.green : linePct <= 60 ? C.orange : "#C0392B";
@@ -147,6 +156,58 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
         {esReal && <StatementDiffNote next={next} fmt={fmt} currency={activeCur} />}
       </div>
 
+      {/* EN QUÉ ESTÁ PARTIDO TU SALDO (F19).
+          Responde la pregunta de por qué el disponible baja sin que suba lo que
+          tienes que pagar este mes: una parte ya te la facturaron y vence, y la
+          otra la llevas gastada en el ciclo abierto y te la cobran en el próximo
+          corte. Las dos ocupan tu línea desde el día de la compra. */}
+      {esReal && desglose && desglose.saldo > 0 && (
+        <div style={{ ...cardStyle, margin: "0 16px 12px", padding: "14px 16px" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>
+              Tu saldo{curs.length > 1 ? " en " + CUR_LABEL[activeCur] : ""}
+            </div>
+            <div style={{ fontFamily: FONT_TITLE, fontSize: 20, fontWeight: 900, color: C.black, letterSpacing: -0.4 }}>{fmtCur(desglose.saldo)}</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, paddingBottom: 8, borderBottom: "1px solid #F0EDE4" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.black }}>Ya facturado</div>
+              <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.4, marginTop: 1 }}>
+                {desglose.facturado > 0 ? <>Vence el {fmtDay(desglose.dueDate)} · {nextPaymentSourceLabel(desglose.source)}</> : "Nada pendiente de cobrar"}
+              </div>
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: desglose.facturado > 0 ? C.orange : C.green, whiteSpace: "nowrap" }}>{fmtCur(desglose.facturado)}</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, paddingTop: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.black }}>Aún sin facturar</div>
+              <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.4, marginTop: 1 }}>
+                Lo que llevas gastado desde el último corte. Te lo cobran el {fmtDay(cycle.end)}.
+              </div>
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.black, whiteSpace: "nowrap" }}>{fmtCur(desglose.cicloAbierto)}</div>
+          </div>
+          {/* Cuando las dos partes no suman el saldo, se dice — no se cuadra a la
+              fuerza. Casi siempre es el banco cobrando algo que ella no registró. */}
+          {Math.abs(desglose.diferencia) >= 0.5 && (
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, paddingTop: 8, borderTop: "1px dashed #E4E0D6", marginTop: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.black }}>No cuadra por</div>
+                <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.4, marginTop: 1 }}>
+                  {desglose.diferencia < 0
+                    ? "El banco te está cobrando más de lo que tienes registrado: intereses, membresía, seguros o compras que se te escaparon."
+                    : "Tienes registrado más de lo que el banco te facturó: puede ser deuda de ciclos anteriores que aún no pagas."}
+                </div>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: C.orange, whiteSpace: "nowrap" }}>{fmtCur(Math.abs(desglose.diferencia))}</div>
+            </div>
+          )}
+          <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45, marginTop: 10, paddingTop: 9, borderTop: "1px solid #F0EDE4" }}>
+            Todo esto ocupa tu línea desde el día que compras. Por eso tu disponible baja apenas gastas, aunque lo que tienes que pagar este mes siga igual.
+          </div>
+        </div>
+      )}
+
       {/* Cerró el ciclo y no sabemos qué cobró el banco: Qori lo pide */}
       {esReal && (
         <div style={{ padding: "0 16px" }}>
@@ -159,6 +220,23 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, expenses, 
       {stmt && (
         <StatementSheet card={card} prompt={stmt} fmt={fmt} onClose={() => setStmt(null)} />
       )}
+
+      {/* Acciones de la tarjeta (F19): viven acá, no en la lista de Medios de pago. */}
+      {esReal && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 16px 12px", flexWrap: "wrap" }}>
+          <button onClick={() => {
+            const entry = buildStatementEntry(card, allExps, data.cardStatements, now ? new Date(now) : new Date());
+            if (entry) setStmt(entry);
+          }} style={{ background: "#fff", color: C.purple, border: "1.5px solid " + C.purple + "55", borderRadius: 10, padding: "9px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>🧾 Lo que debo</button>
+          <div style={{ flex: 1 }} />
+          {hayDeuda ? (
+            <button onClick={() => setPagando(true)} style={{ background: accent, color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Pagar tarjeta</button>
+          ) : (
+            <button disabled style={{ background: "#F0EDE4", color: C.muted, border: "none", borderRadius: 10, padding: "9px 16px", fontWeight: 700, fontSize: 13, cursor: "default", fontFamily: "inherit" }}>Sin deuda 🎉</button>
+          )}
+        </div>
+      )}
+      {pagando && <PayCardSheet card={card} fmt={fmt} showToast={showToast} onClose={() => setPagando(false)} />}
 
       {/* Gasto acumulado del ciclo vs presupuesto del ciclo */}
       <div style={{ background: accent, borderRadius: 16, margin: "0 16px 12px", padding: "18px 18px" }}>

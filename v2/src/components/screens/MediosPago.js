@@ -2,16 +2,12 @@ import { useState, useRef, useEffect } from "react";
 import { C, FONT_TITLE, cardStyle, inputStyle, usageColor } from "../../theme";
 import { PlusIcon } from "../shared/icons";
 import { subStyle, subHeader } from "../shared/subnav";
-import { genId, fmtWith } from "../../lib/format";
-import { getCycleFor, getLineUsage, getSharedUsage, getNextPayment, cardCurrencies, hasLine, buildStatementEntry } from "../../lib/cycles";
-import { tasaVigente, textoTasa } from "../../lib/fx";
+import { genId } from "../../lib/format";
+import { getSharedUsage, hasLine } from "../../lib/cycles";
+import { tasaVigente } from "../../lib/fx";
 import { useStore } from "../../state/store";
 import { pmEmoji } from "../shared/PaymentMethodPicker";
-import { StatementBanner, StatementSheet, StatementDiffNote, nextPaymentSourceLabel } from "../shared/StatementSheet";
-import { EquivalenteSoles } from "../shared/Equivalente";
 
-const fmtDay = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "short" });
-const fmtLong = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "long" });
 
 // Etiqueta del campo del formulario: mismo estilo en toda la pantalla.
 const labelStyle = { fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 };
@@ -22,10 +18,6 @@ const hintStyle = { fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom
 const CARD_COLORS = [C.purple, C.purpleLight, C.orange, C.green, C.greenLight, C.black];
 
 const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", openingBalance: "", usdOn: false, usdOpeningBalance: "", usdRate: "", cycleBudget: "", color: CARD_COLORS[0] };
-
-// Nombre en criollo de cada moneda, para etiquetas y avisos.
-export const CUR_LABEL = { PEN: "soles", USD: "dólares" };
-export const CUR_SYMBOL = { PEN: "S/", USD: "US$" };
 
 export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setConfirm }) {
   const data = useStore(s => s.data);
@@ -42,14 +34,8 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
     if (!cardForm || !formRef.current) return;
     formRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [cardForm && cardForm.id, cardForm === null]);
-  const [payCardId, setPayCardId] = useState(null); // TC que se está pagando
-  const [payAmt, setPayAmt] = useState("");
-  const [payCur, setPayCur] = useState("PEN"); // moneda del pago (F10): son dos deudas distintas
-  const [stmt, setStmt] = useState(null); // { card, prompt } → hoja de estado de cuenta
-
-  // Formatea según la moneda del dato: los dólares SIEMPRE con US$, nunca con el
-  // símbolo de la moneda global.
-  const fmtCur = (n, cur) => (cur === "USD" ? fmtWith(n, "USD") : fmt(n));
+  // F19: pagar la tarjeta y registrar el estado de cuenta se hacen desde el
+  // detalle de cada tarjeta, no desde esta lista.
 
   const methods = data.paymentMethods || [];
   const basics = methods.filter(m => m.type !== "credito");
@@ -201,125 +187,58 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
             Agrega tu tarjeta para seguir tu ciclo de facturación y tu línea de crédito.
           </div>
         )}
+        {/* F19: LISTA, no fichas gigantes. Antes cada tarjeta ocupaba una pantalla
+            entera y con cuatro tarjetas esto era un scroll eterno. Cada fila da
+            lo único que se mira de pasada — cuánto te queda — y toda la vida de
+            la tarjeta (pagos, estado de cuenta, saldo) vive en su detalle. */}
         {cards.map(card => {
-          const curs = cardCurrencies(card); // soles siempre; dólares solo si la configuró
-          const usos = curs.map(cur => ({
-            cur,
-            usage: getLineUsage(card, data.expenses, data.cardPayments, cur),
-            next: getNextPayment(card, data.expenses, data.cardPayments, new Date(), cur, data.cardStatements),
-          }));
-          const conDeuda = usos.filter(u => u.usage.balance > 0);
           // F18: el disponible es UNO, de la línea única. Lo consumido en dólares
           // ocupa esa misma línea convertido a soles.
           const vigente = tasaVigente(card, data);
           const compartido = getSharedUsage(card, data.expenses, data.cardPayments, vigente && vigente.tasa);
+          const barColor = usageColor(compartido.pct);
+          const sinCupo = !compartido.creditLine;
           return (
-          <div key={card.id} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 42, height: 42, borderRadius: 12, background: card.color || C.purple, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>💳</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 15, fontWeight: 600, color: C.black }}>{card.name}</div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-                  corte {card.cutoffDay} · pago {card.paymentDay} · línea {fmt(compartido.creditLine)}
+            <div key={card.id} style={{ ...cardStyle, padding: 0, marginBottom: 8, overflow: "hidden" }}>
+              <div
+                onClick={() => setSubScreen("card-" + card.id)}
+                style={{ padding: "12px 14px 10px", cursor: "pointer" }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 10, background: card.color || C.purple, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>💳</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14.5, fontWeight: 700, color: C.black, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.name}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      corte {card.cutoffDay} · pago {card.paymentDay} · línea {fmt(compartido.creditLine)}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 20, color: C.muted, flexShrink: 0 }}>›</div>
+                </div>
+                {/* El número que mira antes de gastar, a lo ancho para que quepa */}
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginTop: 9 }}>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, color: C.muted, letterSpacing: 0.8, textTransform: "uppercase" }}>
+                    {sinCupo ? "Deuda" : "Disponible"}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+                    <div style={{ fontFamily: FONT_TITLE, fontSize: 19, fontWeight: 900, color: C.black, letterSpacing: -0.4, lineHeight: 1.15, whiteSpace: "nowrap" }}>
+                      {fmt(sinCupo ? compartido.usado : compartido.available)}
+                    </div>
+                    {!sinCupo && <div style={{ fontSize: 11, fontWeight: 700, color: barColor, whiteSpace: "nowrap" }}>{Math.round(compartido.pct)}%</div>}
+                  </div>
+                </div>
+                <div style={{ height: 5, background: "#F0EDE4", borderRadius: 99, overflow: "hidden", marginTop: 6 }}>
+                  <div style={{ height: "100%", width: `${Math.min(Math.round(compartido.pct), 100)}%`, background: barColor, borderRadius: 99 }} />
                 </div>
               </div>
-              <button onClick={() => openEditCard(card)} style={{ background: C.purpleSoft, color: C.purple, border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Editar</button>
-              <button onClick={() => archiveCard(card)} style={{ background: "#F0EDE4", color: "#666", border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Archivar</button>
-            </div>
-            {/* DISPONIBLE (F18): uno solo, de la línea única. Es el número que mira
-                antes de gastar. Si hay deuda en dólares, ocupa esta misma línea
-                convertida a soles, y se dice con qué tipo de cambio se estimó. */}
-            {(() => {
-              const barColor = usageColor(compartido.pct);
-              const sinCupo = !compartido.creditLine;
-              return (
-                <div style={{ background: C.beige, borderRadius: 12, padding: "10px 14px", marginTop: 10 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>
-                        {sinCupo ? "Deuda" : "Disponible"}
-                      </div>
-                      <div style={{ fontFamily: FONT_TITLE, fontSize: 24, fontWeight: 900, color: C.black, letterSpacing: -0.5, lineHeight: 1.15 }}>
-                        {sinCupo
-                          ? fmt(compartido.usado)
-                          : <>{fmt(compartido.available)} <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>de {fmt(compartido.creditLine)}</span></>}
-                      </div>
-                    </div>
-                    {!sinCupo && <div style={{ fontSize: 13, fontWeight: 800, color: barColor, whiteSpace: "nowrap" }}>{Math.round(compartido.pct)}% usado</div>}
-                  </div>
-                  {sinCupo ? (
-                    <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6, lineHeight: 1.45 }}>
-                      Sin línea declarada. Agrégala al editar la tarjeta para ver cuánto te queda disponible.
-                    </div>
-                  ) : (
-                    <div style={{ height: 6, background: "#E4E0D6", borderRadius: 99, overflow: "hidden", marginTop: 8 }}>
-                      <div style={{ height: "100%", width: `${Math.min(Math.round(compartido.pct), 100)}%`, background: barColor, borderRadius: 99 }} />
-                    </div>
-                  )}
-                  {/* De qué está hecho lo usado, cuando hay dos monedas en juego */}
-                  {compartido.tieneUsd && (
-                    <div style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.45 }}>
-                      Usado: {fmt(compartido.balancePEN)} en soles
-                      {compartido.faltaTasa
-                        ? <> · {fmtCur(compartido.balanceUSD, "USD")} en dólares <strong style={{ color: C.orange }}>sin contar</strong> (falta el tipo de cambio)</>
-                        : <> + {fmtCur(compartido.balanceUSD, "USD")} en dólares (≈{fmt(compartido.usdEnSoles)})</>}
-                      <div style={{ marginTop: 2 }}>
-                        {compartido.faltaTasa
-                          ? "Pon el tipo de cambio de tu banco al editar la tarjeta para que el disponible salga completo."
-                          : "Tu banco convierte cada compra en dólares a soles y te la descuenta de esta línea, así que el disponible es aproximado: acá se estimó con " + textoTasa(vigente).replace(/^tipo/, "el tipo") + "."}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            {/* LO QUE SE PAGA: esto sí va por moneda. El banco cobra dos montos y
-                los dólares se pagan en dólares. */}
-            {usos.map(({ cur, usage, next }) => (
-              <div key={cur} style={{ background: C.beige, borderRadius: 12, padding: "10px 14px", marginTop: 8 }}>
-                {curs.length > 1 && (
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>
-                    Pago en {CUR_LABEL[cur]}
-                  </div>
-                )}
-                <div style={{ fontSize: 12, color: C.muted }}>
-                  {next.status === "por-vencer"
-                    ? <>Próximo pago: <strong style={{ color: C.black }}>{fmtCur(next.amount, cur)}</strong> el {fmtLong(next.dueDate)} <span style={{ fontSize: 11 }}>· {nextPaymentSourceLabel(next.source)}</span></>
-                    : <>Próximo pago: <strong style={{ color: C.green }}>al día ✅</strong></>}
-                  {/* Cuánto sería ese pago en soles: informativo, nunca se suma. */}
-                  {cur === "USD" && next.status === "por-vencer" && (
-                    <EquivalenteSoles montoUSD={next.amount} card={card} data={data} nota />
-                  )}
-                </div>
-                <StatementDiffNote next={next} fmt={fmt} currency={cur} />
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-                  Saldo vivo: <strong style={{ color: usage.balance > 0 ? C.orange : C.green }}>{fmtCur(usage.balance, cur)}</strong>
-                </div>
+              {/* Editar y archivar se quedan acá: esta es la pantalla de
+                  configuración. `stopPropagation` para no abrir el detalle. */}
+              <div style={{ display: "flex", gap: 8, padding: "0 14px 11px" }}>
+                <button onClick={e => { e.stopPropagation(); openEditCard(card); }} style={{ background: C.purpleSoft, color: C.purple, border: "none", borderRadius: 8, padding: "6px 12px", fontWeight: 700, fontSize: 11.5, cursor: "pointer", fontFamily: "inherit" }}>Editar</button>
+                <button onClick={e => { e.stopPropagation(); archiveCard(card); }} style={{ background: "#F0EDE4", color: "#666", border: "none", borderRadius: 8, padding: "6px 12px", fontWeight: 700, fontSize: 11.5, cursor: "pointer", fontFamily: "inherit" }}>Archivar</button>
+                <div style={{ flex: 1 }} />
+                <button onClick={() => setSubScreen("card-" + card.id)} style={{ background: "transparent", color: C.purple, border: "none", padding: "6px 2px", fontWeight: 700, fontSize: 11.5, cursor: "pointer", fontFamily: "inherit" }}>Ver detalle ›</button>
               </div>
-            ))}
-            {/* Si ya cerró un ciclo y no registró lo que cobró el banco, Qori lo pide */}
-            <StatementBanner
-              card={card} expenses={data.expenses} statements={data.cardStatements}
-              onOpen={(prompt) => setStmt({ card, prompt })}
-            />
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-              {/* Siempre disponible: ella entra a registrar lo que debe sin esperar
-                  a que Qori se lo pida (el banner solo sale si el ciclo ya cerró). */}
-              <button onClick={() => {
-                const entry = buildStatementEntry(card, data.expenses, data.cardStatements, new Date());
-                if (entry) setStmt({ card, prompt: entry });
-              }} style={{ background: "#fff", color: C.purple, border: "1.5px solid " + C.purple + "55", borderRadius: 10, padding: "9px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>🧾 Lo que debo</button>
-              <div style={{ flex: 1 }} />
-              {conDeuda.length > 0 ? (
-                <button onClick={() => {
-                  const first = conDeuda[0];
-                  setPayCardId(card.id); setPayCur(first.cur); setPayAmt(String(Math.round(first.usage.balance * 100) / 100));
-                }} style={{ background: card.color || C.purple, color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Pagar tarjeta</button>
-              ) : (
-                <button disabled style={{ background: "#F0EDE4", color: C.muted, border: "none", borderRadius: 10, padding: "9px 16px", fontWeight: 700, fontSize: 13, cursor: "default", fontFamily: "inherit" }}>Sin deuda 🎉</button>
-              )}
             </div>
-          </div>
           );
         })}
 
@@ -423,89 +342,6 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
       )}
       <div style={{ height: "calc(40px + env(safe-area-inset-bottom, 20px))" }} />
 
-      {/* Hoja para registrar el monto OFICIAL del banco (F10) */}
-      {stmt && (
-        <StatementSheet card={stmt.card} prompt={stmt.prompt} fmt={fmt} showToast={showToast} onClose={() => setStmt(null)} />
-      )}
-
-      {/* Modal pagar tarjeta: liquidación de gastos ya registrados, NO crea gastos (P1) */}
-      {payCardId && (() => {
-        const card = methods.find(m => m.id === payCardId);
-        if (!card) return null;
-        const cycle = getCycleFor(card, new Date());
-        const curs = cardCurrencies(card);
-        const cur = curs.includes(payCur) ? payCur : "PEN";
-        const { balance } = getLineUsage(card, data.expenses, data.cardPayments, cur);
-        const cycleExps = (data.expenses || []).filter(e => {
-          if (e.paymentMethodId !== card.id || !e.date) return false;
-          if ((e.currency === "USD" ? "USD" : "PEN") !== cur) return false; // cada deuda por su lado
-          const d = new Date(e.date);
-          const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-          return day >= cycle.start && day <= cycle.end;
-        }).sort((a, b) => new Date(b.date) - new Date(a.date));
-        const amtNum = Number(payAmt);
-        const valid = amtNum > 0;
-        const closePay = () => { setPayCardId(null); setPayAmt(""); setPayCur("PEN"); };
-        const confirmPay = () => {
-          if (!valid) return;
-          setData(p => ({ ...p, cardPayments: [...(p.cardPayments || []), { id: genId(), cardId: card.id, amount: amtNum, currency: cur, date: new Date().toISOString(), cycleKey: cycle.key }] }));
-          closePay();
-          showToast("Pago de " + card.name + " registrado");
-        };
-        const pickCur = (next) => {
-          setPayCur(next);
-          setPayAmt(String(Math.round(getLineUsage(card, data.expenses, data.cardPayments, next).balance * 100) / 100));
-        };
-        return (
-          <div style={{ position: "fixed", inset: 0, zIndex: 410 }} onClick={closePay}>
-            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
-            <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", padding: "16px 24px 40px", maxHeight: "85vh", overflowY: "auto", animation: "slideUp 0.3s ease" }}>
-              <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
-              <div style={{ fontSize: 20, fontWeight: 800, color: C.black, marginBottom: 2 }}>Pagar {card.name}</div>
-              <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Ciclo actual: {fmtDay(cycle.start)} – {fmtDay(cycle.end)} · vence {fmtDay(cycle.paymentDate)}</div>
-              {/* Moneda del pago: solo si la tarjeta maneja las dos. El saldo en
-                  dólares se paga aparte, en dólares. */}
-              {curs.length > 1 && (
-                <>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>¿En qué moneda estás pagando?</div>
-                  <div style={{ display: "flex", background: "#F0EDE4", borderRadius: 12, padding: 4, marginBottom: 14 }}>
-                    {curs.map(c => (
-                      <button key={c} onClick={() => pickCur(c)} style={{ flex: 1, padding: "10px 0", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: cur === c ? 800 : 600, color: cur === c ? C.black : C.muted, background: cur === c ? "#fff" : "transparent", boxShadow: cur === c ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
-                        {CUR_SYMBOL[c]} {CUR_LABEL[c]}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-              {/* Saldo vivo de la moneda elegida */}
-              <div style={{ background: card.color || C.purple, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", letterSpacing: 1, textTransform: "uppercase" }}>Saldo vivo en {CUR_LABEL[cur]}</div>
-                <div style={{ fontFamily: FONT_TITLE, fontSize: 30, fontWeight: 900, color: "#fff", letterSpacing: -0.5 }}>{fmtCur(balance, cur)}</div>
-              </div>
-              {/* Gastos del ciclo que se liquidan */}
-              {cycleExps.length > 0 && (
-                <>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Gastos del ciclo en {CUR_LABEL[cur]}</div>
-                  <div style={{ background: C.beige, borderRadius: 12, padding: "4px 14px", marginBottom: 16 }}>
-                    {cycleExps.map((e, i) => (
-                      <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: i < cycleExps.length - 1 ? "1px solid #E8E4DA" : "none" }}>
-                        <span style={{ fontSize: 13, color: C.black, fontWeight: 500 }}>{e.description}</span>
-                        <span style={{ fontSize: 13, color: C.orange, fontWeight: 600 }}>{fmtCur(e.amount, cur)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-              {/* Monto a pagar */}
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Monto a pagar ({CUR_SYMBOL[cur]})</div>
-              <input type="number" inputMode="decimal" value={payAmt} onChange={e => setPayAmt(e.target.value)} style={{ ...inputStyle, color: C.black, fontSize: 24, fontWeight: 800, textAlign: "center", marginBottom: 6, padding: 14 }} />
-              <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>Este pago liquida gastos ya registrados: no se crea ningún gasto nuevo.</div>
-              <button onClick={confirmPay} disabled={!valid} style={{ width: "100%", padding: 16, borderRadius: 14, background: valid ? C.green : "#D4D0C8", color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: valid ? "pointer" : "default", fontFamily: "inherit", marginBottom: 10 }}>Confirmar pago</button>
-              <button onClick={closePay} style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
-            </div>
-          </div>
-        );
-      })()}
 
     </div>
   );
