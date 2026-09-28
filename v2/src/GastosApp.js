@@ -15,6 +15,8 @@ import { downloadBackup } from "./lib/export";
 import { buildDemoData } from "./lib/demo";
 import { migrateData } from "./lib/migrate";
 import { diaHeredado } from "./lib/ingresos";
+import { mesOrigen, plantillaDelMes, necesitaConfirmar, aplicarPlantilla } from "./lib/mesNuevo";
+import { MesNuevoSheet } from "./components/shared/MesNuevoSheet";
 import { useStore } from "./state/store";
 import Home from "./components/screens/Home";
 import MiMes from "./components/screens/MiMes";
@@ -528,6 +530,47 @@ export default function App() {
   const prevMonthName = prevMonthLabel.split(" ")[0]; // e.g. "Abril"
   const curMonthName = curMonth.split(" ")[0]; // e.g. "Mayo"
 
+  // ── F15: los fijos del mes nuevo ──────────────────────────────────────────
+  // Los fijos y los ingresos fijos se guardan por mes y nada los arrastra, así
+  // que cada mes nacía vacío y la cuenta de "¿me alcanza?" quedaba sin ingresos
+  // sin avisar. Al entrar al mes, Qori le muestra la lista del mes anterior y
+  // ella confirma cuáles siguen. Nunca se copia solo.
+  const [showMesNuevo, setShowMesNuevo] = useState(false);
+  const mesNuevoPreguntado = useRef(false);
+  const flagMesNuevo = (mes) => "qori-fijos-" + mes;
+  const origenFijos = useMemo(() => mesOrigen(data, curMonth), [data.fixed, data.incomeFixed, curMonth]);
+  const plantillaMesNuevo = useMemo(() => plantillaDelMes(data, origenFijos), [data.fixed, data.incomeFixed, origenFijos]);
+  const fijosDelMes = data.fixed.filter(f => f.month === curMonth);
+  const ingFijosDelMes = data.incomeFixed.filter(i => i.month === curMonth);
+  // El atajo para traerlos después: solo si esa lista está vacía y hay de dónde.
+  const traerIngresosDe = origenFijos && ingFijosDelMes.length === 0 && plantillaMesNuevo.ingresos.length > 0 ? origenFijos : null;
+  const traerGastosDe = origenFijos && fijosDelMes.length === 0 && plantillaMesNuevo.gastos.length > 0 ? origenFijos : null;
+
+  // Se pregunta una sola vez por mes. El efecto espera a que haya data cargada
+  // (la nube puede llegar después) y por eso mira también data.fixed.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (authPhase !== "app" || mesNuevoPreguntado.current) return;
+    const mes = getCurrentMonthLabel();
+    let visto = false;
+    try { visto = !!localStorage.getItem(flagMesNuevo(mes)); } catch (e) {}
+    if (visto) { mesNuevoPreguntado.current = true; return; }
+    if (necesitaConfirmar(data, mes, null)) { mesNuevoPreguntado.current = true; setShowMesNuevo(true); }
+  }, [authPhase, data.fixed, data.incomeFixed]);
+
+  // Cerrar (por "Ahora no" o por confirmar) marca el mes: no se vuelve a insistir.
+  const cerrarMesNuevo = () => {
+    mesNuevoPreguntado.current = true;
+    try { localStorage.setItem(flagMesNuevo(curMonth), "1"); } catch (e) {}
+    setShowMesNuevo(false);
+  };
+  const confirmarMesNuevo = (seleccion) => {
+    const n = (seleccion.ingresos || []).length + (seleccion.gastos || []).length;
+    if (n > 0) setData(p => aplicarPlantilla(p, curMonth, seleccion));
+    cerrarMesNuevo();
+    showToast(n > 0 ? `Listo: ${n} fijo${n !== 1 ? "s" : ""} en ${curMonthName}` : `No se trajo nada a ${curMonthName}`);
+  };
+
   // Auto carry-over balance from previous month (from next month onwards,
   // May 2025 is handled manually via the one-time carryover modal)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -986,6 +1029,7 @@ export default function App() {
           showAddExtra={showAddExtra} setShowAddExtra={setShowAddExtra} newExtraName={newExtraName} setNewExtraName={setNewExtraName} newExtraAmt={newExtraAmt} setNewExtraAmt={setNewExtraAmt} addExtra={addExtra} deleteExtra={deleteExtra}
           editExtraId={editExtraId} setEditExtraId={setEditExtraId} editExtraName={editExtraName} setEditExtraName={setEditExtraName} editExtraAmt={editExtraAmt} setEditExtraAmt={setEditExtraAmt}
           editExtraCategory={editExtraCategory} setEditExtraCategory={setEditExtraCategory} saveExtraEdit={saveExtraEdit}
+          traerFijosDe={traerIngresosDe} onTraerFijos={() => setShowMesNuevo(true)}
         />
       )}
       {tab === "config" && <Config fmt={fmt} curMonth={curMonth} setSubScreen={setSubScreen} setConfirm={setConfirm} showToast={showToast} signOut={signOut} forceUploadToSupabase={forceUploadToSupabase} retryCloud={retryCloud} />}
@@ -1000,6 +1044,7 @@ export default function App() {
         editFixedExpType={editFixedExpType} setEditFixedExpType={setEditFixedExpType} saveFixedExpType={saveFixedExpType}
         showAddFixed={showAddFixed} setShowAddFixed={setShowAddFixed}
         newFixedName={newFixedName} setNewFixedName={setNewFixedName} newFixedType={newFixedType} setNewFixedType={setNewFixedType}
+        traerFijosDe={traerGastosDe} onTraerFijos={() => setShowMesNuevo(true)}
       />
       <CatsSubScreen type="gastos" title="Cats. Gastos" subScreen={subScreen} setSubScreen={setSubScreen}
         catEditId={catEditId} setCatEditId={setCatEditId} catEditEmoji={catEditEmoji} setCatEditEmoji={setCatEditEmoji}
@@ -1094,6 +1139,16 @@ export default function App() {
       {/* ── Budget feature announcement modal ── */}
       {showBudgetFeatureModal && authPhase === "app" && !showCarryoverModal && (
         <BudgetFeatureModal setShowBudgetFeatureModal={setShowBudgetFeatureModal} setSubScreen={setSubScreen} />
+      )}
+
+      {/* ── F15: ¿cuáles de tus fijos siguen este mes? ──
+          Espera a que no haya otro modal de bienvenida abierto: no se apila. */}
+      {showMesNuevo && authPhase === "app" && origenFijos && !showCarryoverModal && !showBudgetFeatureModal && !confirm && (
+        <MesNuevoSheet
+          key={origenFijos} mesActual={curMonth} mesOrigen={origenFijos}
+          plantilla={plantillaMesNuevo} fmt={fmt}
+          onConfirm={confirmarMesNuevo} onDismiss={cerrarMesNuevo}
+        />
       )}
     </div>
   );

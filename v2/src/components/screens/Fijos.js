@@ -6,6 +6,7 @@ import { genId, fmtWith } from "../../lib/format";
 import { buildCatMap, getMonthData, isPEN, sumUSD } from "../../state/selectors";
 import { getMonthLabel, getMonthShort } from "../../lib/dates";
 import { useStore } from "../../state/store";
+import { TraerFijosButton } from "../shared/MesNuevoSheet";
 
 const typeLabel = (t) => t === "manual" ? "Lo pago yo" : t === "debito" ? "Debito automatico" : "Descuento sueldo";
 const typeBg = (t) => t === "manual" ? C.orange : t === "debito" ? C.purple : C.green;
@@ -19,6 +20,7 @@ export function FijosScreen({
   editFixedExpName, setEditFixedExpName, editFixedExpNameVal, setEditFixedExpNameVal, saveFixedExpName,
   editFixedExpType, setEditFixedExpType, saveFixedExpType,
   showAddFixed, setShowAddFixed, newFixedName, setNewFixedName, newFixedType, setNewFixedType,
+  traerFijosDe, onTraerFijos,
 }) {
   const data = useStore(s => s.data);
   const setData = useStore(s => s.setData);
@@ -39,6 +41,13 @@ export function FijosScreen({
           <div style={{ display: "flex", gap: 8, marginTop: 6, marginBottom: 20, fontSize: 12, color: C.muted }}><span>Pagado: {fmt(totalPaid)}</span><span>|</span><span>Pendiente: {fmt(totalAll - totalPaid)}</span></div>
         </div>
         <div style={{ padding: "0 20px" }}>
+          {/* F15: los fijos viven por mes, así que el mes nuevo nace vacío. Acá
+              puede traer los del mes anterior cuando descartó la pregunta. */}
+          {traerFijosDe && (
+            <div style={{ marginBottom: 12 }}>
+              <TraerFijosButton mesOrigen={traerFijosDe} onClick={onTraerFijos} />
+            </div>
+          )}
           {fixedCur.map(f => (
             <div key={f.id} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, opacity: f.paid ? 0.65 : 1 }}>
               <div style={{ display: "flex", alignItems: "center" }}>

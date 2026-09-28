@@ -2,9 +2,10 @@ import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { PlusIcon, TrashIcon } from "../shared/icons";
 import { useStore } from "../../state/store";
 import { ordenaPorDia, diaDeIngreso } from "../../lib/ingresos";
+import { TraerFijosButton } from "../shared/MesNuevoSheet";
 
 export default function Ingresos({
-  fmt, curMonth,
+  fmt, curMonth, traerFijosDe, onTraerFijos,
   editIncomeId, setEditIncomeId, editIncomeAmt, setEditIncomeAmt, saveIncomeAmt,
   editFixedIncomeName, setEditFixedIncomeName, editFixedIncomeNameVal, setEditFixedIncomeNameVal, saveFixedIncomeName,
   showAddFixedIncome, setShowAddFixedIncome, newFixedIncomeName, setNewFixedIncomeName, addFixedIncome, deleteFixedIncome,
@@ -39,6 +40,16 @@ export default function Ingresos({
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={addFixedIncome} style={{ flex: 1, padding: 12, borderRadius: 12, background: C.green, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Agregar</button>
                 <button onClick={() => { setShowAddFixedIncome(false); setNewFixedIncomeName(""); setNewFixedIncomeDay(""); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: "#E0DCD4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+              </div>
+            </div>
+          )}
+          {/* F15: el mes empieza vacío y sus fijos quedaron en el mes anterior.
+              Este atajo existe para que "Ahora no" no sea un callejón sin salida. */}
+          {traerFijosDe && (
+            <div style={{ marginBottom: 12 }}>
+              <TraerFijosButton mesOrigen={traerFijosDe} onClick={onTraerFijos} />
+              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginTop: 6, padding: "0 2px" }}>
+                Este mes todavía no tienes ingresos fijos, así que Qori no puede decirte si te alcanza.
               </div>
             </div>
           )}
