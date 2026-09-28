@@ -9,6 +9,8 @@ import { parseAmount, extractDescription } from "./lib/voice";
 import { hasSignificantData, saveLocalBackup, loadLocalBackup, clearLocalData } from "./lib/sync";
 import { saveLocalSession, loadLocalSession, clearLocalSession, stashRescueCopy, saveLastSyncAt, loadLastSyncAt, CLOUD_RESCUE_KEY } from "./lib/localSession";
 import { decideSync } from "./lib/reconcile";
+import { fetchPendingInbox, flushInboxMarks, markInboxRowOrQueue } from "./lib/inbox";
+import { InboxSheet } from "./components/shared/InboxSheet";
 import { downloadBackup } from "./lib/export";
 import { buildDemoData } from "./lib/demo";
 import { migrateData } from "./lib/migrate";
@@ -72,6 +74,8 @@ export default function App() {
   const [editExpDate, setEditExpDate] = useState("");
   const [scanLoading, setScanLoading] = useState(false);
   const [scanResults, setScanResults] = useState(null);
+  const [inboxItems, setInboxItems] = useState([]); // compras de Apple Pay por confirmar
+  const [showInbox, setShowInbox] = useState(false);
   const [showScanOptions, setShowScanOptions] = useState(false); // array of {description, amount, date}
   const [toast, setToast] = useState(null);
   const timerRef = useRef(null);
@@ -380,6 +384,59 @@ export default function App() {
     }, 1500);
     return () => clearTimeout(syncTimer.current);
   }, [data, authUser]);
+
+  // Bandeja de gastos por confirmar (F8): compras que el atajo de iOS dejó en
+  // `inbox`. Local-first a rajatabla: si Supabase no responde, fetchPendingInbox
+  // devuelve [] y acá no pasa nada — ni error en pantalla ni bloqueo.
+  useEffect(() => {
+    if (authPhase !== "app" || !authUser) { setInboxItems([]); return; }
+    let vivo = true;
+    (async () => {
+      await flushInboxMarks(supabase, authUser.id); // marcas que quedaron debiendo
+      const items = await fetchPendingInbox(supabase, authUser.id);
+      if (vivo) setInboxItems(items);
+    })();
+    return () => { vivo = false; };
+  }, [authPhase, authUser]);
+
+  // Saca el pendiente de la lista y cierra la hoja cuando ya no queda ninguno.
+  const dropInboxItem = (id) => {
+    setInboxItems(prev => {
+      const next = prev.filter(i => i.id !== id);
+      if (next.length === 0) setShowInbox(false);
+      return next;
+    });
+  };
+
+  // Confirmar un pendiente: el gasto entra al blob local con la fecha correcta
+  // (misma forma que registerExpense) y la fila se marca `confirmed` en la nube.
+  // Si la marca falla queda en cola de reintentos: el gasto local NO se pierde.
+  const registerInboxItem = (item, form) => {
+    const a = Number(form.amt);
+    if (!a || a <= 0) return;
+    const d = (form.desc || "").trim() || "Compra";
+    const pm = form.pm || null;
+    const when = parseDateInput(form.dateStr) || new Date(item.occurredAt);
+    setData(p => ({
+      ...p,
+      expenses: [...p.expenses, {
+        id: genId(), amount: a, description: d,
+        date: when.toISOString(), month: monthLabelOf(when),
+        category: slimCat(form.cat), subcategory: form.sub || null,
+        paymentMethodId: pm,
+      }],
+      ...(pm ? { lastPaymentMethodId: pm } : {}),
+    }));
+    dropInboxItem(item.id);
+    showToast((form.cat ? form.cat.emoji + " " : "") + d + " " + fmtWith(a, data.currency) + " registrado");
+    markInboxRowOrQueue(supabase, item.id, "confirmed");
+  };
+
+  const discardInboxItem = (item) => {
+    dropInboxItem(item.id);
+    showToast("Compra descartada");
+    markInboxRowOrQueue(supabase, item.id, "discarded");
+  };
 
   // Show name setup if logged in and no name set
   useEffect(() => {
@@ -832,10 +889,14 @@ export default function App() {
       {scanResults && (
         <ScanResultsSheet scanResults={scanResults} setScanResults={setScanResults} removeScanItem={removeScanItem} updateScanItem={updateScanItem} confirmScanResults={confirmScanResults} scanPm={scanPm} setScanPm={setScanPm} />
       )}
+      {showInbox && inboxItems.length > 0 && (
+        <InboxSheet items={inboxItems} onRegister={registerInboxItem} onDiscard={discardInboxItem} onClose={() => setShowInbox(false)} />
+      )}
       {confirm && <ConfirmModal confirm={confirm} setConfirm={setConfirm} />}
       {tab === "home" && (
         <Home
           fmt={fmt} curMonth={curMonth} todayTotal={todayTotal} recentExp={recentExp} budgetAlerts={budgetAlerts}
+          inboxItems={inboxItems} setShowInbox={setShowInbox}
           editExpId={editExpId} setEditExpId={setEditExpId} editExpDesc={editExpDesc} setEditExpDesc={setEditExpDesc}
           editExpAmt={editExpAmt} setEditExpAmt={setEditExpAmt} editExpDate={editExpDate} setEditExpDate={setEditExpDate}
           editExpCat={editExpCat} setEditExpCat={setEditExpCat} editExpSub={editExpSub} setEditExpSub={setEditExpSub} editExpPm={editExpPm} setEditExpPm={setEditExpPm}

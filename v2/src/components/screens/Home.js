@@ -7,9 +7,11 @@ import { plazoLabel } from "./ProximosPagos";
 import { useStore } from "../../state/store";
 import { PaymentMethodPicker, PmChip } from "../shared/PaymentMethodPicker";
 import { CategoryPicker } from "../shared/CategoryPicker";
+import { InboxBanner } from "../shared/InboxSheet";
 
 export default function Home({
   fmt, curMonth, todayTotal, recentExp, budgetAlerts,
+  inboxItems, setShowInbox,
   editExpId, setEditExpId, editExpDesc, setEditExpDesc, editExpAmt, setEditExpAmt,
   editExpDate, setEditExpDate, editExpCat, setEditExpCat, editExpSub, setEditExpSub, editExpPm, setEditExpPm,
   saveExpenseEdit, deleteExpense,
@@ -67,6 +69,14 @@ export default function Home({
             <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>Toca <strong style={{ color: "#fff" }}>+</strong> para registrar tu primer gasto</div>
           </div>
         )}
+        {/* Bandeja (F8): compras de Apple Pay esperando categoría. Solo aparece
+            si hay pendientes — con la bandeja vacía Inicio queda igual que antes. */}
+        <InboxBanner
+          items={inboxItems}
+          total={(inboxItems || []).reduce((s, i) => s + i.amount, 0)}
+          onOpen={() => setShowInbox(true)}
+          fmt={fmt}
+        />
         {/* Próximos pagos (F6): lo primero que ve si tiene TC — cuánto vence y cuándo */}
         {creditCards.length > 0 && (() => {
           const { total30, items } = getUpcomingTotal(data.paymentMethods, data.expenses, data.cardPayments, new Date());
