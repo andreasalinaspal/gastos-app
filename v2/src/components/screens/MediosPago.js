@@ -3,7 +3,7 @@ import { C, FONT_TITLE, cardStyle, inputStyle, usageColor } from "../../theme";
 import { PlusIcon } from "../shared/icons";
 import { subStyle, subHeader } from "../shared/subnav";
 import { genId, fmtWith } from "../../lib/format";
-import { getCycleFor, getLineUsage, getNextPayment, cardCurrencies, hasLine } from "../../lib/cycles";
+import { getCycleFor, getLineUsage, getNextPayment, cardCurrencies, hasLine, buildStatementEntry } from "../../lib/cycles";
 import { useStore } from "../../state/store";
 import { pmEmoji } from "../shared/PaymentMethodPicker";
 import { StatementBanner, StatementSheet, StatementDiffNote, nextPaymentSourceLabel } from "../shared/StatementSheet";
@@ -239,7 +239,13 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
               card={card} expenses={data.expenses} statements={data.cardStatements}
               onOpen={(prompt) => setStmt({ card, prompt })}
             />
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              {/* Siempre disponible: ella entra a registrar lo que debe sin esperar
+                  a que Qori se lo pida (el banner solo sale si el ciclo ya cerró). */}
+              <button onClick={() => {
+                const entry = buildStatementEntry(card, data.expenses, data.cardStatements, new Date());
+                if (entry) setStmt({ card, prompt: entry });
+              }} style={{ background: "#fff", color: C.purple, border: "1.5px solid " + C.purple + "55", borderRadius: 10, padding: "9px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>🧾 Lo que debo</button>
               <div style={{ flex: 1 }} />
               {conDeuda.length > 0 ? (
                 <button onClick={() => {

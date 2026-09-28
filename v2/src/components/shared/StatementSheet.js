@@ -3,6 +3,7 @@ import { C, FONT_TITLE, inputStyle } from "../../theme";
 import { genId, fmtWith } from "../../lib/format";
 import { getStatementPrompt } from "../../lib/cycles";
 import { useStore } from "../../state/store";
+import { useKeyboardInset, sheetStyle } from "../../lib/useKeyboardInset";
 
 // Registro del estado de cuenta del banco (F10).
 //
@@ -69,9 +70,12 @@ export function StatementBanner({ card, expenses, statements, now, onOpen, compa
 // Hoja para registrar el monto oficial (una casilla por moneda que falte) y la
 // fecha de vencimiento, prellenada con la calculada.
 export function StatementSheet({ card, prompt, fmt, onClose, showToast }) {
+  const kb = useKeyboardInset();
   const setData = useStore(s => s.setData);
+  // Si ya había un monto registrado para ese ciclo y moneda, viene prellenado
+  // para poder corregirlo en vez de duplicarlo.
   const [amounts, setAmounts] = useState(() =>
-    Object.fromEntries(prompt.missing.map(m => [m.currency, ""]))
+    Object.fromEntries(prompt.missing.map(m => [m.currency, m.registrado != null ? String(m.registrado) : ""]))
   );
   const [due, setDue] = useState(() => toDateInput(prompt.cycle.paymentDate));
   const [error, setError] = useState("");
@@ -87,7 +91,15 @@ export function StatementSheet({ card, prompt, fmt, onClose, showToast }) {
       id: genId(), cardId: card.id, cycleKey: prompt.cycle.key, currency: m.currency,
       amount: m.amount, dueDate: dueISO, registeredAt: new Date().toISOString(),
     }));
-    setData(p => ({ ...p, cardStatements: [...(p.cardStatements || []), ...nuevos] }));
+    // Reemplaza el registro anterior de ese ciclo y moneda en vez de duplicarlo.
+    const reemplazadas = new Set(nuevos.map(n => n.cardId + "|" + n.cycleKey + "|" + n.currency));
+    setData(p => ({
+      ...p,
+      cardStatements: [
+        ...(p.cardStatements || []).filter(s => !reemplazadas.has(s.cardId + "|" + s.cycleKey + "|" + s.currency)),
+        ...nuevos,
+      ],
+    }));
     if (showToast) showToast("Estado de cuenta registrado");
     onClose();
   };
@@ -95,7 +107,7 @@ export function StatementSheet({ card, prompt, fmt, onClose, showToast }) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 420 }} onClick={onClose}>
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
-      <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", padding: "16px 24px 40px", maxHeight: "88vh", overflowY: "auto", animation: "slideUp 0.3s ease" }}>
+      <div onClick={e => e.stopPropagation()} style={sheetStyle(kb)}>
         <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
         <div style={{ fontFamily: FONT_TITLE, fontSize: 22, fontWeight: 900, color: C.black, marginBottom: 4 }}>Tu estado de cuenta</div>
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>

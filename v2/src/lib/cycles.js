@@ -294,3 +294,22 @@ export function getStatementPrompt(card, expenses, statements, now = new Date())
   if (missing.length === 0) return null;
   return { cycle: closed, missing };
 }
+
+// Prompt para cuando la usuaria ENTRA ELLA a registrar lo que debe, sin esperar
+// a que Qori se lo pida. A diferencia de getStatementPrompt, aquí no se filtra
+// nada: ofrece todas las monedas de la tarjeta, aunque el ciclo esté vacío o ya
+// tenga un monto registrado (en ese caso viene prellenado para corregirlo).
+// → { cycle, missing: [{ currency, estimateGross, registrado }] }
+export function buildStatementEntry(card, expenses, statements, now = new Date()) {
+  if (!card || card.type !== "credito") return null;
+  const closed = getClosedCycle(card, now);
+  const missing = cardCurrencies(card).map(cur => {
+    const previo = findStatement(statements, card.id, closed.key, cur);
+    return {
+      currency: cur,
+      estimateGross: openingAt(card, closed.end, cur) + spentSince(card, expenses, closed.end, cur),
+      registrado: previo ? previo.amount : null,
+    };
+  });
+  return missing.length ? { cycle: closed, missing } : null;
+}

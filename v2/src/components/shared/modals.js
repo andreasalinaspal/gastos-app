@@ -3,6 +3,7 @@ import { TrashIcon } from "./icons";
 import { MONTHS_SHORT, DAYS } from "../../lib/dates";
 import { genId, fmtWith } from "../../lib/format";
 import { useStore } from "../../state/store";
+import { useKeyboardInset, sheetStyle } from "../../lib/useKeyboardInset";
 import { PaymentMethodPicker } from "./PaymentMethodPicker";
 import { hasLine, curOf } from "../../lib/cycles";
 import { CategoryPicker } from "./CategoryPicker";
@@ -145,10 +146,11 @@ export function ScanOptionsModal({ setShowScanOptions, cameraInputRef, fileInput
 }
 
 export function ManualModal({ manAmt, setManAmt, manDesc, setManDesc, setShowManual, openCatPicker }) {
+  const kb = useKeyboardInset();
   return (
         <div style={{ position: "fixed", inset: 0, zIndex: 300 }} onClick={() => setShowManual(false)}>
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
-          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", padding: "16px 24px 40px", animation: "slideUp 0.3s ease" }}>
+          <div onClick={e => e.stopPropagation()} style={sheetStyle(kb)}>
             <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
             <div style={{ fontSize: 20, fontWeight: 800, color: C.black, marginBottom: 20 }}>Nuevo gasto</div>
             <input type="number" placeholder="0.00" value={manAmt} onChange={e => setManAmt(e.target.value)} inputMode="decimal" autoFocus style={{ ...inputStyle, color: C.black, fontSize: 28, fontWeight: 800, textAlign: "center", marginBottom: 12, padding: "16px" }} />
@@ -203,6 +205,7 @@ export function NameSetupScreen({ nameSetupValue, setNameSetupValue, setShowName
 
 export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc, pendingExpCat, setPendingExpCat, pendingExpPm, setPendingExpPm, pendingExpDate, setPendingExpDate, pendingExpSub, setPendingExpSub, pendingExpCur, setPendingExpCur, registerExpense }) {
   const data = useStore(s => s.data);
+  const kb = useKeyboardInset();
   // Selector de moneda (F10): solo tiene sentido si el medio de pago elegido es
   // una tarjeta con línea en dólares. Por defecto, soles.
   const pmSel = (data.paymentMethods || []).find(m => m.id === pendingExpPm);
@@ -217,7 +220,7 @@ export function CatPickerModal({ setShowCatPicker, pendingExpAmt, pendingExpDesc
   return (
         <div style={{ position: "fixed", inset: 0, zIndex: 310 }} onClick={() => setShowCatPicker(false)}>
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
-          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#fff", borderRadius: "28px 28px 0 0", padding: "16px 24px 40px", maxHeight: "80vh", overflowY: "auto", animation: "slideUp 0.3s ease" }}>
+          <div onClick={e => e.stopPropagation()} style={sheetStyle(kb)}>
             <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 20px" }} />
             <div style={{ fontSize: 20, fontWeight: 800, color: C.black, marginBottom: 4 }}>¿En qué categoría?</div>
             <div style={{ fontSize: 13, color: C.muted, marginBottom: puedeUsd ? 12 : 20 }}>{pendingExpDesc} · {fmtWith(pendingExpAmt, cur === "USD" ? "USD" : data.currency)}</div>
