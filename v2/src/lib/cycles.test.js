@@ -265,12 +265,19 @@ describe("getNextPayment", () => {
     expect(n.status).toBe("al-dia");
   });
 
-  it("los pagos de ciclos anteriores también descuentan; los de ciclos futuros no", () => {
+  it("descuenta todo pago ya hecho, sin importar a qué ciclo quedó etiquetado", () => {
+    // Un pago registrado hoy lleva el cycleKey del ciclo ABIERTO, pero en la vida real
+    // liquida el estado de cuenta que está por vencer: tiene que descontar igual.
     const pagos = [
-      { id: "p1", cardId: "card-1", amount: 400, cycleKey: "2026-08-25" }, // ciclo anterior
-      { id: "p2", cardId: "card-1", amount: 999, cycleKey: "2026-10-25" }, // ciclo futuro
+      { id: "p1", cardId: "card-1", amount: 400, cycleKey: "2026-08-25", date: new Date(2026, 7, 20).toISOString() },
+      { id: "p2", cardId: "card-1", amount: 300, cycleKey: "2026-10-25", date: new Date(2026, 8, 27).toISOString() },
     ];
-    expect(getNextPayment(c, expenses, pagos, NOW).amount).toBe(800);
+    expect(getNextPayment(c, expenses, pagos, NOW).amount).toBe(500); // 1200 − 400 − 300
+  });
+
+  it("un pago con fecha futura todavía no descuenta", () => {
+    const pagos = [{ id: "p1", cardId: "card-1", amount: 500, date: new Date(2026, 9, 5).toISOString() }];
+    expect(getNextPayment(c, expenses, pagos, NOW).amount).toBe(1200);
   });
 
   it("nunca devuelve monto negativo", () => {

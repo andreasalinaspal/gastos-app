@@ -4,3 +4,5 @@ export const FONT_TITLE = "'Syne', system-ui, sans-serif";
 export const FONT_BODY  = "'ClashGrotesk', system-ui, sans-serif";
 export const inputStyle = { width: "100%", padding: "12px 14px", borderRadius: 10, border: "1.5px solid #D4D0C8", fontSize: 15, fontFamily: FONT_BODY, background: "#FAFAF5", boxSizing: "border-box" };
 export const cardStyle = { background: "#fff", borderRadius: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" };
+// Semáforo de uso de línea de crédito (F6): verde <30%, naranja 30-60%, rojo >60%.
+export const usageColor = (pct) => (pct > 60 ? C.orange : pct >= 30 ? C.orangeLight : C.green);

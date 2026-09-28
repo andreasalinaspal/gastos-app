@@ -135,14 +135,13 @@ export function getNextPayment(card, expenses, cardPayments, now = new Date()) {
 
   const spent = spentSince(card, expenses, closed.end);
   const opening = openingAt(card, closed.end);
-  // Pagos aplicados a este estado de cuenta o a cualquiera anterior (las claves
-  // "YYYY-MM-DD" ordenan bien como texto). Un pago sin cycleKey se ubica por su fecha.
+  // Todo pago ya hecho descuenta de este estado de cuenta: el banco aplica los pagos
+  // a la deuda más antigua primero, así que el `cycleKey` (que solo dice en qué ciclo
+  // se registró el pago) no limita a qué estado de cuenta se aplica.
   const paid = (cardPayments || []).reduce((sum, p) => {
     if (!p || p.cardId !== card.id) return sum;
-    const amount = Number(p.amount) || 0;
-    if (p.cycleKey) return p.cycleKey <= closed.key ? sum + amount : sum;
-    if (!p.date) return sum + amount;
-    return startOfDay(new Date(p.date)) <= closed.end ? sum + amount : sum;
+    if (p.date && startOfDay(new Date(p.date)) > startOfDay(now)) return sum; // pago futuro
+    return sum + (Number(p.amount) || 0);
   }, 0);
 
   const amount = Math.max(0, opening + spent - paid);
