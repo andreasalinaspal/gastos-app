@@ -5,6 +5,7 @@ import { migrateData } from "../../lib/migrate";
 import { loadLastSyncAt } from "../../lib/localSession";
 import { LESSONS } from "../../content/lessons";
 import { useStore } from "../../state/store";
+import { textoVersion, buscaVersion } from "../../lib/version";
 
 const cfgRowStyle = { display: "flex", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #F0EDE4", cursor: "pointer", gap: 14 };
 
@@ -14,6 +15,49 @@ const fmtSync = (iso) => {
   if (Number.isNaN(d.getTime())) return "nunca";
   return d.toLocaleString("es-PE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 };
+
+// F21: qué versión tiene este celular, y un botón para saber si hay una nueva.
+//
+// Existe porque ella no tenía cómo comprobarlo sola: la app se ve igual hasta
+// que el celular suelta la versión vieja, y terminaba preguntando "¿ya se
+// publicó?". Acá lo ve y, si hay algo nuevo, lo trae con un toque.
+function VersionApp({ showToast }) {
+  const [estado, setEstado] = useState(null); // null | buscando | al-dia | nueva | sin-conexion | desconocido
+
+  const revisar = async () => {
+    setEstado("buscando");
+    const r = await buscaVersion();
+    setEstado(r.estado);
+    if (r.estado === "al-dia") showToast("✅ Ya tienes la última versión");
+    if (r.estado === "sin-conexion") showToast("Sin conexión — no se pudo revisar");
+    if (r.estado === "desconocido") showToast("No se pudo saber qué versión hay");
+  };
+
+  return (
+    <div style={{ textAlign: "center", marginBottom: 24 }}>
+      <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>{textoVersion()}</div>
+      {estado === "nueva" ? (
+        <>
+          <div style={{ fontSize: 12.5, color: C.black, fontWeight: 700, marginBottom: 8 }}>Hay una versión nueva 🎉</div>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ padding: "10px 18px", borderRadius: 10, background: C.purple, color: "#fff", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Actualizar ahora
+          </button>
+        </>
+      ) : (
+        <button
+          onClick={revisar}
+          disabled={estado === "buscando"}
+          style={{ padding: "9px 16px", borderRadius: 10, background: "transparent", color: C.muted, border: "1.5px solid #E0DCD4", fontSize: 12.5, fontWeight: 700, cursor: estado === "buscando" ? "default" : "pointer", fontFamily: "inherit" }}
+        >
+          {estado === "buscando" ? "Revisando…" : estado === "al-dia" ? "Estás al día ✅" : "¿Hay versión nueva?"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default function Config({ fmt, curMonth, setSubScreen, setConfirm, showToast, signOut, forceUploadToSupabase, retryCloud }) {
   const data = useStore(s => s.data);
@@ -218,7 +262,8 @@ export default function Config({ fmt, curMonth, setSubScreen, setConfirm, showTo
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>{authUser?.email}</div>
           <button onClick={signOut} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#fff", color: C.orange, border: "2px solid " + C.orange, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cerrar sesión</button>
         </div>
-        <button onClick={() => setConfirm({ message: "¿Resetear todos los datos? Esta acción no se puede deshacer.", onConfirm: () => { setData(initData()); showToast("Datos reseteados"); }})} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.orange, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 24 }}>Resetear datos</button>
+        <button onClick={() => setConfirm({ message: "¿Resetear todos los datos? Esta acción no se puede deshacer.", onConfirm: () => { setData(initData()); showToast("Datos reseteados"); }})} style={{ width: "100%", padding: 14, borderRadius: 12, background: C.orange, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 12 }}>Resetear datos</button>
+        <VersionApp showToast={showToast} />
       </div>
     </div>
   );
