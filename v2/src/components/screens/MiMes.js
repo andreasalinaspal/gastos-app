@@ -4,6 +4,7 @@ import { TrashIcon } from "../shared/icons";
 import { MONTHS_SHORT, DAYS, getMonthShort } from "../../lib/dates";
 import { useStore } from "../../state/store";
 import { curOf } from "../../lib/cycles";
+import { fechaEfectiva, esRecibido } from "../../lib/ingresos";
 import { sumUSD } from "../../state/selectors";
 import { fmtWith } from "../../lib/format";
 import { PaymentMethodPicker, PmChip } from "../shared/PaymentMethodPicker";
@@ -20,9 +21,31 @@ export default function MiMes({
   // Los registros se leen de lo más nuevo a lo más viejo, que es lo que se
   // quiere ver primero; el orden inverso queda a un toque.
   const [ordenRegistros, setOrdenRegistros] = useState("nuevo");
-    const mtabs = [{ label: "Este mes", val: 0 }, { label: getMonthShort(-1), val: -1 }, { label: getMonthShort(-2), val: -2 }, { label: "Historico", val: "hist" }];
+    // F22: el mes que viene solo aparece si ya hay algo ahí. Pasa cuando anota
+    // un pago que le hacen el mes siguiente: tiene que poder verlo antes de que
+    // llegue, no descubrirlo cuando cambie el mes.
+    const haySiguiente = getMonthData(1).ingresos.some(i => (Number(i.amount) || 0) > 0) || getMonthData(1).exps.length > 0;
+    const mtabs = [
+      ...(haySiguiente ? [{ label: getMonthShort(1), val: 1 }] : []),
+      { label: "Este mes", val: 0 }, { label: getMonthShort(-1), val: -1 }, { label: getMonthShort(-2), val: -2 }, { label: "Historico", val: "hist" },
+    ];
     const d = monthTab === "hist" ? getMonthData(0) : getMonthData(monthTab);
     const isNeg = d.balance < 0;
+    // F22: gastos e ingresos en UNA sola lista cronológica. Los ingresos en cero
+    // no entran: son plantillas a las que todavía no les puso monto, no
+    // movimientos. Los que no tienen fecha van al final, como en Ingresos.
+    const movimientos = [
+      ...d.exps.map(e => ({ tipo: "gasto", id: e.id, fecha: new Date(e.date), e })),
+      ...d.ingresos
+        .filter(i => (Number(i.amount) || 0) > 0)
+        .map(i => ({ tipo: "ingreso", id: i.id, fecha: fechaEfectiva(i), pendiente: !esRecibido(i), i })),
+    ].sort((a, b) => {
+      if (!a.fecha && !b.fecha) return 0;
+      if (!a.fecha) return 1;   // sin fecha, siempre al final
+      if (!b.fecha) return -1;
+      const diff = b.fecha - a.fecha;
+      return ordenRegistros === "nuevo" ? diff : -diff;
+    });
     return (
       <div style={{ flex: 1, background: C.beige, minHeight: "100vh", paddingBottom: 80 }}>
         <div style={{ padding: "32px 24px 12px" }}>
@@ -75,6 +98,14 @@ export default function MiMes({
                     No tienes ingresos registrados este mes: esto es solo lo que llevas gastado, no un balance. Regístralos en Ingresos.
                   </div>
                 )}
+                {/* F22: el balance del mes cuenta TODO el mes, incluido lo que
+                    todavía no entra. Se dice, para que no confunda con lo que
+                    tiene hoy en la mano. */}
+                {d.totalIncPendiente > 0 && (
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 1.45 }}>
+                    Cuenta {fmt(d.totalIncPendiente)} de ingresos que todavía no entran. Hoy tienes {fmt(d.totalIncRecibido)} recibidos.
+                  </div>
+                )}
                 {d.totalDiariosUSD > 0 && (
                   <div style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 6, lineHeight: 1.45 }}>
                     Gastaste además {fmtWith(d.totalDiariosUSD, "USD")} en dólares. No se suman acá: esa deuda se paga aparte, en dólares.
@@ -85,7 +116,12 @@ export default function MiMes({
             <div style={{ display: "flex", gap: 10, padding: "0 24px", marginBottom: 20, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
               <div style={{ minWidth: 110, background: C.green, borderRadius: 14, padding: "14px 12px", color: "#fff", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8 }}>Ingresos</div>
-                <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap", fontFamily: FONT_TITLE }}>{fmt(d.totalInc)}</div>
+                {/* F22: el número grande es lo que YA entró. Lo que falta entrar
+                    va debajo, visible pero aparte. */}
+                <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap", fontFamily: FONT_TITLE }}>{fmt(d.totalIncRecibido)}</div>
+                {d.totalIncPendiente > 0 && (
+                  <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2, whiteSpace: "nowrap", opacity: 0.85 }}>+ {fmt(d.totalIncPendiente)} por entrar</div>
+                )}
               </div>
               <div style={{ minWidth: 110, background: C.orange, borderRadius: 14, padding: "14px 12px", color: "#fff", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8 }}>Gastos Fijos</div>
@@ -103,7 +139,7 @@ export default function MiMes({
             <div style={{ padding: "0 24px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, letterSpacing: 1.5, textTransform: "uppercase" }}>Registros del mes</div>
-                {d.exps.length > 1 && (
+                {movimientos.length > 1 && (
                   <button
                     onClick={() => setOrdenRegistros(o => (o === "nuevo" ? "antiguo" : "nuevo"))}
                     title={ordenRegistros === "nuevo" ? "Mostrando primero los más nuevos" : "Mostrando primero los más antiguos"}
@@ -113,11 +149,33 @@ export default function MiMes({
                   </button>
                 )}
               </div>
-              {d.exps.length === 0 && <div style={{ ...cardStyle, textAlign: "center", color: C.muted, fontSize: 14, padding: 24 }}>Sin gastos registrados</div>}
-              {[...d.exps].sort((a, b) => {
-                const diff = new Date(b.date) - new Date(a.date);
-                return ordenRegistros === "nuevo" ? diff : -diff;
-              }).map(e => { const dt = new Date(e.date); return (
+              {movimientos.length === 0 && <div style={{ ...cardStyle, textAlign: "center", color: C.muted, fontSize: 14, padding: 24 }}>Sin movimientos registrados</div>}
+              {/* F22: los ingresos van en la misma lista que los gastos. Los que
+                  todavía no entran salen marcados como pendientes, no como plata
+                  que ya tiene. */}
+              {movimientos.map(mov => mov.tipo === "ingreso" ? (() => { const { i, pendiente, fecha } = mov; return (
+                <div key={"inc-" + i.id} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, opacity: pendiente ? 0.75 : 1, border: pendiente ? "1.5px dashed #CFCABF" : undefined }}>
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: pendiente ? "#F2F0EA" : "#E8F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: pendiente ? C.muted : C.green, marginRight: 14, flexShrink: 0 }}>
+                      {fecha ? fecha.getDate() : "–"}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>{i.name}</div>
+                      <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+                        <span>
+                          {fecha
+                            ? <>{DAYS[fecha.getDay()].toLowerCase().slice(0,3)}, {fecha.getDate()} {MONTHS_SHORT[fecha.getMonth()].toLowerCase()}.</>
+                            : "sin fecha"}
+                        </span>
+                        <span style={{ background: pendiente ? "#F2F0EA" : "#E8F5EE", color: pendiente ? C.muted : C.green, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>
+                          {pendiente ? "⏳ Por entrar" : "💰 Ingreso"}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: pendiente ? C.muted : C.green, marginRight: 8, whiteSpace: "nowrap" }}>+{fmt(i.amount)}</div>
+                  </div>
+                </div>
+              ); })() : (() => { const e = mov.e; const dt = new Date(e.date); return (
                 <div key={e.id} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10 }}>
                   {editExpId === e.id ? (
                     <div>
@@ -160,7 +218,12 @@ export default function MiMes({
                     </div>
                   )}
                 </div>
-              ); })}
+              ); })())}
+              {movimientos.some(m => m.tipo === "ingreso" && m.pendiente) && (
+                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, padding: "2px 2px 6px" }}>
+                  Los ingresos con línea punteada todavía no entran: aparecen para que los tengas en cuenta, pero no se cuentan como plata que ya tienes. El día que les toca pasan a contar solos.
+                </div>
+              )}
             </div>
             </>
             )}

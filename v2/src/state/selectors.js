@@ -1,5 +1,6 @@
 import { getMonthLabel } from "../lib/dates";
 import { curOf } from "../lib/cycles";
+import { separaIngresos } from "../lib/ingresos";
 
 // Los gastos en dólares NO entran a los totales en soles (F10): se muestran
 // siempre como una línea aparte. Nada de tipos de cambio inventados.
@@ -36,7 +37,7 @@ export const budgetAlerts = (data, catSpendMap) => {
 };
 
 // Totales de un mes con offset relativo al actual — antes función inline `getMonthData`.
-export const getMonthData = (data, offset) => {
+export const getMonthData = (data, offset, hoy = new Date()) => {
   const mk = getMonthLabel(offset);
   const exps = data.expenses.filter(e => e.month === mk);
   const fixd = data.fixed.filter(f => f.month === mk);
@@ -48,7 +49,18 @@ export const getMonthData = (data, offset) => {
   const totalFijosAll = fixd.reduce((s, f) => s + f.amount, 0);
   const totalInc = incF.reduce((s, i) => s + i.amount, 0) + incE.reduce((s, i) => s + i.amount, 0);
   const balance = totalInc - totalFijos - totalDiarios;
-  return { exps, totalDiarios, totalDiariosUSD, totalFijos, totalFijosAll, totalInc, balance };
+  // F22: de ese total, cuánto ya entró y cuánto está por entrar.
+  // `totalInc` y `balance` siguen contando TODO el mes a propósito: son las
+  // cuentas de planificación ("¿me alcanza este mes?"), y ahí un sueldo que
+  // entra el 30 sí cuenta. Lo recibido es la otra pregunta —"¿cuánto tengo
+  // hoy?"— y va aparte, nunca mezclado.
+  const { recibidos, pendientes, totalRecibido, totalPendiente } = separaIngresos([...incF, ...incE], hoy);
+  return {
+    exps, ingresos: [...incF, ...incE], totalDiarios, totalDiariosUSD, totalFijos, totalFijosAll,
+    totalInc, balance,
+    ingresosRecibidos: recibidos, ingresosPendientes: pendientes,
+    totalIncRecibido: totalRecibido, totalIncPendiente: totalPendiente,
+  };
 };
 
 // Agrupa por categoría los gastos que le pasen. OJO: no filtra moneda a propósito

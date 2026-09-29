@@ -1,7 +1,7 @@
 import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { PlusIcon, TrashIcon } from "../shared/icons";
 import { useStore } from "../../state/store";
-import { ordenaPorDia, diaDeIngreso, fechaDeIngreso } from "../../lib/ingresos";
+import { ordenaPorDia, diaDeIngreso, fechaDeIngreso, esRecibido, separaIngresos } from "../../lib/ingresos";
 import { parseEtiqueta } from "../../lib/mesNuevo";
 import { toDateInput, diasEnMes, fechaDelDiaEnMes } from "../../lib/dates";
 import { TraerFijosButton } from "../shared/MesNuevoSheet";
@@ -15,6 +15,19 @@ const rangoDelMes = (curMonth) => {
   const primero = new Date(p.anio, p.mes, 1, 12, 0, 0, 0);
   const ultimo = new Date(p.anio, p.mes, diasEnMes(p.anio, p.mes), 12, 0, 0, 0);
   return { min: toDateInput(primero), max: toDateInput(ultimo), ref: primero };
+};
+
+// F22: al CREAR se puede mirar más allá del mes. Su caso: el 29 de setiembre
+// registra un pago que le hacen el 1 de octubre. El ingreso se archiva en el mes
+// al que pertenece su fecha, no en el mes en que lo escribió.
+// (Al editar una fila existente el rango sigue siendo su propio mes: cambiarle
+// la fecha no debería mudarla de mes por accidente.)
+const rangoCreacion = (curMonth) => {
+  const p = parseEtiqueta(curMonth);
+  if (!p) return null;
+  const primero = new Date(p.anio, p.mes, 1, 12, 0, 0, 0);
+  const finSiguiente = new Date(p.anio, p.mes + 1, diasEnMes(p.anio, p.mes + 1), 12, 0, 0, 0);
+  return { min: toDateInput(primero), max: toDateInput(finSiguiente) };
 };
 
 const valorInicialFecha = (i, curMonth) => {
@@ -39,21 +52,29 @@ export default function Ingresos({
   editIncomeId, setEditIncomeId, editIncomeAmt, setEditIncomeAmt, saveIncomeAmt,
   editFixedIncomeName, setEditFixedIncomeName, editFixedIncomeNameVal, setEditFixedIncomeNameVal, saveFixedIncomeName,
   showAddFixedIncome, setShowAddFixedIncome, newFixedIncomeName, setNewFixedIncomeName, addFixedIncome, deleteFixedIncome,
-  newFixedIncomeDay, setNewFixedIncomeDay,
+  newFixedIncomeDay, setNewFixedIncomeDay, newFixedIncomeAmt, setNewFixedIncomeAmt,
   editIncomeDayId, setEditIncomeDayId, editIncomeDayVal, setEditIncomeDayVal, saveIncomeDay,
   showAddExtra, setShowAddExtra, newExtraName, setNewExtraName, newExtraAmt, setNewExtraAmt, addExtra, deleteExtra,
   editExtraId, setEditExtraId, editExtraName, setEditExtraName, editExtraAmt, setEditExtraAmt,
   editExtraCategory, setEditExtraCategory, saveExtraEdit,
 }) {
   const data = useStore(s => s.data);
-    const totalInc = data.incomeFixed.filter(i => i.month === curMonth).reduce((s, i) => s + i.amount, 0) + data.incomeExtra.filter(i => i.month === curMonth).reduce((s, i) => s + i.amount, 0);
+    const delMes = [...data.incomeFixed, ...data.incomeExtra].filter(i => i.month === curMonth);
+    const totalInc = delMes.reduce((s, i) => s + i.amount, 0);
+    // F22: lo que ya entró vs. lo que falta. El número grande es lo recibido.
+    const { totalRecibido, totalPendiente } = separaIngresos(delMes);
     return (
       <div style={{ flex: 1, background: C.beige, minHeight: "100vh", paddingBottom: 80 }}>
         <div style={{ padding: "32px 24px 0" }}>
           <h1 style={{ fontSize: 34, fontWeight: 900, color: C.black, margin: 0, fontStyle: "italic", fontFamily: FONT_TITLE }}>Ingresos</h1>
           <div style={{ borderBottom: "3px solid " + C.purple, marginTop: 6, width: 80, marginBottom: 4 }} />
-          <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, marginBottom: 4 }}>Total mensual</div>
-          <div style={{ fontSize: 40, fontWeight: 900, color: C.green, fontFamily: FONT_TITLE }}>{fmt(totalInc)}</div>
+          <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, marginBottom: 4 }}>{totalPendiente > 0 ? "Ya te entró" : "Total mensual"}</div>
+          <div style={{ fontSize: 40, fontWeight: 900, color: C.green, fontFamily: FONT_TITLE }}>{fmt(totalRecibido)}</div>
+          {totalPendiente > 0 && (
+            <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.45, marginTop: 2 }}>
+              + <strong style={{ color: C.black }}>{fmt(totalPendiente)}</strong> por entrar · {fmt(totalInc)} en todo el mes
+            </div>
+          )}
         </div>
         <div style={{ padding: "24px 24px 8px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -63,16 +84,19 @@ export default function Ingresos({
           {showAddFixedIncome && (
             <div style={{ ...cardStyle, padding: 16, marginBottom: 12, animation: "slideUp 0.2s ease" }}>
               <input type="text" placeholder="Nombre (ej: Sueldo empresa)" value={newFixedIncomeName} onChange={e => setNewFixedIncomeName(e.target.value)} style={{ ...inputStyle, marginBottom: 10, color: C.black }} />
+              {/* F22: el monto, acá mismo. Antes el ingreso nacía en cero y había
+                  que entrar a editarlo aparte para ponerle la cifra. */}
+              <input type="number" inputMode="decimal" placeholder="Monto (ej: 3500)" value={newFixedIncomeAmt} onChange={e => setNewFixedIncomeAmt(e.target.value)} style={{ ...inputStyle, marginBottom: 10, color: C.black }} />
               {/* F14: día en que entra. Opcional a propósito: puede registrar hoy
                   un ingreso que entra en otra fecha, o no saber todavía cuándo. */}
               <div style={{ marginBottom: 6 }}>
                 <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 4 }}>¿Qué día entra? (opcional)</div>
-                <input type="date" value={newFixedIncomeDay} onChange={e => setNewFixedIncomeDay(e.target.value)} {...(rangoDelMes(curMonth) ? { min: rangoDelMes(curMonth).min, max: rangoDelMes(curMonth).max } : {})} style={{ ...inputStyle, color: C.black }} />
+                <input type="date" value={newFixedIncomeDay} onChange={e => setNewFixedIncomeDay(e.target.value)} {...(rangoCreacion(curMonth) ? { min: rangoCreacion(curMonth).min, max: rangoCreacion(curMonth).max } : {})} style={{ ...inputStyle, color: C.black }} />
               </div>
-              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 12 }}>La fecha de este mes en que te entra. Cada mes la confirmas por si cae distinto. Si todavía no la sabes, déjala vacía y se la pones después.</div>
+              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 12 }}>La fecha en que te entra. Si todavía no llega, queda marcada como <strong style={{ color: C.black }}>por entrar</strong> y pasa a contar sola el día que le toca. Puedes poner una fecha del próximo mes: el ingreso se guarda en ese mes. Si no la sabes, déjala vacía.</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={addFixedIncome} style={{ flex: 1, padding: 12, borderRadius: 12, background: C.green, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Agregar</button>
-                <button onClick={() => { setShowAddFixedIncome(false); setNewFixedIncomeName(""); setNewFixedIncomeDay(""); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: "#E0DCD4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                <button onClick={() => { setShowAddFixedIncome(false); setNewFixedIncomeName(""); setNewFixedIncomeDay(""); setNewFixedIncomeAmt(""); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: "#E0DCD4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
               </div>
             </div>
           )}
@@ -115,6 +139,12 @@ export default function Ingresos({
                       <span style={{ fontSize: 12, fontWeight: 600, color: diaDeIngreso(i) !== null ? C.green : C.muted }}>
                         {etiquetaFecha(i, curMonth)}
                       </span>
+                    </div>
+                  )}
+                  {/* F22: si todavía no entra, se dice. No es plata que ya tiene. */}
+                  {!esRecibido(i) && (
+                    <div style={{ display: "inline-flex", alignItems: "center", marginTop: 6, marginLeft: 6, background: "#F2F0EA", borderRadius: 20, padding: "3px 10px" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>⏳ Por entrar</span>
                     </div>
                   )}
                 </div>

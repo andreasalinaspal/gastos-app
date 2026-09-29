@@ -72,6 +72,7 @@ export default function App() {
   const [showAddFixedIncome, setShowAddFixedIncome] = useState(false);
   const [newFixedIncomeName, setNewFixedIncomeName] = useState("");
   const [newFixedIncomeDay, setNewFixedIncomeDay] = useState(""); // F14: día opcional
+  const [newFixedIncomeAmt, setNewFixedIncomeAmt] = useState(""); // F22: monto al crear
   const [editIncomeDayId, setEditIncomeDayId] = useState(null);
   const [editIncomeDayVal, setEditIncomeDayVal] = useState("");
   const [confirm, setConfirm] = useState(null); // { message, onConfirm }
@@ -652,15 +653,26 @@ export default function App() {
     const raw = (newFixedIncomeDay || "").trim();
     const fecha = raw === "" ? null : parseDateInput(raw);
     if (raw !== "" && !fecha) { showToast("Esa fecha no es válida"); return; }
+    // F22: el monto se pide al crear. Sigue siendo opcional (puede no saberlo
+    // todavía y ponerlo después), pero ya no obliga a editar cada ingreso nuevo.
+    const rawMonto = String(newFixedIncomeAmt || "").trim();
+    const monto = rawMonto === "" ? 0 : Number(rawMonto);
+    if (!Number.isFinite(monto) || monto < 0) { showToast("Ese monto no es válido"); return; }
     const dia = fecha ? fecha.getDate() : null;
     const cuando = fecha ? fecha.toLocaleDateString("es-PE", { day: "numeric", month: "long" }) : null;
-    setConfirm({ message: cuando ? `¿Agregar "${n}" como ingreso fijo que entra el ${cuando}?` : `¿Agregar "${n}" como ingreso fijo?`, onConfirm: () => {
+    const conMonto = monto > 0 ? " de " + fmt(monto) : "";
+    // F22: el ingreso vive en el mes al que pertenece su FECHA, no en el mes en
+    // que lo escribió. Así, un pago del 1 de octubre anotado el 29 de setiembre
+    // cae en octubre y no infla el mes que está cerrando.
+    const mesDestino = fecha ? monthLabelOf(fecha) : curMonth;
+    setConfirm({ message: cuando ? `¿Agregar "${n}"${conMonto} como ingreso fijo que entra el ${cuando}?` : `¿Agregar "${n}"${conMonto} como ingreso fijo?`, onConfirm: () => {
       // Los ingresos fijos van una fila por mes: si no escribió día, se hereda
       // el que ella ya le había puesto a ESE mismo ingreso en otro mes, para que
       // el dato no se pierda al cambiar de mes.
-      setData(p => ({ ...p, incomeFixed: [...p.incomeFixed, { id: genId(), name: n, amount: 0, month: curMonth, date: fecha ? fecha.toISOString() : null, day: dia !== null ? dia : diaHeredado(p.incomeFixed, n) }] }));
-      setNewFixedIncomeName(""); setNewFixedIncomeDay(""); setShowAddFixedIncome(false);
-      showToast("Ingreso fijo agregado");
+      setData(p => ({ ...p, incomeFixed: [...p.incomeFixed, { id: genId(), name: n, amount: monto, month: mesDestino, date: fecha ? fecha.toISOString() : null, day: dia !== null ? dia : diaHeredado(p.incomeFixed, n) }] }));
+      setNewFixedIncomeName(""); setNewFixedIncomeDay(""); setNewFixedIncomeAmt(""); setShowAddFixedIncome(false);
+      // Si se fue a otro mes hay que decirlo, o va a pensar que no se guardó.
+      showToast(mesDestino === curMonth ? "Ingreso fijo agregado" : "Guardado en " + mesDestino + " — entra el " + cuando);
     }});
   };
   const saveExtraEdit = (id) => {
@@ -1036,6 +1048,7 @@ export default function App() {
           editFixedIncomeName={editFixedIncomeName} setEditFixedIncomeName={setEditFixedIncomeName} editFixedIncomeNameVal={editFixedIncomeNameVal} setEditFixedIncomeNameVal={setEditFixedIncomeNameVal} saveFixedIncomeName={saveFixedIncomeName}
           showAddFixedIncome={showAddFixedIncome} setShowAddFixedIncome={setShowAddFixedIncome} newFixedIncomeName={newFixedIncomeName} setNewFixedIncomeName={setNewFixedIncomeName} addFixedIncome={addFixedIncome} deleteFixedIncome={deleteFixedIncome}
           newFixedIncomeDay={newFixedIncomeDay} setNewFixedIncomeDay={setNewFixedIncomeDay}
+          newFixedIncomeAmt={newFixedIncomeAmt} setNewFixedIncomeAmt={setNewFixedIncomeAmt}
           editIncomeDayId={editIncomeDayId} setEditIncomeDayId={setEditIncomeDayId} editIncomeDayVal={editIncomeDayVal} setEditIncomeDayVal={setEditIncomeDayVal} saveIncomeDay={saveIncomeDay}
           showAddExtra={showAddExtra} setShowAddExtra={setShowAddExtra} newExtraName={newExtraName} setNewExtraName={setNewExtraName} newExtraAmt={newExtraAmt} setNewExtraAmt={setNewExtraAmt} addExtra={addExtra} deleteExtra={deleteExtra}
           editExtraId={editExtraId} setEditExtraId={setEditExtraId} editExtraName={editExtraName} setEditExtraName={setEditExtraName} editExtraAmt={editExtraAmt} setEditExtraAmt={setEditExtraAmt}

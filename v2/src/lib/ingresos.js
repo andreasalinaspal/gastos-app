@@ -1,4 +1,5 @@
 import { fechaDelDiaEnMes, normalizaDiaDelMes } from "./dates";
+import { parseEtiqueta } from "./mesNuevo";
 
 // F14: el día en que entra cada ingreso fijo.
 // Sirve para lo que de verdad le importa: no basta con que el mes cuadre si la
@@ -25,6 +26,47 @@ export const fechaDeIngreso = (i) => {
   const d = new Date(i.date);
   return isNaN(d.getTime()) ? null : d;
 };
+
+// F22: ¿esa plata ya entró, o todavía está por entrar?
+//
+// Ella lo pidió así: si el 29 de setiembre registra un pago que le hacen el 1 de
+// octubre, eso NO es plata que ya tiene — queda pendiente y recién cuenta como
+// ingreso el día que le toca.
+//
+// Sin fecha se da por recibido. Es a propósito: los ingresos viejos (y los
+// extra) no tienen fecha, y esconderle plata suya por un dato que nunca le
+// pedimos sería peor que contarla de más.
+// La fecha real en que entra, mirando primero la que ella eligió y, si no hay,
+// armándola con el día del ingreso dentro de SU mes. Los registros viejos solo
+// tienen `day`, y un "entra el 30" de este mes sigue siendo una fecha futura:
+// ignorarlo sería contar como recibida una plata que todavía no llega.
+// → Date, o null si no hay forma de ubicarlo en el tiempo.
+export function fechaEfectiva(i) {
+  const exacta = fechaDeIngreso(i);
+  if (exacta) return exacta;
+  const dia = normalizaDiaDelMes(i && i.day);
+  const p = i && i.month ? parseEtiqueta(i.month) : null;
+  if (dia === null || !p) return null;
+  return fechaDelDiaEnMes(dia, new Date(p.anio, p.mes, 1, 12, 0, 0, 0));
+}
+
+export function esRecibido(i, hoy = new Date()) {
+  const f = fechaEfectiva(i);
+  if (!f) return true;
+  return startOfDay(f) <= startOfDay(hoy);
+}
+
+// Parte una lista de ingresos en lo que ya entró y lo que falta.
+// → { recibidos, pendientes, totalRecibido, totalPendiente }
+export function separaIngresos(lista, hoy = new Date()) {
+  const recibidos = [], pendientes = [];
+  for (const i of lista || []) {
+    if (!i) continue;
+    (esRecibido(i, hoy) ? recibidos : pendientes).push(i);
+  }
+  const suma = (xs) => xs.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  return { recibidos, pendientes, totalRecibido: suma(recibidos), totalPendiente: suma(pendientes) };
+}
 
 // Ordena los ingresos fijos como un calendario del mes: por día, y los que no
 // tienen día al final (sin reordenar entre ellos).
