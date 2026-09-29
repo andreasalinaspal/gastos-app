@@ -178,28 +178,36 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast,
             </div>
             <div style={{ fontSize: 15, fontWeight: 800, color: desglose.facturado > 0 ? C.orange : C.green, whiteSpace: "nowrap" }}>{fmtCur(desglose.facturado)}</div>
           </div>
+          {/* Lo que lleva gastado en el ciclo abierto (F20). Sale de la RESTA
+              saldo − facturado, no de los gastos anotados: así funciona aunque
+              ella solo actualice su saldo mirando el banco. Lo anotado va debajo
+              como contraste. */}
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, paddingTop: 8 }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.black }}>Aún sin facturar</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.black }}>Llevas gastado este ciclo</div>
               <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.4, marginTop: 1 }}>
-                Lo que llevas gastado desde el último corte. Te lo cobran el {fmtDay(cycle.end)}.
+                Tu saldo menos lo ya facturado. Te lo cobran el {fmtDay(cycle.end)}.
               </div>
             </div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: C.black, whiteSpace: "nowrap" }}>{fmtCur(desglose.cicloAbierto)}</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.black, whiteSpace: "nowrap" }}>{fmtCur(desglose.delCiclo)}</div>
           </div>
-          {/* Cuando las dos partes no suman el saldo, se dice — no se cuadra a la
-              fuerza. Casi siempre es el banco cobrando algo que ella no registró. */}
-          {Math.abs(desglose.diferencia) >= 0.5 && (
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, paddingTop: 8, borderTop: "1px dashed #E4E0D6", marginTop: 8 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.black }}>No cuadra por</div>
-                <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.4, marginTop: 1 }}>
-                  {desglose.diferencia < 0
-                    ? "El banco te está cobrando más de lo que tienes registrado: intereses, membresía, seguros o compras que se te escaparon."
-                    : "Tienes registrado más de lo que el banco te facturó: puede ser deuda de ciclos anteriores que aún no pagas."}
-                </div>
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: C.orange, whiteSpace: "nowrap" }}>{fmtCur(Math.abs(desglose.diferencia))}</div>
+          {/* Contraste con lo anotado: le dice qué compras le faltan por registrar */}
+          {desglose.delCiclo > 0 && (
+            <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45, marginTop: 8, paddingTop: 8, borderTop: "1px dashed #E4E0D6" }}>
+              Registrado en Qori: <strong style={{ color: C.black }}>{fmtCur(desglose.registrado)}</strong>
+              {desglose.sinRegistrar >= 0.5 && (
+                <> · te faltan <strong style={{ color: C.orange }}>{fmtCur(desglose.sinRegistrar)}</strong> por anotar (o son intereses y membresía del banco)</>
+              )}
+              {desglose.sinRegistrar <= -0.5 && (
+                <> · tienes <strong style={{ color: C.orange }}>{fmtCur(Math.abs(desglose.sinRegistrar))}</strong> de más: revisa si actualizaste tu saldo o si anotaste algo dos veces</>
+              )}
+              {Math.abs(desglose.sinRegistrar) < 0.5 && <> · cuadra con tu saldo ✅</>}
+            </div>
+          )}
+          {/* El estado de cuenta pide más de lo que dice el saldo */}
+          {desglose.excedeSaldo && (
+            <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45, marginTop: 8, paddingTop: 8, borderTop: "1px dashed #E4E0D6" }}>
+              El banco te está cobrando <strong style={{ color: C.orange }}>{fmtCur(desglose.facturado - desglose.saldo)}</strong> más de lo que marca tu saldo. Suele ser intereses, membresía o seguros. Actualiza tu saldo al editar la tarjeta y se acomoda.
             </div>
           )}
           <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45, marginTop: 10, paddingTop: 9, borderTop: "1px solid #F0EDE4" }}>

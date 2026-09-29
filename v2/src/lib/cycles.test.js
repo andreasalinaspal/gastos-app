@@ -538,17 +538,33 @@ describe("getBalanceBreakdown", () => {
   it("parte el saldo en lo ya facturado y lo del ciclo abierto", () => {
     const d = getBalanceBreakdown(c, enCurso, [], hoy, "PEN", statements);
     expect(d.saldo).toBeCloseTo(4357.36);
-    expect(d.facturado).toBe(3735);            // lo que vence el 5 oct
-    expect(d.cicloAbierto).toBeCloseTo(622.36); // lo gastado desde el corte
-    expect(d.diferencia).toBe(0);              // cuadra exacto
+    expect(d.facturado).toBe(3735);           // lo que vence el 5 oct
+    expect(d.delCiclo).toBeCloseTo(622.36);   // saldo − facturado
+    expect(d.registrado).toBeCloseTo(622.36); // lo que ella anotó
+    expect(d.sinRegistrar).toBe(0);           // cuadran
     expect(d.source).toBe("banco");
   });
 
-  it("solo cuenta los gastos posteriores al último corte", () => {
+  // Lo que ella pidió: actualizar el saldo del banco y que Qori saque sola
+  // cuánto lleva gastado en el ciclo, sin haber anotado ni una compra.
+  it("calcula el gasto del ciclo solo con el saldo, sin gastos registrados", () => {
+    const soloSaldo = card({
+      cutoffDay: 11, paymentDay: 5,
+      openingDate: hoy.toISOString(), // la foto del saldo es de hoy
+      lines: { PEN: { creditLine: 6000, openingBalance: 4357.36 } },
+    });
+    const d = getBalanceBreakdown(soloSaldo, [], [], hoy, "PEN", statements);
+    expect(d.saldo).toBeCloseTo(4357.36);
+    expect(d.delCiclo).toBeCloseTo(622.36);
+    expect(d.registrado).toBe(0);
+    expect(d.sinRegistrar).toBeCloseTo(622.36); // todo eso le falta anotar
+  });
+
+  it("lo registrado solo cuenta los gastos posteriores al último corte", () => {
     // El del 5 set cae en el ciclo que YA cerró: está dentro del estado de cuenta.
     const conViejo = [...enCurso, { id: "e0", amount: 1000, paymentMethodId: "card-1", date: new Date(2026, 8, 5).toISOString() }];
     const d = getBalanceBreakdown(c, conViejo, [], hoy, "PEN", statements);
-    expect(d.cicloAbierto).toBeCloseTo(622.36);
+    expect(d.registrado).toBeCloseTo(622.36);
   });
 
   it("pagar el estado de cuenta deja solo lo del ciclo abierto", () => {
@@ -556,23 +572,51 @@ describe("getBalanceBreakdown", () => {
     const d = getBalanceBreakdown(c, enCurso, pagos, new Date(2026, 9, 2), "PEN", statements);
     expect(d.facturado).toBe(0);
     expect(d.status).toBe("al-dia");
-    expect(d.cicloAbierto).toBeCloseTo(622.36);
-    expect(d.diferencia).toBe(0);
+    expect(d.delCiclo).toBeCloseTo(622.36);
+    expect(d.sinRegistrar).toBe(0);
   });
 
-  it("avisa cuando el banco cobra más de lo registrado, en vez de cuadrarlo a la fuerza", () => {
-    // El banco facturó S/4,000 donde ella tenía registrados S/3,735.
-    const infladas = [{ id: "s2", cardId: "card-1", cycleKey: "2026-09-11", currency: "PEN", amount: 4000 }];
+  it("avisa cuando el estado de cuenta pide más de lo que dice el saldo", () => {
+    // El banco facturó S/5,000 sobre un saldo de S/4,357.36 (intereses, membresía).
+    const infladas = [{ id: "s2", cardId: "card-1", cycleKey: "2026-09-11", currency: "PEN", amount: 5000 }];
     const d = getBalanceBreakdown(c, enCurso, [], hoy, "PEN", infladas);
-    expect(d.facturado).toBe(4000);
-    expect(d.cicloAbierto).toBeCloseTo(622.36);
-    expect(d.diferencia).toBe(-265); // 4357.36 − 4000 − 622.36
+    expect(d.facturado).toBe(5000);
+    expect(d.excedeSaldo).toBe(true);
+    expect(d.delCiclo).toBe(0); // nunca negativo
   });
 
-  it("sin estado de cuenta usa el estimado y sigue cuadrando", () => {
+  // Actualizar el saldo NO debe borrar de la vista lo que ya tenía anotado en el
+  // ciclo: si no, la app le diría "te falta anotar" algo que ya anotó.
+  it("lo anotado del ciclo sobrevive a actualizar el saldo", () => {
+    const recienActualizada = card({
+      cutoffDay: 11, paymentDay: 5,
+      openingDate: hoy.toISOString(), // foto del saldo tomada HOY
+      lines: { PEN: { creditLine: 6000, openingBalance: 4357.36 } },
+    });
+    const d = getBalanceBreakdown(recienActualizada, enCurso, [], hoy, "PEN", statements);
+    expect(d.delCiclo).toBeCloseTo(622.36);
+    expect(d.registrado).toBeCloseTo(622.36); // los gastos del 20 y 26, aunque sean previos a la foto
+    expect(d.sinRegistrar).toBe(0);           // cuadra: no le falta anotar nada
+  });
+
+  it("marca lo anotado de más cuando pasa lo que dice el saldo", () => {
+    // Anotó S/900 pero su saldo solo da para S/622.36 de ciclo abierto.
+    const deMas = [{ id: "x1", amount: 900, paymentMethodId: "card-1", date: new Date(2026, 8, 20).toISOString() }];
+    const conSaldoFijo = card({
+      cutoffDay: 11, paymentDay: 5,
+      openingDate: hoy.toISOString(),
+      lines: { PEN: { creditLine: 6000, openingBalance: 4357.36 } },
+    });
+    const d = getBalanceBreakdown(conSaldoFijo, deMas, [], hoy, "PEN", statements);
+    expect(d.delCiclo).toBeCloseTo(622.36);
+    expect(d.registrado).toBe(900);
+    expect(d.sinRegistrar).toBeCloseTo(-277.64);
+  });
+
+  it("sin estado de cuenta usa el estimado", () => {
     const d = getBalanceBreakdown(c, enCurso, [], hoy, "PEN", null);
     expect(d.source).toBe("estimado");
-    expect(d.facturado + d.cicloAbierto + d.diferencia).toBeCloseTo(d.saldo);
+    expect(d.facturado + d.delCiclo).toBeCloseTo(d.saldo);
   });
 
   it("cada moneda se desglosa por su lado", () => {

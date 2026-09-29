@@ -298,23 +298,34 @@ export function getNextPayment(card, expenses, cardPayments, now = new Date(), c
 // ocupan tu línea desde el momento en que compras, que es justo lo que hace que
 // el disponible baje sin que suba lo que tienes que pagar este mes.
 //
-// Las dos partes son números REALES, cada uno de su fuente: lo facturado sale
-// del estado de cuenta (o del estimado) y el ciclo abierto, de sus gastos. No se
-// fuerza que cuadren. Cuando no cuadran, `diferencia` lo dice en vez de esconderlo:
-// casi siempre es el banco cobrando intereses, membresía o compras sin registrar.
-// → { saldo, facturado, cicloAbierto, diferencia, dueDate, source, status, currency }
+// De dónde sale cada número (F20). Esto importa, porque son DOS fuentes:
+//
+//   `delCiclo`    = saldo − facturado. Es la resta que ella hace de cabeza
+//                   mirando su banco, y por eso es la que manda: sirve aunque no
+//                   haya registrado ni una compra, con solo actualizar el saldo.
+//   `registrado`  = lo que Qori tiene anotado desde el corte. Es el contraste.
+//   `sinRegistrar`= la diferencia entre los dos. Positiva = gastó y no lo anotó
+//                   (o el banco cobró intereses); negativa = anotó de más.
+//
+// No se fuerza que cuadren ni se esconde la diferencia: cada uno viene de donde
+// viene y la app dice cuánto se separan.
+// → { saldo, facturado, delCiclo, registrado, sinRegistrar, excedeSaldo,
+//     dueDate, source, status, currency }
 export function getBalanceBreakdown(card, expenses, cardPayments, now = new Date(), currency = "PEN", statements = null) {
   const cur = normCur(currency);
   const saldo = getLineUsage(card, expenses, cardPayments, cur).balance;
   const next = getNextPayment(card, expenses, cardPayments, now, cur, statements);
+  const facturado = next.amount;
 
-  // Gastos desde el último corte: lo que todavía no aparece en ningún estado de
-  // cuenta. Arranca en la foto de la deuda si esa foto es más reciente que el corte.
+  // Gastos anotados en el ciclo abierto. Se cuentan desde el CORTE y nada más,
+  // sin mirar la fecha de la foto del saldo: este número no suma en ninguna
+  // cuenta, solo sirve para contrastar con `delCiclo`. Si se recortara por la
+  // foto, actualizar el saldo borraría de la vista lo que ella ya había anotado
+  // y la app le diría que le falta anotar algo que ya anotó.
   const cycle = getCycleFor(card, now);
-  const desde = openingCutoff(card, cur);
-  const from = desde && desde > cycle.start ? desde : cycle.start;
+  const from = cycle.start;
   const hasta = startOfDay(now);
-  const cicloAbierto = (expenses || []).reduce((sum, e) => {
+  const registrado = (expenses || []).reduce((sum, e) => {
     if (!e || e.paymentMethodId !== card.id || !e.date) return sum;
     if (curOf(e) !== cur) return sum;
     const d = startOfDay(new Date(e.date));
@@ -322,11 +333,16 @@ export function getBalanceBreakdown(card, expenses, cardPayments, now = new Date
     return sum + (Number(e.amount) || 0);
   }, 0);
 
+  const delCiclo = Math.max(0, Math.round((saldo - facturado) * 100) / 100);
   return {
     saldo,
-    facturado: next.amount,
-    cicloAbierto,
-    diferencia: Math.round((saldo - next.amount - cicloAbierto) * 100) / 100 + 0, // +0: evita el -0
+    facturado,
+    delCiclo,
+    registrado,
+    sinRegistrar: Math.round((delCiclo - registrado) * 100) / 100 + 0, // +0: evita el -0
+    // El estado de cuenta pide más de lo que dice el saldo: pasa cuando el banco
+    // cobró intereses o membresía que ella todavía no reflejó en su saldo.
+    excedeSaldo: facturado > saldo,
     dueDate: next.dueDate,
     source: next.source,
     status: next.status,

@@ -94,8 +94,8 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
     const cycleBudget = cardForm.cycleBudget === "" ? null : Number(cardForm.cycleBudget);
     if (cycleBudget !== null && (!Number.isFinite(cycleBudget) || cycleBudget <= 0)) { setFormError("El presupuesto por ciclo debe ser mayor a 0"); return; }
     const openingBalance = cardForm.openingBalance === "" ? 0 : Number(cardForm.openingBalance);
-    if (!Number.isFinite(openingBalance) || openingBalance < 0) { setFormError("Lo consumido hoy no puede ser negativo"); return; }
-    if (openingBalance > creditLine) { setFormError("Lo consumido hoy no puede pasar la línea de crédito"); return; }
+    if (!Number.isFinite(openingBalance) || openingBalance < 0) { setFormError("El saldo actual no puede ser negativo"); return; }
+    if (openingBalance > creditLine) { setFormError("El saldo actual no puede pasar la línea de crédito"); return; }
     // Dólares (F18): NO es una línea aparte. El banco da una sola línea en soles
     // y las compras en dólares se descuentan de ahí a su tipo de cambio. Acá solo
     // se guarda la DEUDA en dólares, que es lo que se paga por separado.
@@ -266,9 +266,9 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
             <div style={labelStyle}>Línea de crédito (S/)</div>
             <input type="number" inputMode="decimal" placeholder="Ej: 6000" value={cardForm.creditLine} onChange={e => setCardForm(f => ({ ...f, creditLine: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />
             <div style={hintStyle}>El máximo que el banco te deja gastar con esta tarjeta, tal como te lo dice: una sola línea en soles. Si compras en dólares, sale de esta misma línea.</div>
-            <div style={labelStyle}>Cuánto tienes consumido hoy (S/)</div>
+            <div style={labelStyle}>Saldo actual en soles (S/)</div>
             <input type="number" inputMode="decimal" placeholder="Ej: 0" value={cardForm.openingBalance} onChange={e => setCardForm(f => ({ ...f, openingBalance: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />
-            <div style={hintStyle}>Lo que ya debes en soles ahora mismo. Qori parte de ahí y le suma lo que registres.</div>
+            <div style={hintStyle}>Lo que debes hoy en total, tal cual lo ves en tu banco. <strong style={{ color: C.black }}>Puedes actualizarlo cuando quieras</strong>: Qori lo toma como la foto de hoy y le suma lo que registres después. Con esto y tu estado de cuenta ya sabe cuánto llevas gastado en el ciclo abierto.</div>
 
             {/* Dólares (F18): no es un cupo aparte, es la MISMA línea usada en otra
                 moneda. Acá solo se declara la deuda en dólares, porque esa sí se
@@ -289,9 +289,9 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
               </div>
               {cardForm.usdOn && (
                 <div style={{ marginTop: 12 }}>
-                  <div style={labelStyle}>Cuánto debes hoy en dólares (US$)</div>
+                  <div style={labelStyle}>Saldo actual en dólares (US$)</div>
                   <input type="number" inputMode="decimal" placeholder="Ej: 0" value={cardForm.usdOpeningBalance} onChange={e => setCardForm(f => ({ ...f, usdOpeningBalance: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6, background: "#fff" }} />
-                  <div style={hintStyle}>Lo que ya debes en dólares ahora mismo. Para pagarlo se queda en dólares; para el disponible se convierte a soles, porque ocupa tu línea.</div>
+                  <div style={hintStyle}>Lo que debes hoy en dólares, tal cual lo ves en tu banco. También lo puedes actualizar cuando quieras. Para pagarlo se queda en dólares; para el disponible se convierte a soles, porque ocupa tu línea.</div>
                   {/* Override del tipo de cambio (F12): el de SUNAT es solo una
                       referencia; el que manda es el que el banco le aplicó a ella. */}
                   <div style={labelStyle}>Tipo de cambio de tu banco (opcional)</div>
