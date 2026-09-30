@@ -1,6 +1,6 @@
 import { getMonthLabel } from "../lib/dates";
 import { curOf } from "../lib/cycles";
-import { separaIngresos } from "../lib/ingresos";
+import { separaIngresos, montoEnSoles, montoEnDolaresSinCambiar } from "../lib/ingresos";
 
 // Los gastos en dólares NO entran a los totales en soles (F10): se muestran
 // siempre como una línea aparte. Nada de tipos de cambio inventados.
@@ -47,19 +47,24 @@ export const getMonthData = (data, offset, hoy = new Date()) => {
   const totalDiariosUSD = sumUSD(exps); // aparte, nunca sumado a los soles
   const totalFijos = fixd.filter(f => f.paid).reduce((s, f) => s + f.amount, 0);
   const totalFijosAll = fixd.reduce((s, f) => s + f.amount, 0);
-  const totalInc = incF.reduce((s, i) => s + i.amount, 0) + incE.reduce((s, i) => s + i.amount, 0);
+  // F24: los ingresos en dólares solo entran al total en soles si ella declaró
+  // el tipo de cambio que le dieron. Los que no, van aparte (`totalIncUSD`).
+  const todosInc = [...incF, ...incE];
+  const totalInc = Math.round(todosInc.reduce((s, i) => s + montoEnSoles(i), 0) * 100) / 100;
+  const totalIncUSD = Math.round(todosInc.reduce((s, i) => s + montoEnDolaresSinCambiar(i), 0) * 100) / 100;
   const balance = totalInc - totalFijos - totalDiarios;
   // F22: de ese total, cuánto ya entró y cuánto está por entrar.
   // `totalInc` y `balance` siguen contando TODO el mes a propósito: son las
   // cuentas de planificación ("¿me alcanza este mes?"), y ahí un sueldo que
   // entra el 30 sí cuenta. Lo recibido es la otra pregunta —"¿cuánto tengo
   // hoy?"— y va aparte, nunca mezclado.
-  const { recibidos, pendientes, totalRecibido, totalPendiente } = separaIngresos([...incF, ...incE], hoy);
+  const { recibidos, pendientes, totalRecibido, totalPendiente, totalRecibidoUSD, totalPendienteUSD } = separaIngresos(todosInc, hoy);
   return {
-    exps, ingresos: [...incF, ...incE], totalDiarios, totalDiariosUSD, totalFijos, totalFijosAll,
-    totalInc, balance,
+    exps, ingresos: todosInc, totalDiarios, totalDiariosUSD, totalFijos, totalFijosAll,
+    totalInc, totalIncUSD, balance,
     ingresosRecibidos: recibidos, ingresosPendientes: pendientes,
     totalIncRecibido: totalRecibido, totalIncPendiente: totalPendiente,
+    totalIncRecibidoUSD: totalRecibidoUSD, totalIncPendienteUSD: totalPendienteUSD,
   };
 };
 

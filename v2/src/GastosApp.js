@@ -14,7 +14,7 @@ import { InboxSheet } from "./components/shared/InboxSheet";
 import { downloadBackup } from "./lib/export";
 import { buildDemoData } from "./lib/demo";
 import { migrateData } from "./lib/migrate";
-import { diaHeredado } from "./lib/ingresos";
+import { diaHeredado, monedaYTasa } from "./lib/ingresos";
 import { mesOrigen, plantillaDelMes, necesitaConfirmar, aplicarPlantilla } from "./lib/mesNuevo";
 import { MesNuevoSheet } from "./components/shared/MesNuevoSheet";
 import { useStore } from "./state/store";
@@ -55,6 +55,9 @@ export default function App() {
   const [editIncomeAmt, setEditIncomeAmt] = useState("");
   const [newExtraName, setNewExtraName] = useState("");
   const [newExtraAmt, setNewExtraAmt] = useState("");
+  // F24: moneda del ingreso y, si vino en dólares, a cuánto se lo cambiaron.
+  const [newExtraCur, setNewExtraCur] = useState("PEN");
+  const [newExtraRate, setNewExtraRate] = useState("");
   const [showAddExtra, setShowAddExtra] = useState(false);
   const [showAddFixed, setShowAddFixed] = useState(false);
   const [newFixedName, setNewFixedName] = useState("");
@@ -73,6 +76,8 @@ export default function App() {
   const [newFixedIncomeName, setNewFixedIncomeName] = useState("");
   const [newFixedIncomeDay, setNewFixedIncomeDay] = useState(""); // F14: día opcional
   const [newFixedIncomeAmt, setNewFixedIncomeAmt] = useState(""); // F22: monto al crear
+  const [newFixedIncomeCur, setNewFixedIncomeCur] = useState("PEN"); // F24
+  const [newFixedIncomeRate, setNewFixedIncomeRate] = useState("");
   const [editIncomeDayId, setEditIncomeDayId] = useState(null);
   const [editIncomeDayVal, setEditIncomeDayVal] = useState("");
   const [confirm, setConfirm] = useState(null); // { message, onConfirm }
@@ -613,12 +618,19 @@ export default function App() {
   const togglePaid = (id) => setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, paid: !f.paid } : f) }));
   const saveFixedAmt = (id) => { setData(p => ({ ...p, fixed: p.fixed.map(f => f.id === id ? { ...f, amount: Number(editFixedAmt) || 0 } : f) })); setEditFixed(null); setEditFixedAmt(""); };
   const saveIncomeAmt = (id) => { setData(p => ({ ...p, incomeFixed: p.incomeFixed.map(i => i.id === id ? { ...i, amount: Number(editIncomeAmt) || 0 } : i) })); setEditIncomeId(null); setEditIncomeAmt(""); };
+  // F24: formatea en la moneda del ingreso, sin mezclar con la moneda global.
+  const fmtMoneda = (n, moneda) => (moneda === "USD" ? fmtWith(n, "USD") : fmt(n));
   const addExtra = () => {
     if (!newExtraAmt || !newExtraName) return;
     const n = newExtraName; const a = Number(newExtraAmt);
-    setConfirm({ message: `¿Agregar ingreso "${n}" por ${fmt(a)}?`, onConfirm: () => {
-      setData(p => ({ ...p, incomeExtra: [...p.incomeExtra, { id: genId(), name: n, amount: a, month: curMonth }] }));
-      setNewExtraName(""); setNewExtraAmt(""); setShowAddExtra(false);
+    // F24: moneda y, si vino en dólares, el tipo de cambio que le dieron. Sin
+    // tasa el ingreso se queda en dólares y no entra a los totales en soles.
+    const moneda = newExtraCur === "USD" ? "USD" : "PEN";
+    const campos = monedaYTasa(moneda, newExtraRate);
+    if (campos === null) { showToast("Ese tipo de cambio no es válido"); return; }
+    setConfirm({ message: `¿Agregar ingreso "${n}" por ${fmtMoneda(a, moneda)}?`, onConfirm: () => {
+      setData(p => ({ ...p, incomeExtra: [...p.incomeExtra, { id: genId(), name: n, amount: a, month: curMonth, ...campos }] }));
+      setNewExtraName(""); setNewExtraAmt(""); setNewExtraCur("PEN"); setNewExtraRate(""); setShowAddExtra(false);
       showToast("Ingreso extra agregado");
     }});
   };
@@ -660,7 +672,10 @@ export default function App() {
     if (!Number.isFinite(monto) || monto < 0) { showToast("Ese monto no es válido"); return; }
     const dia = fecha ? fecha.getDate() : null;
     const cuando = fecha ? fecha.toLocaleDateString("es-PE", { day: "numeric", month: "long" }) : null;
-    const conMonto = monto > 0 ? " de " + fmt(monto) : "";
+    const moneda = newFixedIncomeCur === "USD" ? "USD" : "PEN";
+    const campos = monedaYTasa(moneda, newFixedIncomeRate);
+    if (campos === null) { showToast("Ese tipo de cambio no es válido"); return; }
+    const conMonto = monto > 0 ? " de " + fmtMoneda(monto, moneda) : "";
     // F22: el ingreso vive en el mes al que pertenece su FECHA, no en el mes en
     // que lo escribió. Así, un pago del 1 de octubre anotado el 29 de setiembre
     // cae en octubre y no infla el mes que está cerrando.
@@ -669,8 +684,8 @@ export default function App() {
       // Los ingresos fijos van una fila por mes: si no escribió día, se hereda
       // el que ella ya le había puesto a ESE mismo ingreso en otro mes, para que
       // el dato no se pierda al cambiar de mes.
-      setData(p => ({ ...p, incomeFixed: [...p.incomeFixed, { id: genId(), name: n, amount: monto, month: mesDestino, date: fecha ? fecha.toISOString() : null, day: dia !== null ? dia : diaHeredado(p.incomeFixed, n) }] }));
-      setNewFixedIncomeName(""); setNewFixedIncomeDay(""); setNewFixedIncomeAmt(""); setShowAddFixedIncome(false);
+      setData(p => ({ ...p, incomeFixed: [...p.incomeFixed, { id: genId(), name: n, amount: monto, month: mesDestino, date: fecha ? fecha.toISOString() : null, day: dia !== null ? dia : diaHeredado(p.incomeFixed, n), ...campos }] }));
+      setNewFixedIncomeName(""); setNewFixedIncomeDay(""); setNewFixedIncomeAmt(""); setNewFixedIncomeCur("PEN"); setNewFixedIncomeRate(""); setShowAddFixedIncome(false);
       // Si se fue a otro mes hay que decirlo, o va a pensar que no se guardó.
       showToast(mesDestino === curMonth ? "Ingreso fijo agregado" : "Guardado en " + mesDestino + " — entra el " + cuando);
     }});
@@ -1049,6 +1064,8 @@ export default function App() {
           showAddFixedIncome={showAddFixedIncome} setShowAddFixedIncome={setShowAddFixedIncome} newFixedIncomeName={newFixedIncomeName} setNewFixedIncomeName={setNewFixedIncomeName} addFixedIncome={addFixedIncome} deleteFixedIncome={deleteFixedIncome}
           newFixedIncomeDay={newFixedIncomeDay} setNewFixedIncomeDay={setNewFixedIncomeDay}
           newFixedIncomeAmt={newFixedIncomeAmt} setNewFixedIncomeAmt={setNewFixedIncomeAmt}
+          newFixedIncomeCur={newFixedIncomeCur} setNewFixedIncomeCur={setNewFixedIncomeCur} newFixedIncomeRate={newFixedIncomeRate} setNewFixedIncomeRate={setNewFixedIncomeRate}
+          newExtraCur={newExtraCur} setNewExtraCur={setNewExtraCur} newExtraRate={newExtraRate} setNewExtraRate={setNewExtraRate}
           editIncomeDayId={editIncomeDayId} setEditIncomeDayId={setEditIncomeDayId} editIncomeDayVal={editIncomeDayVal} setEditIncomeDayVal={setEditIncomeDayVal} saveIncomeDay={saveIncomeDay}
           showAddExtra={showAddExtra} setShowAddExtra={setShowAddExtra} newExtraName={newExtraName} setNewExtraName={setNewExtraName} newExtraAmt={newExtraAmt} setNewExtraAmt={setNewExtraAmt} addExtra={addExtra} deleteExtra={deleteExtra}
           editExtraId={editExtraId} setEditExtraId={setEditExtraId} editExtraName={editExtraName} setEditExtraName={setEditExtraName} editExtraAmt={editExtraAmt} setEditExtraAmt={setEditExtraAmt}

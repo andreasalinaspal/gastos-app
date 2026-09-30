@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ordenaPorDia, hayDiasConfigurados, entradasDeIngreso, ingresoPrincipal, esRecibido, separaIngresos, fechaEfectiva } from "./ingresos";
+import { ordenaPorDia, hayDiasConfigurados, entradasDeIngreso, ingresoPrincipal, esRecibido, separaIngresos, fechaEfectiva, montoEnSoles, montoEnDolaresSinCambiar, monedaYTasa } from "./ingresos";
 
 const ing = (id, day, amount = 1000, name = id) => ({ id, name, amount, month: "Septiembre 2026", day });
 
@@ -263,5 +263,103 @@ describe("fechaEfectiva — los registros viejos solo tienen día", () => {
 
   it("un día que no existe en ese mes se clampa al último", () => {
     expect(fechaEfectiva({ id: "u", amount: 100, month: "Febrero 2026", day: 31 }).getDate()).toBe(28);
+  });
+});
+
+// ── F24: ingresos en soles o en dólares ────────────────────────────────────
+//
+// Su pedido: registrar un ingreso en dólares y, opcional, decir a cuánto se lo
+// cambiaron. Con tipo de cambio entra a los soles; sin él, se queda en dólares.
+
+describe("montoEnSoles / montoEnDolaresSinCambiar", () => {
+  const usd = (amount, rate) => ({ id: "u", name: "Freelance", amount, currency: "USD", ...(rate !== undefined ? { rate } : {}) });
+
+  it("un ingreso en soles suma tal cual", () => {
+    expect(montoEnSoles({ id: "p", amount: 3500 })).toBe(3500);
+    expect(montoEnSoles({ id: "p", amount: 3500, currency: "PEN" })).toBe(3500);
+    expect(montoEnDolaresSinCambiar({ id: "p", amount: 3500 })).toBe(0);
+  });
+
+  it("en dólares con el tipo de cambio que le dieron, suma en soles", () => {
+    expect(montoEnSoles(usd(500, 3.72))).toBe(1860);
+    expect(montoEnDolaresSinCambiar(usd(500, 3.72))).toBe(0); // ya no es dólares sueltos
+  });
+
+  it("en dólares SIN tipo de cambio no se convierte: queda aparte", () => {
+    expect(montoEnSoles(usd(500))).toBe(0);
+    expect(montoEnDolaresSinCambiar(usd(500))).toBe(500);
+  });
+
+  it("una tasa inválida se trata como si no hubiera", () => {
+    for (const t of [0, -3, "abc", null]) {
+      expect(montoEnSoles(usd(500, t))).toBe(0);
+      expect(montoEnDolaresSinCambiar(usd(500, t))).toBe(500);
+    }
+  });
+
+  it("redondea los soles a céntimos", () => {
+    expect(montoEnSoles(usd(100, 3.725))).toBe(372.5);
+    expect(montoEnSoles(usd(33.33, 3.721))).toBe(124.02);
+  });
+});
+
+describe("separaIngresos con dos monedas", () => {
+  const hoy = new Date(2026, 8, 29);
+  const lista = [
+    { id: "a", amount: 3500, date: new Date(2026, 8, 15).toISOString() },                                  // soles, ya entró
+    { id: "b", amount: 500, currency: "USD", rate: 3.72, date: new Date(2026, 8, 20).toISOString() },      // dólares cambiados
+    { id: "c", amount: 200, currency: "USD", date: new Date(2026, 8, 25).toISOString() },                  // dólares sin cambiar
+    { id: "d", amount: 1000, date: new Date(2026, 9, 2).toISOString() },                                   // soles, por entrar
+    { id: "e", amount: 300, currency: "USD", date: new Date(2026, 9, 3).toISOString() },                   // dólares por entrar
+  ];
+
+  it("los dólares cambiados entran a los soles, los otros van aparte", () => {
+    const r = separaIngresos(lista, hoy);
+    expect(r.totalRecibido).toBe(5360);      // 3500 + 500×3.72
+    expect(r.totalRecibidoUSD).toBe(200);    // los que no cambió
+    expect(r.totalPendiente).toBe(1000);
+    expect(r.totalPendienteUSD).toBe(300);
+  });
+
+  it("nunca mezcla: los dólares sin cambiar no tocan el total en soles", () => {
+    const soloUsd = separaIngresos([{ id: "x", amount: 999, currency: "USD" }], hoy);
+    expect(soloUsd.totalRecibido).toBe(0);
+    expect(soloUsd.totalRecibidoUSD).toBe(999);
+  });
+});
+
+describe("monedaYTasa — qué se guarda del formulario", () => {
+  it("soles no guarda nada: los registros viejos siguen valiendo", () => {
+    expect(monedaYTasa("PEN", "")).toEqual({});
+    expect(monedaYTasa("PEN", "3.72")).toEqual({});
+  });
+  it("dólares sin tasa guarda solo la moneda", () => {
+    expect(monedaYTasa("USD", "")).toEqual({ currency: "USD" });
+    expect(monedaYTasa("USD", "   ")).toEqual({ currency: "USD" });
+    expect(monedaYTasa("USD", null)).toEqual({ currency: "USD" });
+  });
+  it("dólares con tasa guarda las dos", () => {
+    expect(monedaYTasa("USD", "3.72")).toEqual({ currency: "USD", rate: 3.72 });
+  });
+  it("una tasa escrita mal se rechaza en vez de guardarse en silencio", () => {
+    expect(monedaYTasa("USD", "0")).toBe(null);
+    expect(monedaYTasa("USD", "-2")).toBe(null);
+    expect(monedaYTasa("USD", "hola")).toBe(null);
+  });
+});
+
+describe("la prueba de ¿me alcanza? es solo en soles", () => {
+  const hoy = new Date(2026, 8, 1);
+  it("un ingreso en dólares sin cambiar no sirve para pagar una tarjeta en soles", () => {
+    const soloUsd = [{ id: "u", name: "Freelance", amount: 1000, currency: "USD", day: 5, month: "Septiembre 2026" }];
+    expect(entradasDeIngreso(soloUsd, hoy)).toHaveLength(0);
+    expect(ingresoPrincipal(soloUsd)).toBe(null);
+  });
+  it("con el tipo de cambio puesto sí cuenta, y por su valor en soles", () => {
+    const cambiado = [{ id: "u", name: "Freelance", amount: 1000, currency: "USD", rate: 3.7, day: 5, month: "Septiembre 2026" }];
+    const e = entradasDeIngreso(cambiado, hoy);
+    expect(e.length).toBeGreaterThan(0);
+    expect(e[0].amount).toBe(3700);
+    expect(ingresoPrincipal(cambiado).id).toBe("u");
   });
 });

@@ -56,16 +56,67 @@ export function esRecibido(i, hoy = new Date()) {
   return startOfDay(f) <= startOfDay(hoy);
 }
 
+// F24: un ingreso puede llegar en soles o en dólares.
+//
+// La regla de la app no cambia: los dólares NO se convierten solos. Pero un
+// ingreso en dólares casi siempre termina cambiado a soles en alguna ventanilla,
+// y ese tipo de cambio ella sí lo sabe. Si lo pone (`rate`), el ingreso entra a
+// los totales en soles con SU tasa, que es plata real. Si no lo pone, se queda
+// como una línea aparte en dólares, igual que los gastos.
+export const curOfIngreso = (i) => (i && i.currency === "USD" ? "USD" : "PEN");
+
+export const tasaDeIngreso = (i) => {
+  const t = Number(i && i.rate);
+  return Number.isFinite(t) && t > 0 ? t : null;
+};
+
+// Cuánto suma este ingreso a los totales EN SOLES. Un ingreso en dólares sin
+// tipo de cambio declarado suma 0: no se inventa la conversión.
+export function montoEnSoles(i) {
+  if (!i) return 0;
+  const monto = Number(i.amount) || 0;
+  if (curOfIngreso(i) === "PEN") return monto;
+  const t = tasaDeIngreso(i);
+  return t ? Math.round(monto * t * 100) / 100 : 0;
+}
+
+// Los dólares que siguen siendo dólares (sin cambiar): se muestran aparte.
+export function montoEnDolaresSinCambiar(i) {
+  if (!i || curOfIngreso(i) !== "USD" || tasaDeIngreso(i)) return 0;
+  return Number(i.amount) || 0;
+}
+
+// Los campos que hay que guardar según lo que eligió en el formulario.
+// Soles → no se guarda nada (así los registros viejos siguen siendo válidos).
+// Dólares sin tasa → solo la moneda. Dólares con tasa → moneda y tasa.
+// → objeto para hacerle spread, o null si la tasa escrita no sirve.
+export function monedaYTasa(moneda, tasaCruda) {
+  if (moneda !== "USD") return {};
+  const raw = String(tasaCruda == null ? "" : tasaCruda).trim();
+  if (raw === "") return { currency: "USD" };
+  const t = Number(raw);
+  if (!Number.isFinite(t) || t <= 0) return null;
+  return { currency: "USD", rate: t };
+}
+
 // Parte una lista de ingresos en lo que ya entró y lo que falta.
-// → { recibidos, pendientes, totalRecibido, totalPendiente }
+// Los totales en soles ya incluyen los dólares que ella cambió (con su tasa);
+// los que no cambió van aparte en `...USD`, nunca sumados.
+// → { recibidos, pendientes, totalRecibido, totalPendiente,
+//     totalRecibidoUSD, totalPendienteUSD }
 export function separaIngresos(lista, hoy = new Date()) {
   const recibidos = [], pendientes = [];
   for (const i of lista || []) {
     if (!i) continue;
     (esRecibido(i, hoy) ? recibidos : pendientes).push(i);
   }
-  const suma = (xs) => xs.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  return { recibidos, pendientes, totalRecibido: suma(recibidos), totalPendiente: suma(pendientes) };
+  const suma = (xs) => Math.round(xs.reduce((s, i) => s + montoEnSoles(i), 0) * 100) / 100;
+  const sumaUSD = (xs) => Math.round(xs.reduce((s, i) => s + montoEnDolaresSinCambiar(i), 0) * 100) / 100;
+  return {
+    recibidos, pendientes,
+    totalRecibido: suma(recibidos), totalPendiente: suma(pendientes),
+    totalRecibidoUSD: sumaUSD(recibidos), totalPendienteUSD: sumaUSD(pendientes),
+  };
 }
 
 // Ordena los ingresos fijos como un calendario del mes: por día, y los que no
@@ -84,7 +135,7 @@ export const hayDiasConfigurados = (lista) => (lista || []).some(i => diaDeIngre
 
 // Ingresos que sirven para la cuenta: con día Y con monto. Un ingreso con día
 // pero en 0 todavía no es plata, así que no se usa para avisar nada.
-const utiles = (lista) => (lista || []).filter(i => diaDeIngreso(i) !== null && (Number(i.amount) || 0) > 0);
+const utiles = (lista) => (lista || []).filter(i => diaDeIngreso(i) !== null && montoEnSoles(i) > 0);
 
 // Todas las entradas de plata de esos ingresos, desde el 1 del mes de `now` y
 // proyectadas a los dos meses siguientes (un vencimiento a 30 días puede caer en
@@ -96,7 +147,7 @@ export function entradasDeIngreso(ingresos, now = new Date()) {
     for (const i of utiles(ingresos)) {
       const fecha = fechaDelDiaEnMes(i.day, ref);
       if (!fecha) continue;
-      out.push({ id: i.id, name: i.name, day: diaDeIngreso(i), amount: Number(i.amount) || 0, fecha });
+      out.push({ id: i.id, name: i.name, day: diaDeIngreso(i), amount: montoEnSoles(i), fecha });
     }
   }
   return out.sort((a, b) => a.fecha - b.fecha);
@@ -104,7 +155,7 @@ export function entradasDeIngreso(ingresos, now = new Date()) {
 
 // El ingreso fijo más grande con día: el que la usuaria llamaría "su sueldo".
 export function ingresoPrincipal(ingresos) {
-  return utiles(ingresos).reduce((mejor, i) => (!mejor || (Number(i.amount) || 0) > (Number(mejor.amount) || 0) ? i : mejor), null);
+  return utiles(ingresos).reduce((mejor, i) => (!mejor || montoEnSoles(i) > montoEnSoles(mejor) ? i : mejor), null);
 }
 
 // ¿Le llega la plata antes de cada vencimiento?

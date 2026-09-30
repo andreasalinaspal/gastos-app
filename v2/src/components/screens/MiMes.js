@@ -4,7 +4,7 @@ import { TrashIcon } from "../shared/icons";
 import { MONTHS_SHORT, DAYS, getMonthShort } from "../../lib/dates";
 import { useStore } from "../../state/store";
 import { curOf } from "../../lib/cycles";
-import { fechaEfectiva, esRecibido } from "../../lib/ingresos";
+import { fechaEfectiva, esRecibido, curOfIngreso, tasaDeIngreso, montoEnSoles } from "../../lib/ingresos";
 import { sumUSD } from "../../state/selectors";
 import { fmtWith } from "../../lib/format";
 import { PaymentMethodPicker, PmChip } from "../shared/PaymentMethodPicker";
@@ -122,6 +122,10 @@ export default function MiMes({
                 {d.totalIncPendiente > 0 && (
                   <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2, whiteSpace: "nowrap", opacity: 0.85 }}>+ {fmt(d.totalIncPendiente)} por entrar</div>
                 )}
+                {/* F24: dólares que no cambió a soles — nunca sumados al total */}
+                {d.totalIncUSD > 0 && (
+                  <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2, whiteSpace: "nowrap", opacity: 0.85 }}>+ {fmtWith(d.totalIncUSD, "USD")} en dólares</div>
+                )}
               </div>
               <div style={{ minWidth: 110, background: C.orange, borderRadius: 14, padding: "14px 12px", color: "#fff", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8 }}>Gastos Fijos</div>
@@ -172,7 +176,17 @@ export default function MiMes({
                         </span>
                       </div>
                     </div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: pendiente ? C.muted : C.green, marginRight: 8, whiteSpace: "nowrap" }}>+{fmt(i.amount)}</div>
+                    <div style={{ textAlign: "right", marginRight: 8 }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: pendiente ? C.muted : C.green, whiteSpace: "nowrap" }}>
+                        +{curOfIngreso(i) === "USD" ? fmtWith(i.amount, "USD") : fmt(i.amount)}
+                      </div>
+                      {/* F24: si vino en dólares, a cuánto lo cambió (o que sigue en dólares) */}
+                      {curOfIngreso(i) === "USD" && (
+                        <div style={{ fontSize: 10.5, color: C.muted, marginTop: 1, whiteSpace: "nowrap" }}>
+                          {tasaDeIngreso(i) ? "TC " + tasaDeIngreso(i) + " = " + fmt(montoEnSoles(i)) : "sin cambiar"}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ); })() : (() => { const e = mov.e; const dt = new Date(e.date); return (

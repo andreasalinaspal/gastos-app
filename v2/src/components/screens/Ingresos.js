@@ -1,10 +1,12 @@
 import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
+import { fmtWith } from "../../lib/format";
 import { PlusIcon, TrashIcon } from "../shared/icons";
 import { useStore } from "../../state/store";
-import { ordenaPorDia, diaDeIngreso, fechaDeIngreso, esRecibido, separaIngresos } from "../../lib/ingresos";
+import { ordenaPorDia, diaDeIngreso, fechaDeIngreso, esRecibido, separaIngresos, curOfIngreso, tasaDeIngreso, montoEnSoles } from "../../lib/ingresos";
 import { parseEtiqueta } from "../../lib/mesNuevo";
 import { toDateInput, diasEnMes, fechaDelDiaEnMes } from "../../lib/dates";
 import { TraerFijosButton } from "../shared/MesNuevoSheet";
+import { MonedaIngreso } from "../shared/MonedaIngreso";
 
 // El selector se acota al mes de esa fila: un ingreso de septiembre entra en
 // septiembre. Si ya tenía día pero no fecha (registros viejos), se propone ese
@@ -47,12 +49,23 @@ const etiquetaFecha = (i, curMonth) => {
   return dia !== null ? "📅 Entra el " + dia : "📅 Sin fecha";
 };
 
+// F24: el monto se muestra en SU moneda; el equivalente en soles solo si ella
+// puso el tipo de cambio que le dieron.
+const fmtIngreso = (i, fmt) => (curOfIngreso(i) === "USD" ? fmtWith(i.amount, "USD") : fmt(i.amount));
+const notaCambio = (i) => {
+  if (curOfIngreso(i) !== "USD") return null;
+  const t = tasaDeIngreso(i);
+  return t ? "TC " + t + " · " + fmtWith(montoEnSoles(i), "PEN") : "sin cambiar a soles";
+};
+
 export default function Ingresos({
   fmt, curMonth, traerFijosDe, onTraerFijos,
   editIncomeId, setEditIncomeId, editIncomeAmt, setEditIncomeAmt, saveIncomeAmt,
   editFixedIncomeName, setEditFixedIncomeName, editFixedIncomeNameVal, setEditFixedIncomeNameVal, saveFixedIncomeName,
   showAddFixedIncome, setShowAddFixedIncome, newFixedIncomeName, setNewFixedIncomeName, addFixedIncome, deleteFixedIncome,
   newFixedIncomeDay, setNewFixedIncomeDay, newFixedIncomeAmt, setNewFixedIncomeAmt,
+  newFixedIncomeCur, setNewFixedIncomeCur, newFixedIncomeRate, setNewFixedIncomeRate,
+  newExtraCur, setNewExtraCur, newExtraRate, setNewExtraRate,
   editIncomeDayId, setEditIncomeDayId, editIncomeDayVal, setEditIncomeDayVal, saveIncomeDay,
   showAddExtra, setShowAddExtra, newExtraName, setNewExtraName, newExtraAmt, setNewExtraAmt, addExtra, deleteExtra,
   editExtraId, setEditExtraId, editExtraName, setEditExtraName, editExtraAmt, setEditExtraAmt,
@@ -60,9 +73,10 @@ export default function Ingresos({
 }) {
   const data = useStore(s => s.data);
     const delMes = [...data.incomeFixed, ...data.incomeExtra].filter(i => i.month === curMonth);
-    const totalInc = delMes.reduce((s, i) => s + i.amount, 0);
+    const totalInc = Math.round(delMes.reduce((s, i) => s + montoEnSoles(i), 0) * 100) / 100;
     // F22: lo que ya entró vs. lo que falta. El número grande es lo recibido.
-    const { totalRecibido, totalPendiente } = separaIngresos(delMes);
+    const { totalRecibido, totalPendiente, totalRecibidoUSD, totalPendienteUSD } = separaIngresos(delMes);
+    const totalUSD = Math.round((totalRecibidoUSD + totalPendienteUSD) * 100) / 100;
     return (
       <div style={{ flex: 1, background: C.beige, minHeight: "100vh", paddingBottom: 80 }}>
         <div style={{ padding: "32px 24px 0" }}>
@@ -73,6 +87,12 @@ export default function Ingresos({
           {totalPendiente > 0 && (
             <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.45, marginTop: 2 }}>
               + <strong style={{ color: C.black }}>{fmt(totalPendiente)}</strong> por entrar · {fmt(totalInc)} en todo el mes
+            </div>
+          )}
+          {/* F24: los dólares que no cambió a soles van aparte, nunca sumados */}
+          {totalUSD > 0 && (
+            <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.45, marginTop: 2 }}>
+              + <strong style={{ color: C.black }}>{fmtWith(totalUSD, "USD")}</strong> que no cambiaste a soles
             </div>
           )}
         </div>
@@ -87,6 +107,8 @@ export default function Ingresos({
               {/* F22: el monto, acá mismo. Antes el ingreso nacía en cero y había
                   que entrar a editarlo aparte para ponerle la cifra. */}
               <input type="number" inputMode="decimal" placeholder="Monto (ej: 3500)" value={newFixedIncomeAmt} onChange={e => setNewFixedIncomeAmt(e.target.value)} style={{ ...inputStyle, marginBottom: 10, color: C.black }} />
+              {/* F24: en qué moneda te entra, y a cuánto lo cambiaste */}
+              <MonedaIngreso moneda={newFixedIncomeCur} setMoneda={setNewFixedIncomeCur} tasa={newFixedIncomeRate} setTasa={setNewFixedIncomeRate} monto={newFixedIncomeAmt} />
               {/* F14: día en que entra. Opcional a propósito: puede registrar hoy
                   un ingreso que entra en otra fecha, o no saber todavía cuándo. */}
               <div style={{ marginBottom: 6 }}>
@@ -96,7 +118,7 @@ export default function Ingresos({
               <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 12 }}>La fecha en que te entra. Si todavía no llega, queda marcada como <strong style={{ color: C.black }}>por entrar</strong> y pasa a contar sola el día que le toca. Puedes poner una fecha del próximo mes: el ingreso se guarda en ese mes. Si no la sabes, déjala vacía.</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={addFixedIncome} style={{ flex: 1, padding: 12, borderRadius: 12, background: C.green, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Agregar</button>
-                <button onClick={() => { setShowAddFixedIncome(false); setNewFixedIncomeName(""); setNewFixedIncomeDay(""); setNewFixedIncomeAmt(""); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: "#E0DCD4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+                <button onClick={() => { setShowAddFixedIncome(false); setNewFixedIncomeName(""); setNewFixedIncomeDay(""); setNewFixedIncomeAmt(""); setNewFixedIncomeCur("PEN"); setNewFixedIncomeRate(""); }} style={{ flex: 1, padding: 12, borderRadius: 12, background: "#E0DCD4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
               </div>
             </div>
           )}
@@ -141,6 +163,12 @@ export default function Ingresos({
                       </span>
                     </div>
                   )}
+                  {/* F24: si entra en dólares, se dice a cuánto lo cambió (o que no) */}
+                  {curOfIngreso(i) === "USD" && (
+                    <div style={{ display: "inline-flex", alignItems: "center", marginTop: 6, marginLeft: 6, background: tasaDeIngreso(i) ? "#E8F5EE" : "#F2F0EA", borderRadius: 20, padding: "3px 10px" }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: tasaDeIngreso(i) ? C.green : C.muted }}>💵 {notaCambio(i)}</span>
+                    </div>
+                  )}
                   {/* F22: si todavía no entra, se dice. No es plata que ya tiene. */}
                   {!esRecibido(i) && (
                     <div style={{ display: "inline-flex", alignItems: "center", marginTop: 6, marginLeft: 6, background: "#F2F0EA", borderRadius: 20, padding: "3px 10px" }}>
@@ -155,7 +183,7 @@ export default function Ingresos({
                       <button onClick={() => saveIncomeAmt(i.id)} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>OK</button>
                     </>
                   ) : (
-                    <button onClick={() => { setEditIncomeId(i.id); setEditIncomeAmt(i.amount > 0 ? String(i.amount) : ""); }} style={{ background: "none", border: "1.5px solid #D4D0C8", borderRadius: 10, padding: "8px 14px", fontSize: 14, fontWeight: 600, color: C.muted, cursor: "pointer", fontFamily: "inherit" }}>{i.amount > 0 ? fmt(i.amount) : "Agregar >"}</button>
+                    <button onClick={() => { setEditIncomeId(i.id); setEditIncomeAmt(i.amount > 0 ? String(i.amount) : ""); }} style={{ background: "none", border: "1.5px solid #D4D0C8", borderRadius: 10, padding: "8px 14px", fontSize: 14, fontWeight: 600, color: C.muted, cursor: "pointer", fontFamily: "inherit" }}>{i.amount > 0 ? fmtIngreso(i, fmt) : "Agregar >"}</button>
                   )}
                   <button onClick={() => deleteFixedIncome(i.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><TrashIcon /></button>
                 </div>
@@ -171,7 +199,8 @@ export default function Ingresos({
           {showAddExtra && (
             <div style={{ ...cardStyle, padding: 16, marginBottom: 12, animation: "slideUp 0.2s ease" }}>
               <input type="text" placeholder="Nombre (ej: Freelance)" value={newExtraName} onChange={e => setNewExtraName(e.target.value)} style={{ ...inputStyle, marginBottom: 10, color: C.black }} />
-              <input type="number" placeholder="Monto" value={newExtraAmt} inputMode="decimal" onChange={e => setNewExtraAmt(e.target.value)} style={{ ...inputStyle, marginBottom: 12, color: C.black }} />
+              <input type="number" placeholder="Monto" value={newExtraAmt} inputMode="decimal" onChange={e => setNewExtraAmt(e.target.value)} style={{ ...inputStyle, marginBottom: 10, color: C.black }} />
+              <MonedaIngreso moneda={newExtraCur} setMoneda={setNewExtraCur} tasa={newExtraRate} setTasa={setNewExtraRate} monto={newExtraAmt} />
               <button onClick={addExtra} style={{ width: "100%", padding: 12, borderRadius: 12, background: C.green, color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Agregar</button>
             </div>
           )}
@@ -201,9 +230,13 @@ export default function Ingresos({
                     <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>{i.name}</div>
                     <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
                       {i.category ? <span style={{ background: "#E8F5EE", color: C.green, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{i.category.emoji} {i.category.name}</span> : <span>Toca para editar</span>}
+                      {/* F24: en dólares, a cuánto lo cambió (o que sigue en dólares) */}
+                      {curOfIngreso(i) === "USD" && (
+                        <span style={{ background: tasaDeIngreso(i) ? "#E8F5EE" : "#F2F0EA", color: tasaDeIngreso(i) ? C.green : C.muted, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>💵 {notaCambio(i)}</span>
+                      )}
                     </div>
                   </div>
-                  <span style={{ fontSize: 17, fontWeight: 800, color: C.green, marginRight: 8 }}>{fmt(i.amount)}</span>
+                  <span style={{ fontSize: 17, fontWeight: 800, color: C.green, marginRight: 8 }}>{fmtIngreso(i, fmt)}</span>
                   <button onClick={() => deleteExtra(i.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}><TrashIcon /></button>
                 </div>
               )}
