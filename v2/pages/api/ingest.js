@@ -61,7 +61,7 @@ export default async function handler(req, res) {
 
   const parsed = normalizeTransaction(body);
   if (!parsed.ok) return res.status(400).json({ error: parsed.error });
-  const { amount, merchant, occurredAt, cardHint, source, externalId } = parsed.value;
+  const { amount, merchant, occurredAt, cardHint, source, externalId, currency } = parsed.value;
 
   try {
     // Cliente de service role: escribe saltando RLS y no persiste sesión.
@@ -90,6 +90,7 @@ export default async function handler(req, res) {
       .select("id, source")
       .eq("user_id", userId)
       .eq("amount", amount)
+      .eq("currency", currency)
       .neq("source", source)
       .gte("occurred_at", desde)
       .lte("occurred_at", hasta)
@@ -104,6 +105,7 @@ export default async function handler(req, res) {
       merchant,
       card_hint: cardHint || null,
       occurred_at: occurredAt,
+      currency,
       source,
       external_id: externalId || null,
       status: "pending",

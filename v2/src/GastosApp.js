@@ -433,6 +433,9 @@ export default function App() {
     const d = (form.desc || "").trim() || "Compra";
     const pm = form.pm || null;
     const when = parseDateInput(form.dateStr) || new Date(item.occurredAt);
+    // F27: la moneda del aviso viaja hasta el gasto. Sin esto, un consumo en
+    // dólares entraba como soles y le inflaba el mes sin que nada lo dijera.
+    const esUsd = form.cur === "USD";
     setData(p => ({
       ...p,
       expenses: [...p.expenses, {
@@ -440,11 +443,12 @@ export default function App() {
         date: when.toISOString(), month: monthLabelOf(when),
         category: slimCat(form.cat), subcategory: form.sub || null,
         paymentMethodId: pm,
+        ...(esUsd ? { currency: "USD" } : {}),
       }],
       ...(pm ? { lastPaymentMethodId: pm } : {}),
     }));
     dropInboxItem(item.id);
-    showToast((form.cat ? form.cat.emoji + " " : "") + d + " " + fmtWith(a, data.currency) + " registrado");
+    showToast((form.cat ? form.cat.emoji + " " : "") + d + " " + fmtWith(a, esUsd ? "USD" : data.currency) + " registrado");
     markInboxRowOrQueue(supabase, item.id, "confirmed");
   };
 

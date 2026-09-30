@@ -11,6 +11,19 @@ const MAX_EXTERNAL_ID = 200;
 // F26: de dónde vino el aviso. Importa para dos cosas: mostrárselo a ella y no
 // contar dos veces la misma compra cuando llega por los dos canales.
 export const FUENTES = ["apple-pay", "correo"];
+// F27: en qué moneda vino la compra. Los avisos de banco traen el símbolo
+// pegado al monto ("S/ 25.50", "$ 4.86"), así que se deduce de ahí cuando quien
+// llama no la manda explícita. Sin señal se asume soles, que es lo habitual.
+export function monedaDeTexto(raw) {
+  const t = String(raw === undefined || raw === null ? "" : raw).toUpperCase();
+  if (/S\/|\bPEN\b|SOLES/.test(t)) return "PEN";
+  if (/US\$|\bUSD\b|D[OÓ]LAR/.test(t)) return "USD";
+  if (t.includes("$")) return "USD";
+  return "PEN";
+}
+
+export const normalizaMoneda = (raw) => (String(raw === undefined || raw === null ? "" : raw).trim().toUpperCase() === "USD" ? "USD" : "PEN");
+
 export const normalizaFuente = (raw) => {
   const v = String(raw === undefined || raw === null ? "" : raw).trim().toLowerCase();
   if (v === "correo" || v === "email" || v === "gmail") return "correo";
@@ -62,7 +75,7 @@ const trimTo = (raw, max) => {
 
 /**
  * Valida y normaliza el cuerpo que manda el atajo de iOS.
- * → { ok: true, value: { amount, merchant, occurredAt, cardHint, source, externalId } }
+ * → { ok: true, value: { amount, merchant, occurredAt, cardHint, source, externalId, currency } }
  * → { ok: false, error: "motivo en español" }
  */
 export function normalizeTransaction(body) {
@@ -100,7 +113,14 @@ export function normalizeTransaction(body) {
   const externalId = trimTo(body.externalId !== undefined ? body.externalId : body.idExterno, MAX_EXTERNAL_ID);
   const source = normalizaFuente(body.source !== undefined ? body.source : body.fuente);
 
-  return { ok: true, value: { amount: abs, merchant, occurredAt, cardHint, source, externalId } };
+  // Si no viene explícita, se lee del propio texto del monto: "S/ 25.50" → soles,
+  // "$ 4.86" → dólares. Registrar dólares como soles sería un error enorme y mudo.
+  const rawCur = body.currency !== undefined ? body.currency : body.moneda;
+  const currency = rawCur !== undefined && rawCur !== null && String(rawCur).trim() !== ""
+    ? normalizaMoneda(rawCur)
+    : monedaDeTexto(rawAmount);
+
+  return { ok: true, value: { amount: abs, merchant, occurredAt, cardHint, source, externalId, currency } };
 }
 
 // minúsculas, sin tildes, sin espacios ni signos: "Visa BCP ••1234" → "visabcp1234"

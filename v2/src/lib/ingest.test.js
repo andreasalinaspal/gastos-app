@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseMoney, normalizeTransaction, normalizeName, matchPaymentMethod, normalizaFuente } from "./ingest";
+import { parseMoney, normalizeTransaction, normalizeName, matchPaymentMethod, normalizaFuente, monedaDeTexto } from "./ingest";
 
 describe("parseMoney", () => {
   it("acepta números tal cual", () => {
@@ -250,5 +250,58 @@ describe("fuente e id externo", () => {
   it("recorta un id absurdamente largo en vez de guardarlo entero", () => {
     const largo = "x".repeat(500);
     expect(normalizeTransaction({ amount: 25, externalId: largo }).value.externalId.length).toBe(200);
+  });
+});
+
+// ── F27: en qué moneda vino la compra ──
+//
+// Sus correos de Interbank traen el símbolo pegado al monto ("Monto: $ 4.86").
+// Confundir dólares con soles sería un error grande y silencioso, así que la
+// moneda se deduce del texto y además se puede corregir al confirmar.
+
+describe("monedaDeTexto", () => {
+  it("reconoce los soles", () => {
+    for (const t of ["S/ 25.50", "s/25", "25.50 PEN", "25 soles"]) {
+      expect(monedaDeTexto(t)).toBe("PEN");
+    }
+  });
+
+  it("reconoce los dólares", () => {
+    for (const t of ["$ 4.86", "US$ 120", "120 USD", "4.86 dólares", "$2012.00"]) {
+      expect(monedaDeTexto(t)).toBe("USD");
+    }
+  });
+
+  it("si aparecen los dos, manda el soles", () => {
+    // "S/ 50 (equivalente a $ 13)" es un aviso en soles, no en dólares.
+    expect(monedaDeTexto("S/ 50 (equivalente a $ 13)")).toBe("PEN");
+  });
+
+  it("sin símbolo asume soles, que es lo habitual", () => {
+    expect(monedaDeTexto("25.50")).toBe("PEN");
+    expect(monedaDeTexto("")).toBe("PEN");
+    expect(monedaDeTexto(null)).toBe("PEN");
+    expect(monedaDeTexto(25.5)).toBe("PEN");
+  });
+});
+
+describe("la moneda llega hasta el gasto", () => {
+  it("deduce dólares del monto de un aviso de Interbank", () => {
+    const v = normalizeTransaction({ amount: "$ 4.86", merchant: "UBER BV USD-USD PERU" }).value;
+    expect(v.amount).toBe(4.86);
+    expect(v.currency).toBe("USD");
+  });
+
+  it("deduce soles cuando el aviso trae S/", () => {
+    expect(normalizeTransaction({ amount: "S/ 25.50" }).value.currency).toBe("PEN");
+  });
+
+  it("la moneda explícita manda sobre el símbolo", () => {
+    expect(normalizeTransaction({ amount: "$ 10", currency: "PEN" }).value.currency).toBe("PEN");
+    expect(normalizeTransaction({ amount: "S/ 10", moneda: "USD" }).value.currency).toBe("USD");
+  });
+
+  it("una moneda desconocida cae a soles, no se cuela", () => {
+    expect(normalizeTransaction({ amount: "10", currency: "EUR" }).value.currency).toBe("PEN");
   });
 });

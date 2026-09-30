@@ -43,6 +43,9 @@ function InboxItemForm({ item, data, onRegister, onDiscard }) {
   // Si no hay match, el default de siempre.
   const matched = matchPaymentMethod(item.cardHint, data.paymentMethods);
   const [pm, setPm] = useState(matched || getDefaultPaymentMethodId(data));
+  // F27: la moneda viene del aviso del banco, pero se puede corregir acá. Un
+  // consumo en dólares registrado como soles sería un error enorme y mudo.
+  const [cur, setCur] = useState(item.currency === "USD" ? "USD" : "PEN");
   const puedeRegistrar = Number(amt) > 0;
   const matchedName = matched ? (data.paymentMethods || []).find(m => m.id === matched)?.name : null;
 
@@ -52,7 +55,15 @@ function InboxItemForm({ item, data, onRegister, onDiscard }) {
       <input type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Comercio" style={{ ...inputStyle, color: C.black, marginBottom: 12 }} />
 
       <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Monto</div>
-      <input type="number" value={amt} onChange={e => setAmt(e.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, color: C.black, marginBottom: 12 }} />
+      <input type="number" value={amt} onChange={e => setAmt(e.target.value)} inputMode="decimal" placeholder="Monto" style={{ ...inputStyle, color: C.black, marginBottom: 8 }} />
+      <div style={{ display: "flex", background: "#F0EDE4", borderRadius: 12, padding: 4, marginBottom: 12 }}>
+        {[["PEN", "S/ Soles"], ["USD", "US$ Dólares"]].map(([v, l]) => (
+          <button key={v} onClick={() => setCur(v)}
+            style={{ flex: 1, padding: "8px 0", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: cur === v ? 800 : 600, color: cur === v ? C.black : C.muted, background: cur === v ? "#fff" : "transparent", boxShadow: cur === v ? "0 1px 4px rgba(0,0,0,0.08)" : "none" }}>
+            {l}
+          </button>
+        ))}
+      </div>
 
       <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Fecha</div>
       <input type="date" value={dateStr} onChange={e => setDateStr(e.target.value)} style={{ ...inputStyle, color: C.black, marginBottom: 12 }} />
@@ -72,7 +83,7 @@ function InboxItemForm({ item, data, onRegister, onDiscard }) {
       <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
         <button onClick={() => onDiscard(item)} style={{ flex: 1, padding: 15, borderRadius: 14, background: "#E0DCD4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Descartar</button>
         <button
-          onClick={() => puedeRegistrar && onRegister(item, { amt, desc, dateStr, cat, sub, pm })}
+          onClick={() => puedeRegistrar && onRegister(item, { amt, desc, dateStr, cat, sub, pm, cur })}
           disabled={!puedeRegistrar}
           style={{ flex: 1, padding: 15, borderRadius: 14, background: puedeRegistrar ? C.green : "#C8C4BC", color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: puedeRegistrar ? "pointer" : "default", fontFamily: "inherit" }}
         >Registrar</button>

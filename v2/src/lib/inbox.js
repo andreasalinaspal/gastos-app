@@ -18,6 +18,8 @@ export function rowToInboxItem(row) {
     amount,
     merchant: (row.merchant || "Compra").trim() || "Compra",
     cardHint: row.card_hint || "",
+    // F27: la moneda del aviso. Sin dato se asume soles, como el resto de la app.
+    currency: row.currency === "USD" ? "USD" : "PEN",
     occurredAt: isNaN(when.getTime()) ? new Date().toISOString() : when.toISOString(),
   };
 }
@@ -28,7 +30,7 @@ export async function fetchPendingInbox(supabase, userId) {
   try {
     const { data, error } = await supabase
       .from("inbox")
-      .select("id, amount, merchant, card_hint, occurred_at")
+      .select("id, amount, merchant, card_hint, occurred_at, currency")
       .eq("user_id", userId)
       .eq("status", "pending")
       .order("occurred_at", { ascending: false })

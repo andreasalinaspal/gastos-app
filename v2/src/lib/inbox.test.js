@@ -8,7 +8,7 @@ describe("rowToInboxItem", () => {
       card_hint: "Visa BCP ••1234", occurred_at: "2026-09-20T15:04:00.000Z",
     });
     expect(item).toEqual({
-      id: "row-1", amount: 25.5, merchant: "Starbucks",
+      id: "row-1", amount: 25.5, merchant: "Starbucks", currency: "PEN",
       cardHint: "Visa BCP ••1234", occurredAt: "2026-09-20T15:04:00.000Z",
     });
   });
@@ -57,7 +57,7 @@ describe("fetchPendingInbox (local-first)", () => {
   it("devuelve los items mapeados", async () => {
     const client = fakeClient({ data: [{ id: "a", amount: 5, merchant: "Wong" }], error: null });
     expect(await fetchPendingInbox(client, "u1")).toEqual([
-      { id: "a", amount: 5, merchant: "Wong", cardHint: "", occurredAt: expect.any(String) },
+      { id: "a", amount: 5, merchant: "Wong", cardHint: "", currency: "PEN", occurredAt: expect.any(String) },
     ]);
   });
 
@@ -79,5 +79,16 @@ describe("markInboxRow", () => {
   it("false cuando falla — nunca lanza", async () => {
     expect(await markInboxRow(fakeClient({ error: { message: "boom" } }), "a", "confirmed")).toBe(false);
     expect(await markInboxRow(null, "a", "confirmed")).toBe(false);
+  });
+});
+
+// F27: la moneda del aviso viaja hasta la pantalla de confirmación.
+describe("moneda del pendiente", () => {
+  it("un aviso en dólares llega como USD", () => {
+    expect(rowToInboxItem({ id: "r", amount: 4.86, currency: "USD" }).currency).toBe("USD");
+  });
+  it("sin moneda se asume soles, como el resto de la app", () => {
+    expect(rowToInboxItem({ id: "r", amount: 10 }).currency).toBe("PEN");
+    expect(rowToInboxItem({ id: "r", amount: 10, currency: "EUR" }).currency).toBe("PEN");
   });
 });
