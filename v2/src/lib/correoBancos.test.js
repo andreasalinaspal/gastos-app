@@ -219,3 +219,34 @@ describe("piezas sueltas", () => {
     expect(bancoDe("alguien@gmail.com")).toBe(null);
   });
 });
+
+// Gmail convierte el HTML a texto y no siempre respeta los saltos de línea.
+// Estas son las formas en que puede llegar el MISMO correo.
+describe("aguanta cómo Gmail arma el texto plano", () => {
+  it("etiqueta y valor separados por varios espacios", () => {
+    expect(campo("Código de operación    02240792", "Código de operación")).toBe("02240792");
+    expect(campo("Comercio\t\tCineplanet", "Comercio")).toBe("Cineplanet");
+  });
+
+  it("aun así no confunde 'Monto' con 'Monto y moneda'", () => {
+    // Un solo espacio después de la etiqueta = es otra etiqueta, no un valor.
+    expect(campo("Monto y moneda    S/ 20.00", "Monto")).toBe("");
+    expect(campo("Monto y moneda    S/ 20.00", "Monto y moneda")).toBe("S/ 20.00");
+  });
+
+  it("aguanta espacios duros (&nbsp;) y líneas con tabulaciones", () => {
+    const cuerpo = "Interbank\t\nComercio: Cineplanet\nMonto: S/. 38.00";
+    expect(campo(cuerpo, "Comercio")).toBe("Cineplanet");
+    expect(campo(cuerpo, "Monto")).toBe("S/. 38.00");
+  });
+
+  it("lee el consumo aunque venga todo apretado en una línea por campo", () => {
+    const r = leeInterbank({
+      asunto: "Andrea Carolina, realizaste un consumo con tu Tarjeta Amex",
+      cuerpo: "Tarjeta   ****709\nComercio   Cineplanet\nMonto   S/. 38.00\nFecha   25/08/2026\nHora   02:14 PM",
+    });
+    expect(r.accion).toBe("registrar");
+    expect(r.payload.merchant).toBe("Cineplanet");
+    expect(r.payload.amount).toBe("S/. 38.00");
+  });
+});

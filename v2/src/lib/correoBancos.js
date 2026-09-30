@@ -36,6 +36,14 @@ export function campo(cuerpo, etiqueta) {
     if (l.startsWith(objetivo + ":")) {
       return limpia(lineas[i].slice(lineas[i].indexOf(":") + 1));
     }
+    // Gmail, al pasar el HTML a texto, a veces deja la etiqueta y el valor en la
+    // misma línea separados por espacios en vez de por un salto. Se exige una
+    // separación de 2+ espacios para no confundir "Monto" con "Monto y moneda",
+    // donde después de la etiqueta viene un solo espacio y sigue el nombre.
+    if (l.startsWith(objetivo)) {
+      const resto = lineas[i].slice(etiqueta.length);
+      if (/^[ \t ]{2,}\S/.test(resto)) return limpia(resto);
+    }
   }
   return "";
 }
