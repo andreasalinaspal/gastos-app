@@ -305,3 +305,41 @@ describe("la moneda llega hasta el gasto", () => {
     expect(normalizeTransaction({ amount: "10", currency: "EUR" }).value.currency).toBe("PEN");
   });
 });
+
+// ── F27: los formatos REALES de sus correos de Interbank ──
+//
+// Copiados tal cual de los avisos que ella recibe. Interbank escribe los soles
+// con "S/." (con punto) y los dólares con "$".
+
+describe("montos tal como los escribe Interbank", () => {
+  const casos = [
+    ["S/. 38.00", 38, "PEN"],       // Cineplanet
+    ["$ 4.86", 4.86, "USD"],        // UBER BV USD-USD PERU
+    ["$ 2012.00", 2012, "USD"],
+    ["S/. 1,234.50", 1234.5, "PEN"],
+    ["S/.38.00", 38, "PEN"],        // sin espacio
+    ["S/ 38.00", 38, "PEN"],        // sin el punto
+  ];
+
+  for (const [texto, monto, moneda] of casos) {
+    it(`"${texto}" → ${monto} ${moneda}`, () => {
+      const v = normalizeTransaction({ amount: texto, merchant: "Cineplanet" });
+      expect(v.ok).toBe(true);
+      expect(v.value.amount).toBe(monto);
+      expect(v.value.currency).toBe(moneda);
+    });
+  }
+
+  // El punto de "S/." se pegaba al número y lo invalidaba: TODAS las compras en
+  // soles se rechazaban con "El monto no es un número válido".
+  it("el punto de S/. no invalida el monto", () => {
+    expect(parseMoney("S/. 38.00")).toBe(38);
+  });
+
+  // Un separador suelto de verdad sigue siendo inválido: mejor rechazarlo que
+  // adivinar si ".50" son 50 céntimos o 50 soles.
+  it("un separador suelto sin moneda sigue siendo inválido", () => {
+    expect(parseMoney(".50")).toBe(null);
+    expect(parseMoney(",")).toBe(null);
+  });
+});

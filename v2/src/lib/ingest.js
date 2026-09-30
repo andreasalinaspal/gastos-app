@@ -37,8 +37,14 @@ export function parseMoney(raw) {
   if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
   if (typeof raw !== "string") return null;
 
+  // F27: primero fuera el símbolo de moneda, con su punto y todo. Interbank
+  // escribe "S/. 38.00", y si solo se filtran los caracteres válidos queda
+  // ".38.00" — un separador suelto al inicio que no parsea. Cada compra en
+  // soles se habría rechazado por eso.
+  const sinMoneda = raw.replace(/(S\/\.?|US\$|\$|\bPEN\b|\bUSD\b|SOLES|D[OÓ]LARES?)/gi, " ");
+
   // Nos quedamos solo con dígitos, separadores y el signo menos inicial.
-  const cleaned = raw.replace(/[^\d.,-]/g, "").trim();
+  const cleaned = sinMoneda.replace(/[^\d.,-]/g, "").trim();
   if (!cleaned) return null;
 
   const negative = cleaned.startsWith("-");
