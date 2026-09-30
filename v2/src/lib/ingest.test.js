@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseMoney, normalizeTransaction, normalizeName, matchPaymentMethod } from "./ingest";
+import { parseMoney, normalizeTransaction, normalizeName, matchPaymentMethod, normalizaFuente } from "./ingest";
 
 describe("parseMoney", () => {
   it("acepta números tal cual", () => {
@@ -221,5 +221,34 @@ describe("matchPaymentMethod", () => {
 
   it("ignora tildes al emparejar", () => {
     expect(matchPaymentMethod("credito interbank", [{ id: "pm-x", name: "Crédito Interbank" }])).toBe("pm-x");
+  });
+});
+
+// ── F26: de dónde vino el aviso, y el id para no duplicar ──
+describe("fuente e id externo", () => {
+  it("por defecto el aviso es de Apple Pay", () => {
+    expect(normalizeTransaction({ amount: 25 }).value.source).toBe("apple-pay");
+  });
+
+  it("reconoce el correo escrito de varias formas", () => {
+    for (const v of ["correo", "email", "gmail", "GMAIL", " Correo "]) {
+      expect(normalizeTransaction({ amount: 25, source: v }).value.source).toBe("correo");
+    }
+  });
+
+  it("una fuente desconocida no se cuela: cae a apple-pay", () => {
+    expect(normalizeTransaction({ amount: 25, source: "hackeado" }).value.source).toBe("apple-pay");
+    expect(normalizaFuente(null)).toBe("apple-pay");
+  });
+
+  it("guarda el id del correo para cortar el mismo aviso dos veces", () => {
+    expect(normalizeTransaction({ amount: 25, externalId: "18f2ab9c" }).value.externalId).toBe("18f2ab9c");
+    expect(normalizeTransaction({ amount: 25, idExterno: "18f2ab9c" }).value.externalId).toBe("18f2ab9c");
+    expect(normalizeTransaction({ amount: 25 }).value.externalId).toBe("");
+  });
+
+  it("recorta un id absurdamente largo en vez de guardarlo entero", () => {
+    const largo = "x".repeat(500);
+    expect(normalizeTransaction({ amount: 25, externalId: largo }).value.externalId.length).toBe(200);
   });
 });

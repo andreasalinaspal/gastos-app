@@ -61,20 +61,51 @@ export default async function handler(req, res) {
 
   const parsed = normalizeTransaction(body);
   if (!parsed.ok) return res.status(400).json({ error: parsed.error });
-  const { amount, merchant, occurredAt, cardHint } = parsed.value;
+  const { amount, merchant, occurredAt, cardHint, source, externalId } = parsed.value;
 
   try {
     // Cliente de service role: escribe saltando RLS y no persiste sesión.
     const admin = createClient(SUPABASE_URL, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+
+    // F26 · duplicado exacto: el mismo correo procesado dos veces. El id externo
+    // lo identifica sin ambigüedad, así que se corta antes de escribir.
+    if (externalId) {
+      const { data: yaEsta } = await admin.from("inbox")
+        .select("id").eq("user_id", userId).eq("external_id", externalId).limit(1);
+      if (yaEsta && yaEsta.length > 0) {
+        return res.status(200).json({ ok: true, duplicado: "mismo aviso" });
+      }
+    }
+
+    // F26 · misma compra por los dos canales: Apple Pay la avisa al instante y
+    // el banco manda su correo minutos después. Se descarta solo cuando la
+    // fuente es DISTINTA: dos compras iguales el mismo día son normales (dos
+    // cafés), pero siempre llegarían por el mismo canal.
+    const ventana = 15 * 60 * 1000;
+    const desde = new Date(new Date(occurredAt).getTime() - ventana).toISOString();
+    const hasta = new Date(new Date(occurredAt).getTime() + ventana).toISOString();
+    const { data: gemelas } = await admin.from("inbox")
+      .select("id, source")
+      .eq("user_id", userId)
+      .eq("amount", amount)
+      .neq("source", source)
+      .gte("occurred_at", desde)
+      .lte("occurred_at", hasta)
+      .limit(1);
+    if (gemelas && gemelas.length > 0) {
+      return res.status(200).json({ ok: true, duplicado: "ya llegó por " + gemelas[0].source });
+    }
+
     const { error } = await admin.from("inbox").insert({
       user_id: userId,
       amount,
       merchant,
       card_hint: cardHint || null,
       occurred_at: occurredAt,
-      source: "apple-pay",
+      source,
+      external_id: externalId || null,
       status: "pending",
     });
     if (error) throw error;

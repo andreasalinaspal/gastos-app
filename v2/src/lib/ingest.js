@@ -1,4 +1,4 @@
-// Lógica pura de la ingesta de transacciones (Apple Pay vía Atajos de iOS).
+// Lógica pura de la ingesta de transacciones (Atajos de iOS y avisos de correo).
 //
 // Vive aparte de la ruta /api/ingest a propósito: así se puede probar sin red,
 // sin Supabase y sin Next. La ruta solo valida, guarda y responde.
@@ -6,6 +6,16 @@
 const MAX_AMOUNT = 1000000; // más que eso es un error de formato, no una compra
 const MAX_MERCHANT = 120;
 const MAX_CARD_HINT = 120;
+const MAX_EXTERNAL_ID = 200;
+
+// F26: de dónde vino el aviso. Importa para dos cosas: mostrárselo a ella y no
+// contar dos veces la misma compra cuando llega por los dos canales.
+export const FUENTES = ["apple-pay", "correo"];
+export const normalizaFuente = (raw) => {
+  const v = String(raw === undefined || raw === null ? "" : raw).trim().toLowerCase();
+  if (v === "correo" || v === "email" || v === "gmail") return "correo";
+  return "apple-pay";
+};
 
 // "S/ 1,234.50" / "1.234,50" / "25,50" / "25.50" / 25.5 → 25.5
 // Regla: el ÚLTIMO separador es el decimal si le siguen 1 o 2 dígitos; el resto
@@ -52,7 +62,7 @@ const trimTo = (raw, max) => {
 
 /**
  * Valida y normaliza el cuerpo que manda el atajo de iOS.
- * → { ok: true, value: { amount, merchant, occurredAt, cardHint } }
+ * → { ok: true, value: { amount, merchant, occurredAt, cardHint, source, externalId } }
  * → { ok: false, error: "motivo en español" }
  */
 export function normalizeTransaction(body) {
@@ -85,7 +95,12 @@ export function normalizeTransaction(body) {
 
   const cardHint = trimTo(body.cardHint !== undefined ? body.cardHint : body.tarjeta, MAX_CARD_HINT);
 
-  return { ok: true, value: { amount: abs, merchant, occurredAt, cardHint } };
+  // F26: el id del correo que originó el aviso. Sirve para que, si el script de
+  // Gmail corre dos veces sobre el mismo mensaje, la compra no entre duplicada.
+  const externalId = trimTo(body.externalId !== undefined ? body.externalId : body.idExterno, MAX_EXTERNAL_ID);
+  const source = normalizaFuente(body.source !== undefined ? body.source : body.fuente);
+
+  return { ok: true, value: { amount: abs, merchant, occurredAt, cardHint, source, externalId } };
 }
 
 // minúsculas, sin tildes, sin espacios ni signos: "Visa BCP ••1234" → "visabcp1234"
