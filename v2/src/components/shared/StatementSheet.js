@@ -201,5 +201,7 @@ export function StatementSheet({ card, prompt, fmt, onClose, showToast }) {
 
 // De dónde sale el número, para textos sueltos.
 export function nextPaymentSourceLabel(source) {
-  return source === "banco" ? "según tu estado de cuenta" : "estimado con tus gastos";
+  if (source === "banco") return "según tu estado de cuenta";
+  if (source === "sin-dato") return "falta tu estado de cuenta";
+  return "estimado con tus gastos";
 }

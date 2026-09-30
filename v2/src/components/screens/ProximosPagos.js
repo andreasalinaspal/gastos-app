@@ -67,6 +67,8 @@ function AvisoIngreso({ texto }) {
 function CardRow({ it, fmtC, onOpen, equivData, aviso }) {
   const accent = it.card.color || C.purple;
   const pend = it.status === "por-vencer";
+  // F23: hay deuda viva pero falta el estado de cuenta para saber cuánto vence.
+  const sinDato = it.status === "sin-dato";
   return (
     <div onClick={onOpen} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, cursor: "pointer" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -74,13 +76,19 @@ function CardRow({ it, fmtC, onOpen, equivData, aviso }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{it.card.name}</div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
-            {pend ? <>vence el {fmtLong(it.dueDate)} · <strong style={{ color: it.days <= 3 ? C.orange : C.muted }}>{faltanLabel(it.days)}</strong></> : "Sin deuda por vencer"}
+            {pend
+              ? <>vence el {fmtLong(it.dueDate)} · <strong style={{ color: it.days <= 3 ? C.orange : C.muted }}>{faltanLabel(it.days)}</strong></>
+              : sinDato
+                ? <>vence el {fmtLong(it.dueDate)} · no sé cuánto todavía</>
+                : "Sin deuda por vencer"}
           </div>
-          {pend && <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{nextPaymentSourceLabel(it.source)}</div>}
+          {(pend || sinDato) && <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{nextPaymentSourceLabel(it.source)}</div>}
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
           {pend ? (
             <div style={{ fontFamily: FONT_TITLE, fontSize: 20, fontWeight: 900, color: C.black, letterSpacing: -0.5 }}>{fmtC(it.amount)}</div>
+          ) : sinDato ? (
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.orange, whiteSpace: "nowrap" }}>Falta el dato</div>
           ) : (
             <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>Al día ✅</div>
           )}
@@ -116,6 +124,8 @@ export function ProximosPagosScreen({ subScreen, setSubScreen, fmt, traerFijosDe
   const sobra = totalInc - totalFijosAll - total30;
   const alcanza = sobra >= 0;
   const proximo = items.find(i => i.status === "por-vencer") || items[0];
+  // F23: tarjetas con deuda viva cuyo monto a pagar todavía no se sabe.
+  const sinDato = items.filter(i => i.status === "sin-dato");
   // F14: el cruce entre el día en que entra su plata y el día en que vence cada
   // tarjeta. Solo soles, igual que la cuenta de "¿te alcanza?".
   const ingresosDelMes = (data.incomeFixed || []).filter(i => i.month === getCurrentMonthLabel());
@@ -157,8 +167,17 @@ export function ProximosPagosScreen({ subScreen, setSubScreen, fmt, traerFijosDe
               <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 4 }}>
                 {total30 > 0 && proximo
                   ? <>{items.filter(i => i.status === "por-vencer").length === 1 ? "Un estado de cuenta" : `${items.filter(i => i.status === "por-vencer").length} estados de cuenta`} · el más cercano {plazoLabel(proximo.days)}</>
-                  : "Ninguna tarjeta tiene deuda por pagar 🎉"}
+                  : sinDato.length > 0
+                    ? "Todavía no sé cuánto vence"
+                    : "Ninguna tarjeta tiene deuda por pagar 🎉"}
               </div>
+              {/* F23: si falta el estado de cuenta de alguna tarjeta, este total
+                  se queda corto. Decirlo, o la prueba de "¿me alcanza?" miente. */}
+              {sinDato.length > 0 && (
+                <div style={{ fontSize: 12.5, color: "#FFD9B8", marginTop: 8, lineHeight: 1.45 }}>
+                  Este total no incluye {sinDato.length === 1 ? sinDato[0].card.name : sinDato.length + " tarjetas"}: tienen deuda pero todavía no registraste su estado de cuenta.
+                </div>
+              )}
             </div>
           </div>
 

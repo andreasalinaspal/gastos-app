@@ -145,7 +145,11 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast,
           <div style={{ fontSize: 12, color: C.muted, marginTop: 6, paddingTop: 8, borderTop: "1px solid #F0EDE4" }}>
             {next.status === "por-vencer"
               ? <>Próximo pago: <strong style={{ color: C.black }}>{fmtCur(next.amount)}</strong> el {fmtDay(next.dueDate)} · {nextPaymentSourceLabel(next.source)}</>
-              : <>Próximo pago: <strong style={{ color: C.green }}>al día ✅</strong></>}
+              : next.status === "sin-dato"
+                /* F23: hay deuda viva pero no hay con qué saber cuánto vence.
+                   Decir "al día" sería mentir. */
+                ? <>Próximo pago: <strong style={{ color: C.orange }}>falta el dato</strong> — vence el {fmtDay(next.dueDate)}</>
+                : <>Próximo pago: <strong style={{ color: C.green }}>al día ✅</strong></>}
             {/* Cuánto sería ese pago en soles. Solo para tenerlo: no entra en
                 ninguna cuenta en soles. */}
             {activeCur === "USD" && next.status === "por-vencer" && (
@@ -169,6 +173,28 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast,
             </div>
             <div style={{ fontFamily: FONT_TITLE, fontSize: 20, fontWeight: 900, color: C.black, letterSpacing: -0.4 }}>{fmtCur(desglose.saldo)}</div>
           </div>
+          {/* F23: el saldo que ella puso es de HOY, o sea junta lo que el banco
+              ya facturó con lo que lleva gastado desde el corte. Esas dos cosas
+              solo se separan con el estado de cuenta. Sin él no se reparte nada:
+              se pide el dato. */}
+          {desglose.faltaEstadoDeCuenta ? (
+            <div style={{ background: "#FDF2E9", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.black, marginBottom: 4 }}>Falta tu estado de cuenta</div>
+              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+                Ese saldo junta dos cosas: lo que el banco ya te facturó (vence el {fmtDay(desglose.dueDate)}) y lo que llevas gastado desde el corte del {fmtDay(cycle.start)}. Para separarlas necesito lo que te cobró el banco.
+              </div>
+              <button
+                onClick={() => {
+                  const entry = buildStatementEntry(card, allExps, data.cardStatements, now ? new Date(now) : new Date());
+                  if (entry) setStmt(entry);
+                }}
+                style={{ marginTop: 10, background: C.purple, color: "#fff", border: "none", borderRadius: 10, padding: "9px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                🧾 Registrar lo que debo
+              </button>
+            </div>
+          ) : (
+          <>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, paddingBottom: 8, borderBottom: "1px solid #F0EDE4" }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.black }}>Ya facturado</div>
@@ -209,6 +235,8 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast,
             <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45, marginTop: 8, paddingTop: 8, borderTop: "1px dashed #E4E0D6" }}>
               El banco te está cobrando <strong style={{ color: C.orange }}>{fmtCur(desglose.facturado - desglose.saldo)}</strong> más de lo que marca tu saldo. Suele ser intereses, membresía o seguros. Actualiza tu saldo al editar la tarjeta y se acomoda.
             </div>
+          )}
+          </>
           )}
           <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45, marginTop: 10, paddingTop: 9, borderTop: "1px solid #F0EDE4" }}>
             Todo esto ocupa tu línea desde el día que compras. Por eso tu disponible baja apenas gastas, aunque lo que tienes que pagar este mes siga igual.

@@ -292,11 +292,29 @@ describe("getNextPayment", () => {
     expect(ymd(n.dueDate)).toBe("2026-10-15");
   });
 
-  it("una deuda previa declarada DESPUÉS del corte cerrado no se cobra todavía", () => {
+  // F23: antes esto decía "al día", que era mentira — ella tiene deuda viva y
+  // un vencimiento encima. Un saldo declarado DESPUÉS del corte junta lo ya
+  // facturado con lo del ciclo abierto, y separarlo necesita el estado de cuenta.
+  it("un saldo declarado DESPUÉS del corte no se puede repartir: falta el dato", () => {
     const reciente = card({ openingBalance: 500, openingDate: new Date(2026, 8, 26).toISOString() });
     const n = getNextPayment(reciente, expenses, [], NOW);
-    expect(n.amount).toBe(0);
-    expect(n.status).toBe("al-dia");
+    expect(n.status).toBe("sin-dato");
+    expect(n.source).toBe("sin-dato");
+    expect(n.amount).toBe(0); // no se inventa un monto
+    expect(n.saldoVivo).toBeGreaterThan(0);
+  });
+
+  it("con el estado de cuenta registrado sí sabe cuánto vence", () => {
+    const reciente = card({ openingBalance: 500, openingDate: new Date(2026, 8, 26).toISOString() });
+    const st = [{ id: "s", cardId: "card-1", cycleKey: "2026-09-25", currency: "PEN", amount: 400 }];
+    const n = getNextPayment(reciente, expenses, [], NOW, "PEN", st);
+    expect(n.status).toBe("por-vencer");
+    expect(n.amount).toBe(400);
+  });
+
+  it("sin deuda viva no molesta aunque el saldo sea posterior al corte", () => {
+    const limpia = card({ openingBalance: 0, openingDate: new Date(2026, 8, 26).toISOString() });
+    expect(getNextPayment(limpia, [], [], NOW).status).toBe("al-dia");
   });
 
   it("ignora los pagos de otras tarjetas", () => {
@@ -906,5 +924,50 @@ describe("buildStatementEntry — registrar sin línea declarada", () => {
     const entry = buildStatementEntry(soloSoles, [], [], new Date(2026, 8, 28));
     const pen = entry.missing.find(m => m.currency === "PEN");
     expect(pen.sinLinea).toBe(false);
+  });
+});
+
+// ── F23: el caso de ella, textual ──────────────────────────────────────────
+// "no cuadra mi tarjeta porque estoy dentro de mi ciclo de facturación y he
+//  hecho gastos que no se ven reflejados"
+//
+// Corte 11, pago 5. Hoy 29 set: ciclo abierto desde el 12 set. Ella pone el
+// saldo que le marca el banco HOY, que ya incluye compras que no anotó.
+
+describe("F23 · saldo de hoy dentro del ciclo abierto", () => {
+  const tarjeta = (openingBalance, openingDate) => ({
+    id: "card-1", type: "credito", cutoffDay: 11, paymentDay: 5,
+    lines: { PEN: { creditLine: 6000, openingBalance, openingDate: openingDate.toISOString() } },
+  });
+  const hoy = new Date(2026, 8, 29);
+
+  it("sin estado de cuenta no reparte nada y lo dice", () => {
+    const d = getBalanceBreakdown(tarjeta(4357.36, hoy), [], [], hoy, "PEN", null);
+    expect(d.saldo).toBeCloseTo(4357.36);
+    expect(d.faltaEstadoDeCuenta).toBe(true);
+    expect(d.delCiclo).toBe(null);      // no se inventa el reparto
+    expect(d.sinRegistrar).toBe(null);
+  });
+
+  it("con el estado de cuenta ya separa las dos partes", () => {
+    const st = [{ id: "s", cardId: "card-1", cycleKey: "2026-09-11", currency: "PEN", amount: 3735 }];
+    const d = getBalanceBreakdown(tarjeta(4357.36, hoy), [], [], hoy, "PEN", st);
+    expect(d.faltaEstadoDeCuenta).toBe(false);
+    expect(d.facturado).toBe(3735);
+    expect(d.delCiclo).toBeCloseTo(622.36);
+    expect(d.registrado).toBe(0);
+    // Justo su queja: ese gasto lo hizo y no está anotado.
+    expect(d.sinRegistrar).toBeCloseTo(622.36);
+  });
+
+  it("al anotar los gastos que faltaban, cuadra", () => {
+    const st = [{ id: "s", cardId: "card-1", cycleKey: "2026-09-11", currency: "PEN", amount: 3735 }];
+    const anotados = [
+      { id: "e1", amount: 400, paymentMethodId: "card-1", date: new Date(2026, 8, 20).toISOString() },
+      { id: "e2", amount: 222.36, paymentMethodId: "card-1", date: new Date(2026, 8, 26).toISOString() },
+    ];
+    const d = getBalanceBreakdown(tarjeta(4357.36, hoy), anotados, [], hoy, "PEN", st);
+    expect(d.registrado).toBeCloseTo(622.36);
+    expect(d.sinRegistrar).toBe(0);
   });
 });

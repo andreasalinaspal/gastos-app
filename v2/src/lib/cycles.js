@@ -272,6 +272,23 @@ export function getNextPayment(card, expenses, cardPayments, now = new Date(), c
   const amount = Math.max(0, gross - paid);
   const dueDate = st && st.dueDate ? startOfDay(new Date(st.dueDate)) : closed.paymentDate;
 
+  // F23: cuando la foto del saldo se tomó DESPUÉS del corte, ese número junta
+  // dos cosas que Qori no puede separar sola: lo que el banco ya facturó y lo
+  // que ella lleva gastado en el ciclo abierto. El estimado de arriba da 0 —
+  // `openingAt` descarta una foto posterior al corte — y decir "al día" con
+  // deuda viva es mentir. Se dice que falta el dato y se pide el estado de
+  // cuenta, que es el único lugar donde ese corte existe de verdad.
+  const foto = openingCutoff(card, cur);
+  const saldoVivo = getLineUsage(card, expenses, cardPayments, cur).balance;
+  const sinDato = !st && !!foto && foto > closed.end && saldoVivo > 0;
+  if (sinDato) {
+    return {
+      amount: 0, dueDate, cycleKey: closed.key,
+      status: "sin-dato", currency: cur, source: "sin-dato",
+      estimateGross: 0, statementAmount: null, saldoVivo,
+    };
+  }
+
   return {
     amount,
     dueDate,
@@ -333,13 +350,17 @@ export function getBalanceBreakdown(card, expenses, cardPayments, now = new Date
     return sum + (Number(e.amount) || 0);
   }, 0);
 
-  const delCiclo = Math.max(0, Math.round((saldo - facturado) * 100) / 100);
+  // F23: sin estado de cuenta y con la foto del saldo posterior al corte no hay
+  // forma de partir el saldo. No se inventa el reparto: se dice qué falta.
+  const faltaEstadoDeCuenta = next.status === "sin-dato";
+  const delCiclo = faltaEstadoDeCuenta ? null : Math.max(0, Math.round((saldo - facturado) * 100) / 100);
   return {
     saldo,
     facturado,
+    faltaEstadoDeCuenta,
     delCiclo,
     registrado,
-    sinRegistrar: Math.round((delCiclo - registrado) * 100) / 100 + 0, // +0: evita el -0
+    sinRegistrar: faltaEstadoDeCuenta ? null : Math.round((delCiclo - registrado) * 100) / 100 + 0, // +0: evita el -0
     // El estado de cuenta pide más de lo que dice el saldo: pasa cuando el banco
     // cobró intereses o membresía que ella todavía no reflejó en su saldo.
     excedeSaldo: facturado > saldo,
