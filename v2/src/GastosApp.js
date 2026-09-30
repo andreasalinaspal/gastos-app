@@ -25,6 +25,7 @@ import { FijosScreen, CatsSubScreen, PresupuestosScreen, AllCatsScreen } from ".
 import { slimCat } from "./components/shared/CategoryPicker";
 import Config from "./components/screens/Config";
 import { MediosPagoScreen } from "./components/screens/MediosPago";
+import { DeudasScreen } from "./components/screens/Deudas";
 import { CardCycleScreen } from "./components/screens/CardCycle";
 import { ProximosPagosScreen } from "./components/screens/ProximosPagos";
 import { AprendeScreen } from "./components/screens/Aprende";
@@ -1103,6 +1104,8 @@ export default function App() {
       />
       {/* Medios de pago sub-screen */}
       <MediosPagoScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} showToast={showToast} setConfirm={setConfirm} />
+      {/* F25: deudas por cobrar */}
+      <DeudasScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} showToast={showToast} setConfirm={setConfirm} />
       {/* Próximos pagos: cuánto vence y si alcanza el mes (key `proximos-pagos`) */}
       <ProximosPagosScreen
         subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt}

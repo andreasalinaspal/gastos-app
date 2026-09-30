@@ -18,9 +18,9 @@ const v1Blob = () => ({
 });
 
 describe("migrateData — blob v1", () => {
-  it("agrega paymentMethods default (efectivo y débito), cardPayments, education y schemaVersion 4", () => {
+  it("agrega paymentMethods default (efectivo y débito), cardPayments, education, deudas y schemaVersion 5", () => {
     const m = migrateData(v1Blob());
-    expect(m.schemaVersion).toBe(4);
+    expect(m.schemaVersion).toBe(5);
     expect(m.paymentMethods).toHaveLength(2);
     expect(m.paymentMethods.map(p => p.type).sort()).toEqual(["debito", "efectivo"]);
     expect(m.paymentMethods.every(p => p.id && p.name)).toBe(true);
@@ -65,15 +65,15 @@ describe("migrateData — idempotencia", () => {
     const partial = { ...v1Blob(), schemaVersion: 2, paymentMethods: [{ id: "pm1", type: "efectivo", name: "Efectivo" }] };
     delete partial.cardPayments;
     const m = migrateData(partial);
-    expect(m.schemaVersion).toBe(4);
+    expect(m.schemaVersion).toBe(5);
     expect(m.paymentMethods).toEqual([{ id: "pm1", type: "efectivo", name: "Efectivo" }]); // no se pisa
     expect(m.cardPayments).toEqual([]);
     expect(m.education).toEqual({ completedLessons: [], quizResult: null, simulatorState: null });
   });
 
   it("schemaVersion mayor al actual se respeta", () => {
-    const future = { ...migrateData(v1Blob()), schemaVersion: 5 };
-    expect(migrateData(future).schemaVersion).toBe(5);
+    const future = { ...migrateData(v1Blob()), schemaVersion: 6 };
+    expect(migrateData(future).schemaVersion).toBe(6);
   });
 });
 
@@ -94,7 +94,7 @@ describe("migrateData — v3: deuda previa en tarjetas", () => {
     const card = m.paymentMethods.find(p => p.id === "c1");
     expect(card.openingBalance).toBe(0);
     expect(card.openingDate).toBe(LEGACY_OPENING_DATE);
-    expect(m.schemaVersion).toBe(4);
+    expect(m.schemaVersion).toBe(5);
   });
 
   it("no toca ningún otro campo de la tarjeta", () => {
@@ -152,10 +152,10 @@ describe("migrateData — v4: lines.PEN / lines.USD", () => {
     ],
   });
 
-  it("mueve la línea plana a lines.PEN y sube a schemaVersion 4", () => {
+  it("mueve la línea plana a lines.PEN y sube a schemaVersion 5", () => {
     const m = migrateData(withCard());
     const card = m.paymentMethods.find(p => p.id === "c1");
-    expect(m.schemaVersion).toBe(4);
+    expect(m.schemaVersion).toBe(5);
     expect(card.lines.PEN).toEqual({ creditLine: 3000, openingBalance: 850 });
   });
 
@@ -216,5 +216,26 @@ describe("migrateData — v4: lines.PEN / lines.USD", () => {
     delete sinLinea.paymentMethods[1].creditLine;
     const card = migrateData(sinLinea).paymentMethods.find(p => p.id === "c1");
     expect(card.lines.PEN.creditLine).toBe(0);
+  });
+});
+
+// F25: deudas por cobrar. La migración solo AGREGA el array; nada existente se toca.
+describe("v5 · deudas por cobrar", () => {
+  it("agrega deudas vacío a un blob que no lo tenía", () => {
+    const m = migrateData(v1Blob());
+    expect(m.deudas).toEqual([]);
+    expect(m.schemaVersion).toBe(5);
+  });
+
+  it("respeta las deudas que ya estaban", () => {
+    const con = { ...migrateData(v1Blob()), deudas: [{ id: "d", name: "Ana", amount: 500, pagos: [] }] };
+    const m = migrateData(con);
+    expect(m.deudas).toHaveLength(1);
+    expect(m.deudas[0].name).toBe("Ana");
+  });
+
+  it("es idempotente: migrar dos veces devuelve el MISMO objeto", () => {
+    const una = migrateData(v1Blob());
+    expect(migrateData(una)).toBe(una);
   });
 });

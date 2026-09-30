@@ -30,6 +30,8 @@ export function initData() {
       { id: genId(), name: "Sueldo", amount: 0, month: getCurrentMonthLabel() },
     ],
     incomeExtra: [],
+    // F25: la plata que a ella le deben, con sus pagos y cuotas.
+    deudas: [],
     categories: {
       gastos: DEFAULT_CATS_GASTOS.map(c => ({ id: genId(), ...c })),
       ingresos: DEFAULT_CATS_INGRESOS.map(c => ({ id: genId(), ...c })),

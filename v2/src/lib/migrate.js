@@ -94,8 +94,15 @@ export function migrateData(data) {
     changed = true;
   }
 
-  if (!(typeof out.schemaVersion === "number" && out.schemaVersion >= 4)) {
-    out.schemaVersion = 4;
+  // v5: deudas por cobrar (F25). Solo se agrega el array vacío; nada existente
+  // se toca, así que los blobs viejos siguen siendo válidos.
+  if (!Array.isArray(out.deudas)) {
+    out.deudas = [];
+    changed = true;
+  }
+
+  if (!(typeof out.schemaVersion === "number" && out.schemaVersion >= 5)) {
+    out.schemaVersion = 5;
     changed = true;
   }
 

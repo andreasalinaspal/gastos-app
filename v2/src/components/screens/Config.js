@@ -6,6 +6,19 @@ import { loadLastSyncAt } from "../../lib/localSession";
 import { LESSONS } from "../../content/lessons";
 import { useStore } from "../../state/store";
 import { textoVersion, buscaVersion } from "../../lib/version";
+import { resumenDeudas } from "../../lib/deudas";
+
+// F25: resumen de una línea para la fila de Config.
+const resumenDeudasTexto = (deudas, fmt) => {
+  const r = resumenDeudas(deudas || []);
+  const n = r.PEN.deudas.length + r.USD.deudas.length;
+  if (n === 0) return "Nadie te debe ahora mismo";
+  const partes = [];
+  if (r.PEN.total > 0) partes.push(fmt(r.PEN.total));
+  if (r.USD.total > 0) partes.push("US$" + r.USD.total);
+  const quien = n === 1 ? "1 persona" : n + " personas";
+  return partes.join(" + ") + " · " + quien + (r.vencidas.length > 0 ? " · ⚠️ hay cuotas vencidas" : "");
+};
 
 const cfgRowStyle = { display: "flex", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #F0EDE4", cursor: "pointer", gap: 14 };
 
@@ -146,13 +159,22 @@ export default function Config({ fmt, curMonth, setSubScreen, setConfirm, showTo
             </div>
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
           </div>
-          <div onClick={() => setSubScreen("medios-pago")} style={{ ...cfgRowStyle, borderBottom: "none" }}>
+          <div onClick={() => setSubScreen("medios-pago")} style={cfgRowStyle}>
             <span style={{ fontSize: 22 }}>💳</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Medios de pago</div>
               <div style={{ fontSize: 12, color: C.muted }}>
                 {(() => { const n = (data.paymentMethods || []).filter(m => m.type === "credito" && !m.archived).length; return n === 1 ? "1 tarjeta de crédito activa" : `${n} tarjetas de crédito activas`; })()}
               </div>
+            </div>
+            <span style={{ fontSize: 20, color: C.muted }}>›</span>
+          </div>
+          {/* F25: la plata que a ella le deben, con sus pagos y cuotas */}
+          <div onClick={() => setSubScreen("deudas")} style={{ ...cfgRowStyle, borderBottom: "none" }}>
+            <span style={{ fontSize: 22 }}>🤝</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Te deben</div>
+              <div style={{ fontSize: 12, color: C.muted }}>{resumenDeudasTexto(data.deudas, fmt)}</div>
             </div>
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
           </div>
