@@ -22,7 +22,9 @@ Registro automático de gastos, por dos vías: Apple Pay y correos del banco.
   en el código.
 - **Primera prueba real OK**: una "Constancia de Pago Plin" devolvió `201 registrado:true`,
   salió la franja en Inicio y la confirmó. Falta ver una COMPRA entrando sola.
-- `lib/correoBancos.js` — lector de Interbank, con 18 pruebas sobre correos reales.
+- `lib/correoBancos.js` — lectores de **Interbank** y **BBVA**, con 25 pruebas sobre correos reales.
+- BBVA (F37): plantilla distinta — moneda en campo propio (`PEN`/`USD`), monto pelado, hora 24h.
+  Sin moneda reconocible NO se registra. El filtro de Gmail ya tiene los dos remitentes.
 - `/api/ingest-correo` — recibe el correo crudo y decide.
 - Protección contra duplicados: por id del mensaje y entre canales (Apple Pay vs correo, ventana de 15 min, misma moneda).
 - Moneda de punta a punta: API → bandeja → pantalla de confirmación → gasto.
@@ -32,6 +34,7 @@ Registro automático de gastos, por dos vías: Apple Pay y correos del banco.
 ## ⏳ Lo que falta
 
 ### 1. Probar Apple Pay con una compra real
+El token del atajo ya se actualizó (1 oct). Falta la compra.
 Hacer una compra chiquita y ver si llega el banner **"1 gasto por confirmar"**.
 Si no llega, diagnosticar en este orden:
 1. ¿Llegó la notificación de la automatización? → si no, el disparador está apagado.
@@ -42,9 +45,20 @@ Si no llega, diagnosticar en este orden:
 - **Interbank · pago de tarjeta de crédito** — solo el asunto. Ahora mismo lo ignoro
   por asuntos adivinados (`"pago de tu tarjeta"`, `"pago de tarjeta"`). Si el real es
   distinto, caería en "no-reconocido": inofensivo, pero no acierta.
-- **BCP, BBVA, Ripley** — un consumo con tarjeta de cada uno (remitente, asunto, cuerpo).
+- **BCP y Ripley** — un consumo con tarjeta de cada uno (remitente, asunto, cuerpo).
+  BBVA ya está hecho.
 
-### 3. El selector S/ | US$ de la bandeja
+### 3. Que la bandeja sepa crear PAGOS de tarjeta, no solo gastos
+El correo de BBVA "Constancia Pago de Tarjetas propias" trae todo lo necesario:
+importe, fecha y los últimos 4 (`Número de tarjeta • 1849`). Hoy se reconoce y se
+descarta, porque un pago tiene que hacer DOS cosas —contar como gasto y bajar el
+saldo de esa tarjeta— y la bandeja solo sabe crear gastos sueltos. Meterlo como
+gasto a secas dejaría la deuda intacta, y si después lo anota desde la tarjeta
+quedaría contado dos veces.
+Trabajo: tipo nuevo en `inbox`, variante en la pantalla de confirmación, y emparejar
+los 4 dígitos con una tarjeta de `paymentMethods`.
+
+### 4. El selector S/ | US$ de la bandeja
 La bandeja se vio funcionando a clics con el Plin (en soles). El selector de moneda
 sigue sin probarse: hace falta que entre un pendiente en dólares.
 
@@ -66,6 +80,12 @@ sigue sin probarse: hace falta que entre un pendiente en dólares.
 - **Nada entra sin confirmación.** Todo cae en la bandeja y ella decide categoría y
   medio de pago antes de que sea un gasto.
 
+### 5. Datos de ella que faltan
+- Saldo actual + línea de las otras tres tarjetas (la Amex BBVA ••1849 ya cuadra con su banco).
+- Ingresos fijos de setiembre con sus fechas.
+
+---
+
 ## Formatos reales de Interbank (verificados)
 
 - Remitente único para todo: `servicioalcliente@netinterbank.com.pe`
@@ -74,3 +94,13 @@ sigue sin probarse: hace falta que entre un pendiente en dólares.
 - Dólares: `Monto: $ 4.86`
 - La tarjeta sale del asunto: `"...realizaste un consumo con tu Tarjeta Amex"`.
 - Plin trae `Código de operación`, que sirve de id contra duplicados.
+
+## Formato real de BBVA (verificado)
+
+- Remitente: `procesos@bbva.com.pe`
+- Consumo — asunto: `Has realizado un consumo con tu tarjeta BBVA`
+  Campos en líneas separadas: `Comercio:` / `Monto:` (sin símbolo) / `Moneda:` (`PEN`)
+  / `Fecha:` (`29/09/2026`) / `Hora:` (`19:09:47`, 24h).
+  La tarjeta al final: `Este se cargará a tu tarjeta terminada en *1849`.
+- Pago de tarjeta — asunto: `BBVA - Constancia Pago de Tarjetas propias`
+  Trae `Importe transferido S/ 73.87`, `Número de operación` y `Número de tarjeta • 1849`.
