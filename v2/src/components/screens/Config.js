@@ -7,6 +7,7 @@ import { LESSONS } from "../../content/lessons";
 import { useStore } from "../../state/store";
 import { textoVersion, buscaVersion } from "../../lib/version";
 import { resumenDeudas } from "../../lib/deudas";
+import { resumenSuscripciones } from "../../lib/suscripciones";
 
 // F25: resumen de una línea para la fila de Config.
 const resumenDeudasTexto = (deudas, fmt) => {
@@ -170,11 +171,20 @@ export default function Config({ fmt, curMonth, setSubScreen, setConfirm, showTo
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
           </div>
           {/* F25: la plata que a ella le deben, con sus pagos y cuotas */}
-          <div onClick={() => setSubScreen("deudas")} style={{ ...cfgRowStyle, borderBottom: "none" }}>
+          <div onClick={() => setSubScreen("deudas")} style={cfgRowStyle}>
             <span style={{ fontSize: 22 }}>🤝</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Te deben</div>
               <div style={{ fontSize: 12, color: C.muted }}>{resumenDeudasTexto(data.deudas, fmt)}</div>
+            </div>
+            <span style={{ fontSize: 20, color: C.muted }}>›</span>
+          </div>
+          {/* F43: no se registran a mano — salen de sus propios gastos */}
+          <div onClick={() => setSubScreen("suscripciones")} style={{ ...cfgRowStyle, borderBottom: "none" }}>
+            <span style={{ fontSize: 22 }}>🔁</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Suscripciones</div>
+              <div style={{ fontSize: 12, color: C.muted }}>{resumenSuscripciones(data.expenses, fmt)}</div>
             </div>
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
           </div>

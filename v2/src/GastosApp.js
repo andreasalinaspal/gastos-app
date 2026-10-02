@@ -26,6 +26,7 @@ import { slimCat } from "./components/shared/CategoryPicker";
 import Config from "./components/screens/Config";
 import { MediosPagoScreen } from "./components/screens/MediosPago";
 import { DeudasScreen } from "./components/screens/Deudas";
+import { SuscripcionesScreen } from "./components/screens/Suscripciones";
 import { CardCycleScreen } from "./components/screens/CardCycle";
 import { ProximosPagosScreen } from "./components/screens/ProximosPagos";
 import { AprendeScreen } from "./components/screens/Aprende";
@@ -1149,6 +1150,8 @@ export default function App() {
       <MediosPagoScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} showToast={showToast} setConfirm={setConfirm} />
       {/* F25: deudas por cobrar */}
       <DeudasScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} showToast={showToast} setConfirm={setConfirm} />
+      {/* F43: las suscripciones que Qori encuentra sola en sus gastos */}
+      <SuscripcionesScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} />
       {/* Próximos pagos: cuánto vence y si alcanza el mes (key `proximos-pagos`) */}
       <ProximosPagosScreen
         subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt}
