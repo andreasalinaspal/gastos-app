@@ -1,4 +1,4 @@
-# Dónde quedamos — 29 set 2026
+# Dónde quedamos — 1 oct 2026
 
 Registro automático de gastos, por dos vías: Apple Pay y correos del banco.
 
@@ -16,7 +16,12 @@ Registro automático de gastos, por dos vías: Apple Pay y correos del banco.
 - Configurada con: cualquier tarjeta, notificar al ejecutar, sin confirmar antes.
 - **Nunca se probó con una compra real.**
 
-### Correo
+### Correo — FUNCIONANDO de punta a punta
+- Filtro de Gmail (etiqueta `Qori`), script de Apps Script y temporizador cada 5 minutos:
+  todo configurado por ella el 1 oct. El token vive en las propiedades del proyecto, no
+  en el código.
+- **Primera prueba real OK**: una "Constancia de Pago Plin" devolvió `201 registrado:true`,
+  salió la franja en Inicio y la confirmó. Falta ver una COMPRA entrando sola.
 - `lib/correoBancos.js` — lector de Interbank, con 18 pruebas sobre correos reales.
 - `/api/ingest-correo` — recibe el correo crudo y decide.
 - Protección contra duplicados: por id del mensaje y entre canales (Apple Pay vs correo, ventana de 15 min, misma moneda).
@@ -33,22 +38,15 @@ Si no llega, diagnosticar en este orden:
 2. ¿Llegó pero no hay banner? → token mal pegado (espacio de más, o falta `Bearer `).
 3. ¿Hay banner pero sin comercio? → las variables quedaron como texto, no como burbujita azul.
 
-### 2. El script de Gmail
-Falta escribirlo. Son ~20 líneas de Google Apps Script que corren en la cuenta de ella:
-lee los correos con la etiqueta que ponga un filtro, los manda a `/api/ingest-correo`,
-y los marca como leídos. El análisis ya está del lado del servidor, así que el script
-no hay que volver a tocarlo cuando un banco cambie su plantilla.
-
-### 3. Correos que faltan
+### 2. Correos que faltan
 - **Interbank · pago de tarjeta de crédito** — solo el asunto. Ahora mismo lo ignoro
   por asuntos adivinados (`"pago de tu tarjeta"`, `"pago de tarjeta"`). Si el real es
   distinto, caería en "no-reconocido": inofensivo, pero no acierta.
 - **BCP, BBVA, Ripley** — un consumo con tarjeta de cada uno (remitente, asunto, cuerpo).
 
-### 4. Verificación pendiente
-La pantalla de confirmación con el selector **S/ | US$** está cubierta por pruebas
-pero **no se ha visto funcionando a clics**: necesita un pendiente real en la bandeja.
-Se verifica con el primer aviso que entre, venga de donde venga.
+### 3. El selector S/ | US$ de la bandeja
+La bandeja se vio funcionando a clics con el Plin (en soles). El selector de moneda
+sigue sin probarse: hace falta que entre un pendiente en dólares.
 
 ---
 
@@ -58,8 +56,11 @@ Se verifica con el primer aviso que entre, venga de donde venga.
   plantillas; así el arreglo se despliega desde el repo y ella no toca nada.
 - **Ante la duda, NO se registra.** Lo que no se entiende queda fuera. Un gasto que
   falta se nota y se anota a mano; uno inventado envenena las cuentas en silencio.
-- **Pagar la tarjeta NO es un gasto** (P1). Se ignora a propósito: liquida compras ya
-  registradas. Contarlo sería duplicar — el hábito que estamos dejando atrás.
+- **El gasto es cuando SALE la plata** (F33–F36). P1 quedó derogado: ella lo rebatió y
+  tenía razón. Una compra con tarjeta cuenta el día que la paga, no el día que la compra,
+  y los pagos tienen su propia categoría 💳 Pago de tarjeta.
+- **Los correos de pago de tarjeta se siguen ignorando**, pero por otra razón: un abono
+  hay que amarrarlo a UNA tarjeta y el correo no siempre dice a cuál. Pendiente de ver.
 - **Los Plin/abonos recibidos se ignoran.** Son ingresos, no gastos. Si más adelante
   se quieren registrar, van por el camino de ingresos (que ya maneja fecha y moneda).
 - **Nada entra sin confirmación.** Todo cae en la bandeja y ella decide categoría y
