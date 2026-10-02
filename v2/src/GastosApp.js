@@ -526,7 +526,13 @@ export default function App() {
   // Los dólares no se suman a los soles (F10): van en su propia línea.
   const todayTotal = todayExp.filter(isPEN).reduce((s, e) => s + e.amount, 0);
   const todayTotalUSD = sumUSD(todayExp);
-  const recentExp = [...data.expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
+  // F31: "Últimos movimientos" son movimientos, no solo gastos. Los pagos de
+  // tarjeta se ven acá igual que en Mi Mes — salió plata de su cuenta y quiere
+  // verlo — pero siguen sin sumar a los gastos: saldan compras ya registradas.
+  const recentExp = [
+    ...data.expenses.map(e => ({ tipo: "gasto", id: e.id, fecha: new Date(e.date), e })),
+    ...(data.cardPayments || []).filter(p => p && p.date).map(p => ({ tipo: "pago-tc", id: p.id, fecha: new Date(p.date), p })),
+  ].sort((a, b) => b.fecha - a.fecha).slice(0, 10);
 
   // Spending per category this month
   const catSpend = useMemo(() => catSpendSel(data, curMonth), [data.expenses, curMonth]);

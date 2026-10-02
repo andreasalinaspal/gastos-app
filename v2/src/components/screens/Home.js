@@ -159,7 +159,25 @@ export default function Home({
           {recentExp.length > 0 && (
             <>
               <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 1.5, marginBottom: 10 }}>ÚLTIMOS MOVIMIENTOS</div>
-              {recentExp.map(e => (
+              {recentExp.map(mov => mov.tipo === "pago-tc" ? (() => {
+                const p = mov.p;
+                const tc = (data.paymentMethods || []).find(m => m.id === p.cardId);
+                return (
+                  <div key={"pago-" + p.id} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 14, padding: "12px 16px", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 500, color: "rgba(255,255,255,0.9)" }}>Pago a {tc ? tc.name : "tu tarjeta"}</div>
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
+                          💳 Pago de tarjeta · {mov.fecha.toLocaleDateString("es-PE", { day: "numeric", month: "short" })} · no suma a tus gastos
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 16, fontWeight: 600, color: "rgba(255,255,255,0.75)", marginRight: 10, whiteSpace: "nowrap" }}>
+                        −{p.currency === "USD" ? fmtWith(p.amount, "USD") : fmt(p.amount)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })() : (() => { const e = mov.e; return (
                 <div key={e.id} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 14, padding: "12px 16px", marginBottom: 8 }}>
                   {editExpId === e.id ? (
                     <div>
@@ -201,7 +219,7 @@ export default function Home({
                     </div>
                   )}
                 </div>
-              ))}
+              ); })())}
               {data.expenses.length > 10 && (
                 <button onClick={() => setTab("month")} style={{ width: "100%", padding: "12px 0", marginTop: 4, background: "rgba(255,255,255,0.12)", border: "none", borderRadius: 14, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: 0.2 }}>Ver más →</button>
               )}
