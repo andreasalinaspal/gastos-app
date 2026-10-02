@@ -98,7 +98,7 @@ function InboxItemForm({ item, data, onRegister, onDiscard }) {
  * cierra la hoja cuando ya no queda ninguno. Mismo flujo que confirmar un
  * escaneo, pero con categoría por compra (cada tienda es una categoría distinta).
  */
-export function InboxSheet({ items, onRegister, onDiscard, onClose }) {
+export function InboxSheet({ items, onRegister, onDiscard, onDiscardAll, onClose }) {
   const data = useStore(s => s.data);
   const item = items?.[0];
   if (!item) return null;
@@ -119,6 +119,15 @@ export function InboxSheet({ items, onRegister, onDiscard, onClose }) {
       <div style={{ flex: 1, padding: "8px 20px 40px" }}>
         <div style={{ fontSize: 34, fontWeight: 900, color: C.orange, fontFamily: FONT_TITLE, letterSpacing: -1, marginBottom: 12 }}>{fmt(item.amount)}</div>
         <InboxItemForm key={item.id} item={item} data={data} onRegister={onRegister} onDiscard={onDiscard} />
+        {/* F38: con una tanda grande (sumar un banco al filtro arrastra meses de
+            correo viejo), ir de a una no es viable. Va abajo y discreto: lo
+            normal es confirmarlas, no barrerlas. */}
+        {onDiscardAll && items.length > 1 && (
+          <button onClick={onDiscardAll}
+            style={{ width: "100%", marginTop: 14, padding: 13, borderRadius: 14, background: "transparent", color: C.muted, border: "1px solid #D8D4CC", fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            Descartar las {items.length} de una vez
+          </button>
+        )}
       </div>
     </div>
   );

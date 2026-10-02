@@ -458,6 +458,26 @@ export default function App() {
     markInboxRowOrQueue(supabase, item.id, "discarded");
   };
 
+  // F38: vaciar la bandeja de un golpe.
+  //
+  // Cuando se suma un banco al filtro de Gmail, Google le pone la etiqueta a TODO
+  // el correo viejo y entra meses de compras de una. Descartarlas de a una es
+  // insufrible, y la alternativa —no mirarlas— es peor: la bandeja deja de
+  // significar algo. Pide confirmación porque no tiene vuelta atrás.
+  const discardAllInboxItems = () => {
+    const todos = inboxItems || [];
+    if (todos.length === 0) return;
+    setConfirm({
+      message: `¿Descartar las ${todos.length} compras por confirmar? No se registra ninguna y no se puede deshacer.`,
+      onConfirm: () => {
+        setInboxItems([]);
+        setShowInbox(false);
+        todos.forEach(i => markInboxRowOrQueue(supabase, i.id, "discarded"));
+        showToast(todos.length + " compras descartadas");
+      },
+    });
+  };
+
   // Show name setup if logged in and no name set
   useEffect(() => {
     if (authUser && authPhase === "app" && !isLoadingUserData.current && !data.userName) {
@@ -1046,7 +1066,7 @@ export default function App() {
         <ScanResultsSheet scanResults={scanResults} setScanResults={setScanResults} removeScanItem={removeScanItem} updateScanItem={updateScanItem} confirmScanResults={confirmScanResults} scanPm={scanPm} setScanPm={setScanPm} />
       )}
       {showInbox && inboxItems.length > 0 && (
-        <InboxSheet items={inboxItems} onRegister={registerInboxItem} onDiscard={discardInboxItem} onClose={() => setShowInbox(false)} />
+        <InboxSheet items={inboxItems} onRegister={registerInboxItem} onDiscard={discardInboxItem} onDiscardAll={discardAllInboxItems} onClose={() => setShowInbox(false)} />
       )}
       {confirm && <ConfirmModal confirm={confirm} setConfirm={setConfirm} />}
       {tab === "home" && (
