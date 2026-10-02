@@ -3,6 +3,7 @@ import { C, FONT_TITLE, inputStyle } from "../../theme";
 import { genId, fmtWith } from "../../lib/format";
 import { getCycleFor, getLineUsage, cardCurrencies, curOf } from "../../lib/cycles";
 import { useStore } from "../../state/store";
+import { CAT_PAGO_TC } from "../../constants";
 import { useKeyboardInset, sheetStyle } from "../../lib/useKeyboardInset";
 
 // Hoja para pagar una tarjeta (F19: vive acá para que la use la pantalla de
@@ -47,10 +48,18 @@ export function PayCardSheet({ card, fmt, showToast, onClose }) {
   const valid = amtNum > 0;
   const confirmar = () => {
     if (!valid) return;
-    setData(p => ({
-      ...p,
-      cardPayments: [...(p.cardPayments || []), { id: genId(), cardId: card.id, amount: amtNum, currency: activa, date: new Date().toISOString(), cycleKey: cycle.key }],
-    }));
+    setData(p => {
+      // F35: los pagos se agrupan en su propia categoría. Si ella todavía no la
+      // tiene, se crea una vez — así puede ponerle presupuesto y verla en los
+      // gráficos como cualquier otra.
+      const gastos = p.categories?.gastos || [];
+      const existe = gastos.some(c => c && String(c.name || "").trim().toLowerCase() === CAT_PAGO_TC.name.toLowerCase());
+      return {
+        ...p,
+        ...(existe ? {} : { categories: { ...p.categories, gastos: [...gastos, { id: genId(), ...CAT_PAGO_TC }] } }),
+        cardPayments: [...(p.cardPayments || []), { id: genId(), cardId: card.id, amount: amtNum, currency: activa, date: new Date().toISOString(), cycleKey: cycle.key }],
+      };
+    });
     onClose();
     if (showToast) showToast("Pago de " + card.name + " registrado");
   };

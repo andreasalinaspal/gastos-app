@@ -324,7 +324,7 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast,
             <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>…y {abonos.length - 8} abonos más.</div>
           )}
           <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45, marginTop: 10, paddingTop: 9, borderTop: "1px solid #F0EDE4" }}>
-            Cada abono baja tu saldo y lo que te toca pagar, y <strong style={{ color: C.black }}>suma a tus gastos del mes</strong>. Tus presupuestos por categoría no lo cuentan: ahí solo van las compras.
+            Cada abono baja tu saldo y lo que te toca pagar, y <strong style={{ color: C.black }}>suma a tus gastos del mes</strong>, en la categoría “Pago de tarjeta”.
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { catSpend, getMonthData, isPEN, sumUSD, buildCatMap } from "./selectors";
+import { catSpend, getMonthData, isPEN, sumUSD, buildCatMap, categoriaPagoTC, pagosComoGastos } from "./selectors";
 import { getMonthLabel } from "../lib/dates";
 
 // F10: los gastos en dólares NUNCA entran a los totales en soles.
@@ -140,5 +140,62 @@ describe("pagos de tarjeta y salida de caja", () => {
     const vacio = { paymentMethods: [], expenses: [], fixed: [], incomeFixed: [], incomeExtra: [] };
     expect(getMonthData(vacio, 0).salioDeTuCuenta).toBe(0);
     expect(getMonthData(vacio, 0).pagosTC).toEqual([]);
+  });
+});
+
+// ── F35: los pagos de tarjeta son su propia categoría ──
+//
+// Su razonamiento, y es correcto: si compra el cine en octubre y lo paga en
+// noviembre, el cine sale en el gráfico de octubre y el pago en el de
+// noviembre. No se pisan, porque viven en meses distintos.
+
+describe("categoría de los pagos de tarjeta", () => {
+  const mes = getMonthLabel(0);
+  const hoyISO = () => { const d = new Date(); d.setDate(Math.min(d.getDate(), 28)); return d.toISOString(); };
+
+  it("usa la categoría de ella si ya la tiene, con su emoji", () => {
+    const data = { categories: { gastos: [{ id: "mia", emoji: "🏦", name: "Pago de tarjeta" }] } };
+    expect(categoriaPagoTC(data)).toMatchObject({ id: "mia", emoji: "🏦" });
+  });
+
+  it("no distingue mayúsculas ni espacios al buscarla", () => {
+    const data = { categories: { gastos: [{ id: "mia", name: "  PAGO DE TARJETA " }] } };
+    expect(categoriaPagoTC(data).id).toBe("mia");
+  });
+
+  it("sin ninguna propia usa una sintética, sin tocar sus datos", () => {
+    expect(categoriaPagoTC({ categories: { gastos: [] } })).toMatchObject({ id: "__pago-tc", name: "Pago de tarjeta" });
+    expect(categoriaPagoTC({})).toMatchObject({ id: "__pago-tc" });
+  });
+
+  it("convierte los pagos del mes en gastos para el gráfico", () => {
+    const data = { cardPayments: [{ id: "p1", cardId: "tc", amount: 175, date: hoyISO() }], categories: { gastos: [] } };
+    const r = pagosComoGastos(data, mes);
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject({ amount: 175, description: "Pago de tarjeta", esPagoTC: true });
+    expect(r[0].category.name).toBe("Pago de tarjeta");
+  });
+
+  it("sin mes trae todos (la vista de todo el histórico)", () => {
+    const data = { cardPayments: [
+      { id: "p1", cardId: "tc", amount: 175, date: hoyISO() },
+      { id: "p2", cardId: "tc", amount: 50, date: new Date(2020, 0, 5).toISOString() },
+    ], categories: { gastos: [] } };
+    expect(pagosComoGastos(data, mes)).toHaveLength(1);
+    expect(pagosComoGastos(data, null)).toHaveLength(2);
+  });
+
+  it("los dólares se marcan como tales, para que no entren a los totales en soles", () => {
+    const data = { cardPayments: [{ id: "p", cardId: "tc", amount: 50, currency: "USD", date: hoyISO() }], categories: { gastos: [] } };
+    expect(pagosComoGastos(data, mes)[0].currency).toBe("USD");
+    expect(pagosComoGastos(data, mes).filter(isPEN)).toHaveLength(0);
+  });
+
+  it("el presupuesto de esa categoría cuenta los pagos", () => {
+    const data = {
+      expenses: [], cardPayments: [{ id: "p", cardId: "tc", amount: 175, date: hoyISO() }],
+      categories: { gastos: [{ id: "mia", name: "Pago de tarjeta" }] },
+    };
+    expect(catSpend(data, mes).mia).toBe(175);
   });
 });

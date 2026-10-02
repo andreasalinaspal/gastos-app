@@ -3,7 +3,7 @@ import { C, FONT_TITLE, cardStyle, inputStyle } from "../../theme";
 import { CheckIcon, PlusIcon, TrashIcon } from "../shared/icons";
 import { subStyle, subHeader } from "../shared/subnav";
 import { genId, fmtWith } from "../../lib/format";
-import { buildCatMap, getMonthData, isPEN, sumUSD } from "../../state/selectors";
+import { buildCatMap, getMonthData, isPEN, sumUSD, pagosComoGastos } from "../../state/selectors";
 import { getMonthLabel, getMonthShort } from "../../lib/dates";
 import { useStore } from "../../state/store";
 import { TraerFijosButton } from "../shared/MesNuevoSheet";
@@ -359,7 +359,9 @@ export function AllCatsScreen({ subScreen, setSubScreen, fmt, setSelectedCatDeta
   const exps = monthOff === "all"
     ? data.expenses
     : data.expenses.filter(e => e.month === getMonthLabel(monthOff));
-  const cats = buildCatMap(exps.filter(isPEN));
+  // F35: los pagos de tarjeta son su propia categoría acá también.
+  const pagos = pagosComoGastos(data, monthOff === "all" ? null : getMonthLabel(monthOff));
+  const cats = buildCatMap([...exps, ...pagos].filter(isPEN));
   const totalUSD = sumUSD(exps); // los dólares se listan aparte, nunca sumados
   const total = cats.reduce((s, c) => s + c.amount, 0);
   const max = cats[0]?.amount || 1;
@@ -377,7 +379,7 @@ export function AllCatsScreen({ subScreen, setSubScreen, fmt, setSelectedCatDeta
           <div style={{ ...cardStyle, padding: "16px 18px", marginBottom: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>{rotulo}</div>
             <div style={{ fontFamily: FONT_TITLE, fontSize: 30, fontWeight: 900, color: C.black, marginTop: 2 }}>{fmt(total)}</div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{exps.length} gasto{exps.length !== 1 ? "s" : ""} en {cats.length} categoría{cats.length !== 1 ? "s" : ""}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{exps.length + pagos.length} gasto{exps.length + pagos.length !== 1 ? "s" : ""} en {cats.length} categoría{cats.length !== 1 ? "s" : ""}</div>
             {/* Los gastos en dólares van aparte, nunca sumados a los soles (F10) */}
             {totalUSD > 0 && (
               <div style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, marginTop: 4 }}>+ {fmtWith(totalUSD, "USD")} en dólares</div>
@@ -386,7 +388,7 @@ export function AllCatsScreen({ subScreen, setSubScreen, fmt, setSelectedCatDeta
                 que la de "Diarios", y sin decirlo los dos números no cuadran y
                 parece un error. */}
             <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45, marginTop: 10, paddingTop: 9, borderTop: "1px solid #F0EDE4" }}>
-              Acá ves <strong style={{ color: C.black }}>en qué consumes</strong>: cuentan todas tus compras, con tarjeta o sin ella, el día que las hiciste. Los pagos de tarjeta no salen como categoría porque esa plata ya está repartida en estas — por eso este total no es el mismo que “Diarios”.
+              Cuentan tus compras el día que las hiciste y tus pagos de tarjeta el día que los pagaste. Como la compra y su pago caen en meses distintos, cada mes muestra lo suyo sin repetirse.
             </div>
           </div>
           {cats.map((cat, i) => {

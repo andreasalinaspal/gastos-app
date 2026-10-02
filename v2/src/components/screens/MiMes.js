@@ -274,7 +274,7 @@ export default function MiMes({
               ); })())}
               {movimientos.some(m => m.tipo === "pago-tc") && (
                 <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, padding: "2px 2px 6px" }}>
-                  Tus gastos son la plata que <strong style={{ color: C.black }}>sale de tu bolsillo</strong>. Lo que compras con tarjeta no cuenta el día de la compra: cuenta cuando pagas la tarjeta. Lo de efectivo y débito cuenta el mismo día. Tus presupuestos por categoría sí miran todo lo que consumes, lo hayas pagado o no.
+                  Tus gastos son la plata que <strong style={{ color: C.black }}>sale de tu bolsillo</strong>. Lo que compras con tarjeta no cuenta el día de la compra: cuenta cuando pagas la tarjeta, en la categoría “Pago de tarjeta”. Lo de efectivo y débito cuenta el mismo día.
                 </div>
               )}
               {movimientos.some(m => m.tipo === "ingreso" && m.pendiente) && (

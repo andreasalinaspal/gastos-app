@@ -1,7 +1,7 @@
 import { C, FONT_TITLE, inputStyle, usageColor } from "../../theme";
 import { TrashIcon } from "../shared/icons";
 import { getToday } from "../../lib/dates";
-import { buildCatMap, isPEN, sumUSD } from "../../state/selectors";
+import { buildCatMap, isPEN, sumUSD, pagosComoGastos } from "../../state/selectors";
 import { getCycleFor, getCycleSpend, getUpcomingTotal, getSharedUsage, curOf } from "../../lib/cycles";
 import { tasaVigente } from "../../lib/fx";
 import { fmtWith } from "../../lib/format";
@@ -23,7 +23,8 @@ export default function Home({
   const data = useStore(s => s.data);
   const setTab = useStore(s => s.setTab);
     const monthExps = data.expenses.filter(e => e.month === curMonth);
-    const topCats = buildCatMap(monthExps.filter(isPEN)).slice(0, 5);
+    // F35: los pagos de tarjeta entran al gráfico como su propia categoría.
+    const topCats = buildCatMap([...monthExps, ...pagosComoGastos(data, curMonth)].filter(isPEN)).slice(0, 5);
     const monthUSD = sumUSD(monthExps); // los dólares no se suman a los soles
     const maxCat = topCats[0]?.amount || 1;
     const creditCards = (data.paymentMethods || []).filter(m => m.type === "credito" && !m.archived);

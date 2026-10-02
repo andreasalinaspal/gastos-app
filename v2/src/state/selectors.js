@@ -1,6 +1,7 @@
 import { getMonthLabel, monthLabelOf } from "../lib/dates";
 import { curOf } from "../lib/cycles";
 import { separaIngresos, montoEnSoles, montoEnDolaresSinCambiar } from "../lib/ingresos";
+import { CAT_PAGO_TC } from "../constants";
 
 const redondea = (n) => Math.round(n * 100) / 100;
 
@@ -9,13 +10,43 @@ const redondea = (n) => Math.round(n * 100) / 100;
 export const isPEN = (e) => curOf(e) !== "USD";
 export const sumUSD = (exps) => (exps || []).reduce((s, e) => (curOf(e) === "USD" ? s + (Number(e.amount) || 0) : s), 0);
 
+// F35: la categoría donde caen los pagos de tarjeta. Si ella ya tiene una con
+// ese nombre se usa la suya (conserva su emoji y su presupuesto); si no, una
+// sintética que no hace falta guardar en sus datos.
+export const categoriaPagoTC = (data) => {
+  const propia = (data?.categories?.gastos || []).find(c => c && String(c.name || "").trim().toLowerCase() === CAT_PAGO_TC.name.toLowerCase());
+  return propia || { id: "__pago-tc", ...CAT_PAGO_TC };
+};
+
+// Un pago de tarjeta visto como un gasto más, para los gráficos por categoría.
+// No se guarda así en ningún lado: se arma al vuelo.
+export const pagoComoGasto = (p, cat) => ({
+  id: "pago-" + p.id,
+  amount: Number(p.amount) || 0,
+  description: "Pago de tarjeta",
+  date: p.date,
+  category: cat,
+  ...(p.currency === "USD" ? { currency: "USD" } : {}),
+  esPagoTC: true,
+});
+
+// Los pagos de un mes, ya convertidos. `mes` es la etiqueta ("Octubre 2026") o
+// null para traerlos todos (la vista "Todo el histórico").
+export const pagosComoGastos = (data, mes) => {
+  const cat = categoriaPagoTC(data);
+  return (data?.cardPayments || [])
+    .filter(p => p && p.date && (Number(p.amount) || 0) > 0)
+    .filter(p => !mes || monthLabelOf(new Date(p.date)) === mes)
+    .map(p => pagoComoGasto(p, cat));
+};
+
 // Funciones puras extraídas del monolito GastosApp.js (misma lógica, firmas puras).
 
 // Gasto por categoría del mes indicado — antes useMemo `catSpend`.
 export const catSpend = (data, curMonth) => {
   const m = {};
-  data.expenses
-    .filter(e => e.month === curMonth && isPEN(e))
+  [...data.expenses.filter(e => e.month === curMonth), ...pagosComoGastos(data, curMonth)]
+    .filter(isPEN)
     .forEach(e => {
       if (e.category?.id) {
         m[e.category.id] = (m[e.category.id] || 0) + e.amount;

@@ -17,6 +17,12 @@ export const DEFAULT_CATS_GASTOS = [
   { emoji: "🛍️", name: "Compras" }, { emoji: "💄", name: "Estética" }, { emoji: "📚", name: "Educación" },
   { emoji: "📱", name: "Suscripciones" }, { emoji: "✈️", name: "Viajes" }, { emoji: "⚡", name: "Imprevistos" },
 ];
+// F35: los pagos de tarjeta se agrupan en su propia categoría.
+// Su razonamiento, y es correcto: si compra el cine en octubre y lo paga en
+// noviembre, el cine sale en el gráfico de octubre y el pago en el de
+// noviembre. No se pisan, porque viven en meses distintos.
+export const CAT_PAGO_TC = { emoji: "💳", name: "Pago de tarjeta" };
+
 export const DEFAULT_CATS_INGRESOS = [
   { emoji: "💼", name: "Sueldo" }, { emoji: "💻", name: "Freelance" }, { emoji: "📈", name: "Inversión" },
   { emoji: "🏠", name: "Alquiler" }, { emoji: "🎯", name: "Bono" }, { emoji: "🛒", name: "Ventas" },
