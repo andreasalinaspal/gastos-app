@@ -243,9 +243,42 @@ export function costaNoCancelar(lista) {
 
 export const esAnual = (s) => s && s.cadencia === "anual";
 
+// F51: un bono o descuento que le rebaja la suscripción —el gimnasio se lo paga
+// en parte su empresa, en dólares, y el cobro es en soles.
+//
+// La regla de la casa manda igual que siempre: **los dólares no se convierten
+// solos**. Si el bono está en otra moneda, hace falta que ella ponga el tipo de
+// cambio (`bonoTasa`); mientras no lo ponga, el bono no se descuenta y se avisa.
+// Un neto fijo en soles estaría mal todos los meses, porque el cambio se mueve.
+export const tieneBono = (s) => !!(s && Number(s.bono) > 0);
+export const monedaDeBono = (s) => (s && s.bonoCurrency === "USD" ? "USD" : "PEN");
+export const curDeSuscripcion = (s) => (s && s.currency === "USD" ? "USD" : "PEN");
+
+// ¿Hace falta un tipo de cambio que ella todavía no puso?
+export const faltaTasaBono = (s) =>
+  tieneBono(s) && monedaDeBono(s) !== curDeSuscripcion(s) && !(Number(s.bonoTasa) > 0);
+
+// El bono, llevado a la moneda de la suscripción. 0 si falta la tasa.
+export function bonoEnSuMoneda(s) {
+  if (!tieneBono(s)) return 0;
+  const monto = Number(s.bono) || 0;
+  if (monedaDeBono(s) === curDeSuscripcion(s)) return redondea(monto);
+  const t = Number(s.bonoTasa);
+  if (!(t > 0)) return 0;
+  // El bono en dólares vale `t` soles cada uno; al revés, se divide.
+  return redondea(monedaDeBono(s) === "USD" ? monto * t : monto / t);
+}
+
+// Lo que de verdad sale de su bolsillo por esa suscripción. Nunca negativo: si
+// el bono cubre de más, el resto no se arrastra como saldo a favor.
+export function costoNeto(s) {
+  const bruto = Number(s && s.monto) || 0;
+  return redondea(Math.max(0, bruto - bonoEnSuMoneda(s)));
+}
+
 // Lo que cuesta al mes: una anual se reparte entre 12 para poder compararla.
 export const costoMensual = (s) => {
-  const m = Number(s && s.monto) || 0;
+  const m = costoNeto(s);
   return esAnual(s) ? redondea(m / 12) : m;
 };
 

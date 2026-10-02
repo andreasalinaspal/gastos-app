@@ -10,6 +10,7 @@ import { useKeyboardInset, sheetStyle } from "../../lib/useKeyboardInset";
 import {
   detectaSuscripciones, ordenaPorCancelar, costaNoCancelar,
   ordenaSuscripciones, totalMensualDeLista, costoMensual, esAnual, detectadasNoAnotadas,
+  costoNeto, bonoEnSuMoneda, faltaTasaBono, tieneBono, monedaDeBono,
 } from "../../lib/suscripciones";
 
 // F43: las suscripciones que Qori encuentra sola en sus gastos.
@@ -105,7 +106,7 @@ function PorCancelar({ items, fmt, onHecho }) {
 }
 
 const CADENCIAS_UI = [["mensual", "Cada mes"], ["anual", "Cada año"]];
-const vacia = { nombre: "", monto: "", currency: "PEN", cobra: "", cadencia: "mensual", nota: "" };
+const vacia = { nombre: "", monto: "", currency: "PEN", cobra: "", cadencia: "mensual", nota: "", bono: "", bonoCurrency: "USD", bonoTasa: "" };
 
 // Una suscripción de SU lista. Acá sí se puede editar y dar de baja, porque es
 // un dato suyo y no una deducción de Qori.
@@ -126,8 +127,25 @@ function FilaMia({ s, fmt, onEditar, onCancelar }) {
           )}
           {s.nota && <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.45, marginTop: 5 }}>{s.nota}</div>}
         </div>
-        <div style={{ fontFamily: FONT_TITLE, fontSize: 18, fontWeight: 900, color: C.black, letterSpacing: -0.4, flexShrink: 0 }}>{fmtC(s.monto)}</div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ fontFamily: FONT_TITLE, fontSize: 18, fontWeight: 900, color: C.black, letterSpacing: -0.4 }}>{fmtC(costoNeto(s))}</div>
+          {tieneBono(s) && bonoEnSuMoneda(s) > 0 && (
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, textDecoration: "line-through" }}>{fmtC(s.monto)}</div>
+          )}
+        </div>
       </div>
+      {/* F51: de dónde sale el descuento, y el aviso si falta el tipo de cambio. */}
+      {tieneBono(s) && bonoEnSuMoneda(s) > 0 && (
+        <div style={{ fontSize: 12, color: C.green, fontWeight: 600, marginTop: 5 }}>
+          − {monedaDeBono(s) === "USD" ? fmtWith(s.bono, "USD") : fmt(s.bono)} de bono
+          {monedaDeBono(s) !== (s.currency === "USD" ? "USD" : "PEN") ? " (a " + s.bonoTasa + ")" : ""}
+        </div>
+      )}
+      {faltaTasaBono(s) && (
+        <div style={{ fontSize: 12, color: C.orange, fontWeight: 600, marginTop: 5, lineHeight: 1.4 }}>
+          Tienes un bono de {fmtWith(s.bono, "USD")} sin descontar: ponle el tipo de cambio del mes al editarla.
+        </div>
+      )}
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button onClick={() => onEditar(s)} style={{ padding: "7px 12px", borderRadius: 9, background: "#F0EDE4", color: C.black, border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Editar</button>
         <button onClick={() => onCancelar(s)} style={{ padding: "7px 12px", borderRadius: 9, background: "transparent", color: C.orange, border: `1px solid ${C.orange}`, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Quiero cancelarla</button>
@@ -186,6 +204,30 @@ function FormSuscripcion({ form, setForm, onGuardar, onBorrar, onCerrar }) {
         Opcional, pero con esto Qori te avisa cuántos días faltan.
       </div>
 
+      {/* F51: lo que le rebaja la suscripción. El tipo de cambio lo pone ella
+          cada mes, porque se mueve — Qori no lo inventa. */}
+      <div style={lbl}>Bono o descuento (opcional)</div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        <input type="number" inputMode="decimal" value={form.bono} onChange={e => setForm(f => ({ ...f, bono: e.target.value }))} placeholder="0" style={{ ...inputStyle, color: C.black, flex: 1 }} />
+        <div style={{ display: "flex", background: "#F0EDE4", borderRadius: 12, padding: 4, flex: 1 }}>
+          {[["PEN", "S/"], ["USD", "US$"]].map(([v, l]) => (
+            <button key={v} onClick={() => setForm(f => ({ ...f, bonoCurrency: v }))}
+              style={{ flex: 1, padding: "8px 0", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: form.bonoCurrency === v ? 800 : 600, color: form.bonoCurrency === v ? C.black : C.muted, background: form.bonoCurrency === v ? "#fff" : "transparent" }}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {Number(form.bono) > 0 && form.bonoCurrency !== form.currency && (
+        <>
+          <div style={lbl}>Tipo de cambio de este mes</div>
+          <input type="number" inputMode="decimal" step="0.001" value={form.bonoTasa} onChange={e => setForm(f => ({ ...f, bonoTasa: e.target.value }))} placeholder="Ej: 3.78" style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 12 }}>
+            El bono está en otra moneda. Sin este dato Qori no lo descuenta — no inventa tipos de cambio.
+            Actualízalo cuando se mueva.
+          </div>
+        </>
+      )}
+      {Number(form.bono) > 0 && form.bonoCurrency === form.currency && <div style={{ marginBottom: 12 }} />}
+
       <div style={lbl}>Nota (opcional)</div>
       <input value={form.nota} onChange={e => setForm(f => ({ ...f, nota: e.target.value }))} placeholder="Ej: dónde se cancela" style={{ ...inputStyle, color: C.black, marginBottom: 14 }} />
 
@@ -221,6 +263,9 @@ export function SuscripcionesScreen({ subScreen, setSubScreen, fmt, showToast })
       cadencia: form.cadencia === "anual" ? "anual" : "mensual",
       cobra: form.cadencia === "anual" ? (form.cobra || null) : (Number(form.cobra) || null),
       nota: String(form.nota || "").trim() || null,
+      bono: Number(form.bono) || 0,
+      bonoCurrency: form.bonoCurrency === "PEN" ? "PEN" : "USD",
+      bonoTasa: Number(form.bonoTasa) || null,
     };
     setData(p => {
       const lista = p.suscripciones || [];
@@ -298,7 +343,8 @@ export function SuscripcionesScreen({ subScreen, setSubScreen, fmt, showToast })
         </div>
         {mias.map(s => (
           <FilaMia key={s.id} s={s} fmt={fmt}
-            onEditar={(x) => setForm({ ...x, monto: String(x.monto), cobra: x.cobra == null ? "" : String(x.cobra), nota: x.nota || "" })}
+            onEditar={(x) => setForm({ ...x, monto: String(x.monto), cobra: x.cobra == null ? "" : String(x.cobra), nota: x.nota || "",
+              bono: x.bono ? String(x.bono) : "", bonoCurrency: x.bonoCurrency || "USD", bonoTasa: x.bonoTasa ? String(x.bonoTasa) : "" })}
             onCancelar={quieroCancelar} />
         ))}
 

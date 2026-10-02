@@ -3,6 +3,7 @@ import {
   claveComercio, montoParecido, cadenciaDe,
   detectaSuscripciones, resumenSuscripciones,
   proximoCobroDe, diasParaCobro, ordenaPorCancelar, costaNoCancelar,
+  costoNeto, bonoEnSuMoneda, faltaTasaBono, costoMensual, totalMensualDeLista,
 } from "./suscripciones";
 
 const HOY = new Date(2026, 9, 2); // 2 oct 2026
@@ -199,5 +200,49 @@ describe("por cancelar", () => {
   it("sin nada pendiente devuelve ceros", () => {
     expect(costaNoCancelar([])).toEqual({ PEN: 0, USD: 0 });
     expect(ordenaPorCancelar(null)).toEqual([]);
+  });
+});
+
+// F51: un bono que le rebaja la suscripción (su empresa le paga parte del gym).
+describe("bono o descuento", () => {
+  const gym = { id: "g", nombre: "Smart Fit", monto: 112, currency: "PEN", cadencia: "mensual", cobra: 20 };
+
+  it("sin bono, el neto es el monto", () => {
+    expect(costoNeto(gym)).toBe(112);
+    expect(faltaTasaBono(gym)).toBe(false);
+  });
+
+  it("con bono en dólares y tipo de cambio, descuenta lo que vale", () => {
+    const con = { ...gym, bono: 20, bonoCurrency: "USD", bonoTasa: 3.78 };
+    expect(bonoEnSuMoneda(con)).toBe(75.6);
+    expect(costoNeto(con)).toBe(36.4);
+    expect(faltaTasaBono(con)).toBe(false);
+  });
+
+  it("el tipo de cambio lo pone ella: si cambia, el neto cambia", () => {
+    expect(costoNeto({ ...gym, bono: 20, bonoCurrency: "USD", bonoTasa: 3.9 })).toBe(34);
+  });
+
+  it("sin tipo de cambio NO se inventa: el bono no descuenta y se avisa", () => {
+    const sinTasa = { ...gym, bono: 20, bonoCurrency: "USD" };
+    expect(bonoEnSuMoneda(sinTasa)).toBe(0);
+    expect(costoNeto(sinTasa)).toBe(112);
+    expect(faltaTasaBono(sinTasa)).toBe(true);
+  });
+
+  it("un bono en la misma moneda no necesita tasa", () => {
+    const mismo = { ...gym, bono: 30, bonoCurrency: "PEN" };
+    expect(costoNeto(mismo)).toBe(82);
+    expect(faltaTasaBono(mismo)).toBe(false);
+  });
+
+  it("si el bono cubre de más, el neto es 0 y no queda saldo a favor", () => {
+    expect(costoNeto({ ...gym, bono: 200, bonoCurrency: "PEN" })).toBe(0);
+  });
+
+  it("el total al mes usa el neto, y una anual con bono se reparte entre 12", () => {
+    const con = { ...gym, bono: 20, bonoCurrency: "USD", bonoTasa: 3.78 };
+    expect(totalMensualDeLista([con])).toEqual({ PEN: 36.4, USD: 0 });
+    expect(costoMensual({ ...con, cadencia: "anual", monto: 1200, bono: 0 })).toBe(100);
   });
 });
