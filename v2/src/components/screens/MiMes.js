@@ -30,7 +30,7 @@ export default function MiMes({
       { label: "Este mes", val: 0 }, { label: getMonthShort(-1), val: -1 }, { label: getMonthShort(-2), val: -2 }, { label: "Historico", val: "hist" },
     ];
     const d = monthTab === "hist" ? getMonthData(0) : getMonthData(monthTab);
-    const isNeg = d.balance < 0;
+    const isNeg = d.balanceHoy < 0;
     // F22: gastos e ingresos en UNA sola lista cronológica. Los ingresos en cero
     // no entran: son plantillas a las que todavía no les puso monto, no
     // movimientos. Los que no tienen fecha van al final, como en Ingresos.
@@ -91,9 +91,18 @@ export default function MiMes({
             <>
             <div style={{ padding: "0 24px", marginBottom: 16 }}>
               <div style={{ background: isNeg ? C.orange : "linear-gradient(135deg, #1B6B3A 0%, #2D9F5B 100%)", borderRadius: 20, padding: "28px 24px" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>Balance del mes</div>
-                <div style={{ fontSize: "clamp(22px, 9vw, 46px)", fontWeight: 900, color: "#fff", letterSpacing: -1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: FONT_TITLE }}>{fmt(Math.abs(d.balance))}</div>
-                {isNeg && <div style={{ fontSize: 14, color: "rgba(255,255,255,0.65)", marginTop: 4 }}>estás en rojo</div>}
+                {/* F39: el número grande es lo que tiene HOY, no lo que tendrá a
+                    fin de mes. Un sueldo que entra el 29 no se puede gastar el 1. */}
+                <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 8 }}>{d.totalIncPendiente > 0 ? "Tienes hoy" : "Balance del mes"}</div>
+                <div style={{ fontSize: "clamp(22px, 9vw, 46px)", fontWeight: 900, color: "#fff", letterSpacing: -1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: FONT_TITLE }}>{fmt(Math.abs(d.balanceHoy))}</div>
+                {/* "Estás en rojo" asusta cuando lo único que pasa es que el
+                    sueldo entra a fin de mes. Con ingresos por entrar se dice
+                    qué está pasando, no una sentencia. */}
+                {isNeg && (
+                  <div style={{ fontSize: 14, color: "rgba(255,255,255,0.65)", marginTop: 4 }}>
+                    {d.totalIncPendiente > 0 ? "hasta que entren tus ingresos" : "estás en rojo"}
+                  </div>
+                )}
                 {/* F15: con los ingresos en cero este balance es solo lo que
                     gastó, no un balance. Se dice, sin dramatizar. */}
                 {monthTab === 0 && d.totalInc === 0 && (d.totalDiarios + d.totalFijosAll) > 0 && (
@@ -101,12 +110,12 @@ export default function MiMes({
                     No tienes ingresos registrados este mes: esto es solo lo que llevas gastado, no un balance. Regístralos en Ingresos.
                   </div>
                 )}
-                {/* F22: el balance del mes cuenta TODO el mes, incluido lo que
-                    todavía no entra. Se dice, para que no confunda con lo que
-                    tiene hoy en la mano. */}
+                {/* Lo que falta entrar va aparte y SIN sumarse: es el dato de
+                    planificación, no lo que puede gastar hoy. */}
                 {d.totalIncPendiente > 0 && (
                   <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 1.45 }}>
-                    Cuenta {fmt(d.totalIncPendiente)} de ingresos que todavía no entran. Hoy tienes {fmt(d.totalIncRecibido)} recibidos.
+                    Con tus ingresos ya recibidos, menos lo que llevas gastado.
+                    Te faltan entrar {fmt(d.totalIncPendiente)} este mes: cuando entren, este número sube.
                   </div>
                 )}
                 {d.totalDiariosUSD > 0 && (

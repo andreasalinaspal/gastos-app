@@ -199,3 +199,41 @@ describe("categoría de los pagos de tarjeta", () => {
     expect(catSpend(data, mes).mia).toBe(175);
   });
 });
+
+// F39: lo que tiene HOY vs lo que tendrá a fin de mes.
+describe("balanceHoy", () => {
+  const hoy = new Date(2026, 9, 10); // 10 oct 2026
+  const mesHoy = getMonthLabel(0, hoy);
+  const conPendiente = () => ({
+    expenses: [{ id: "e1", amount: 150, month: mesHoy, category: null }],
+    fixed: [{ id: "f1", amount: 200, paid: true, month: mesHoy }],
+    incomeFixed: [
+      { id: "i1", amount: 1000, month: mesHoy, date: new Date(2026, 9, 5).toISOString() },  // ya entró
+      { id: "i2", amount: 5000, month: mesHoy, date: new Date(2026, 9, 29).toISOString() }, // falta
+    ],
+    incomeExtra: [],
+    categories: { gastos: [] },
+    budgets: {},
+  });
+
+  it("solo cuenta los ingresos que ya entraron", () => {
+    const d = getMonthData(conPendiente(), 0, hoy);
+    expect(d.totalIncRecibido).toBe(1000);
+    expect(d.totalIncPendiente).toBe(5000);
+    expect(d.balanceHoy).toBe(650);  // 1000 − 200 − 150
+    expect(d.balance).toBe(5650);    // el de planificación sigue contando todo
+  });
+
+  it("sin nada por entrar, los dos números coinciden", () => {
+    const data = conPendiente();
+    data.incomeFixed = [data.incomeFixed[0]];
+    const d = getMonthData(data, 0, hoy);
+    expect(d.balanceHoy).toBe(d.balance);
+  });
+
+  it("puede quedar en rojo si gastó más de lo que ya le entró", () => {
+    const data = conPendiente();
+    data.expenses = [{ id: "e1", amount: 1500, month: mesHoy, category: null }];
+    expect(getMonthData(data, 0, hoy).balanceHoy).toBe(-700); // 1000 − 200 − 1500
+  });
+});

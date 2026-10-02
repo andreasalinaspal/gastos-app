@@ -9,7 +9,7 @@ import { parseAmount, extractDescription } from "./lib/voice";
 import { hasSignificantData, saveLocalBackup, loadLocalBackup, clearLocalData } from "./lib/sync";
 import { saveLocalSession, loadLocalSession, clearLocalSession, stashRescueCopy, saveLastSyncAt, loadLastSyncAt, CLOUD_RESCUE_KEY } from "./lib/localSession";
 import { decideSync } from "./lib/reconcile";
-import { fetchPendingInbox, flushInboxMarks, markInboxRowOrQueue } from "./lib/inbox";
+import { fetchPendingInbox, flushInboxMarks, markInboxRowOrQueue, markAllPendingInbox } from "./lib/inbox";
 import { InboxSheet } from "./components/shared/InboxSheet";
 import { downloadBackup } from "./lib/export";
 import { buildDemoData } from "./lib/demo";
@@ -461,19 +461,28 @@ export default function App() {
   // F38: vaciar la bandeja de un golpe.
   //
   // Cuando se suma un banco al filtro de Gmail, Google le pone la etiqueta a TODO
-  // el correo viejo y entra meses de compras de una. Descartarlas de a una es
-  // insufrible, y la alternativa —no mirarlas— es peor: la bandeja deja de
-  // significar algo. Pide confirmación porque no tiene vuelta atrás.
+  // el correo viejo y entran meses de compras de una. Descartarlas de a una es
+  // insufrible, y peor: la pantalla carga 50 como mucho, así que al recargar
+  // bajan las siguientes y la bandeja parece no vaciarse nunca.
+  // Por eso cierra los pendientes en la base, no solo los que están en pantalla.
+  // Pide confirmación porque no tiene vuelta atrás.
   const discardAllInboxItems = () => {
-    const todos = inboxItems || [];
-    if (todos.length === 0) return;
+    const enPantalla = (inboxItems || []).length;
+    if (enPantalla === 0) return;
     setConfirm({
-      message: `¿Descartar las ${todos.length} compras por confirmar? No se registra ninguna y no se puede deshacer.`,
-      onConfirm: () => {
+      message: "¿Descartar TODAS las compras por confirmar, incluidas las que no entran en esta pantalla? No se registra ninguna y no se puede deshacer.",
+      onConfirm: async () => {
         setInboxItems([]);
         setShowInbox(false);
-        todos.forEach(i => markInboxRowOrQueue(supabase, i.id, "discarded"));
-        showToast(todos.length + " compras descartadas");
+        showToast("Vaciando la bandeja…");
+        const ok = authUser && await markAllPendingInbox(supabase, authUser.id, "discarded");
+        if (ok) {
+          showToast("Bandeja vacía");
+        } else {
+          // No se pudo en la nube: al menos no se quedan en pantalla, y el
+          // próximo arranque las vuelve a traer para intentarlo de nuevo.
+          showToast("No se pudo vaciar en la nube, inténtalo de nuevo");
+        }
       },
     });
   };

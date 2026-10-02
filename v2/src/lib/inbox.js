@@ -56,6 +56,28 @@ export async function markInboxRow(supabase, id, status) {
   }
 }
 
+// F38: marca TODOS los pendientes del usuario de un golpe.
+//
+// No sirve recorrer los items cargados: `fetchPendingInbox` trae 50 como mucho,
+// así que descartarlos uno por uno deja los demás esperando y al recargar vuelven
+// a aparecer. Esto los cierra en la base, haya 50 o 3,000.
+// Devuelve true/false; nunca lanza.
+export async function markAllPendingInbox(supabase, userId, status) {
+  if (!supabase || !userId || !status) return false;
+  try {
+    const { error } = await supabase
+      .from("inbox")
+      .update({ status })
+      .eq("user_id", userId)
+      .eq("status", "pending");
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.warn("[Qori] No se pudo vaciar la bandeja:", e?.message || e);
+    return false;
+  }
+}
+
 // --- Cola de reintentos -----------------------------------------------------
 // Si el gasto ya entró al blob local pero Supabase no aceptó la marca, la
 // dejamos anotada y la reintentamos en el próximo arranque. El gasto de la

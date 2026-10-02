@@ -122,9 +122,19 @@ export const getMonthData = (data, offset, hoy = new Date()) => {
   // entra el 30 sí cuenta. Lo recibido es la otra pregunta —"¿cuánto tengo
   // hoy?"— y va aparte, nunca mezclado.
   const { recibidos, pendientes, totalRecibido, totalPendiente, totalRecibidoUSD, totalPendienteUSD } = separaIngresos(todosInc, hoy);
+
+  // F39: lo que tiene HOY de verdad. Igual que `balance`, pero contando solo los
+  // ingresos que ya entraron.
+  //
+  // Ella lo pidió así: "no quiero que salga la suma de lo que tengo y lo que me
+  // va a entrar, porque recién se hará visible en sus días correspondientes".
+  // Un sueldo que entra el 29 no es plata que pueda gastar el 1.
+  //
+  // En un mes pasado los dos números coinciden: ya entró todo.
+  const balanceHoy = redondea(totalRecibido - totalFijos - totalDiarios);
   return {
     exps, ingresos: todosInc, totalDiarios, totalCompras, totalConTarjeta, totalDiariosUSD, totalFijos, totalFijosAll,
-    totalInc, totalIncUSD, balance,
+    totalInc, totalIncUSD, balance, balanceHoy,
     pagosTC, totalPagosTC, totalPagosTCUSD, salioDeTuCuenta,
     ingresosRecibidos: recibidos, ingresosPendientes: pendientes,
     totalIncRecibido: totalRecibido, totalIncPendiente: totalPendiente,

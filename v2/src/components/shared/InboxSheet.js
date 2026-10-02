@@ -111,7 +111,9 @@ export function InboxSheet({ items, onRegister, onDiscard, onDiscardAll, onClose
         <div style={{ flex: 1 }}>
           <h2 style={{ fontSize: 26, fontWeight: 900, color: C.black, fontStyle: "italic", margin: 0, fontFamily: FONT_TITLE }}>Gastos por confirmar</h2>
           <p style={{ fontSize: 13, color: C.muted, marginTop: 6, marginBottom: 0 }}>
-            {items.length === 1 ? "Queda 1 compra" : `Quedan ${items.length} compras`} · {fmt(total)}. Elige la categoría y registra.
+            {/* La bandeja trae 50 como mucho: con el tope lleno hay más esperando
+                y decir "quedan 50" sería mentira. */}
+            {items.length === 1 ? "Queda 1 compra" : `Quedan ${items.length}${items.length >= 50 ? " o más" : ""} compras`} · {fmt(total)}. Elige la categoría y registra.
           </p>
         </div>
         <button onClick={onClose} style={{ background: "#E0DCD4", border: "none", borderRadius: "50%", width: 32, height: 32, fontSize: 17, fontWeight: 700, color: "#666", cursor: "pointer", fontFamily: "inherit", flexShrink: 0, lineHeight: 1 }}>×</button>
@@ -125,7 +127,7 @@ export function InboxSheet({ items, onRegister, onDiscard, onDiscardAll, onClose
         {onDiscardAll && items.length > 1 && (
           <button onClick={onDiscardAll}
             style={{ width: "100%", marginTop: 14, padding: 13, borderRadius: 14, background: "transparent", color: C.muted, border: "1px solid #D8D4CC", fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-            Descartar las {items.length} de una vez
+            Descartar todas las pendientes
           </button>
         )}
       </div>

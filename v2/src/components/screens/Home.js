@@ -116,7 +116,10 @@ export default function Home({
             El número grande es el DISPONIBLE, que es lo que se mira antes de gastar. */}
         {creditCards.length > 0 && (
           <div style={{ padding: "10px 0 0" }}>
-            <div style={{ display: "flex", gap: 10, overflowX: "auto", padding: "0 20px 4px", WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory" }}>
+            {/* `scrollPaddingLeft` hace que al soltar el deslizamiento la tarjeta
+                quede a los mismos 20px que la card de arriba, en vez de pegada al
+                borde. Sin esto arrancan alineadas pero se desalinean al deslizar. */}
+            <div style={{ display: "flex", gap: 10, overflowX: "auto", padding: "0 20px 4px", scrollPaddingLeft: 20, WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory" }}>
               {creditCards.map(card => {
                 const cycle = getCycleFor(card, new Date());
                 // F18: la línea es una sola. Lo consumido en dólares ocupa esa misma
