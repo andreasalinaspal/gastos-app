@@ -167,3 +167,67 @@ export function resumenSuscripciones(gastos, fmt, hoy = new Date()) {
   const ojo = subieron > 0 ? (subieron === 1 ? " · 1 subió de precio" : ` · ${subieron} subieron de precio`) : "";
   return base + plata + ojo;
 }
+
+// ── F44: las que decidió cancelar y todavía no canceló ────────────────────
+//
+// Decidir cancelar algo y cancelarlo son dos cosas distintas, y en el medio se
+// pierde plata. Lo que manda acá es la FECHA del próximo cobro: una suscripción
+// "por cancelar" sin fecha es un buen propósito; con fecha es un plazo.
+//
+// `porCancelar = [{ id, nombre, monto, currency, cobra, nota }]`
+//   `cobra`: ISO del próximo cobro, o el día del mes (1-31) si se repite.
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+// El próximo cobro de una entrada, como Date. Con `cobra` numérico se calcula
+// el siguiente día de ese número que todavía no pasó.
+export function proximoCobroDe(item, hoy = new Date()) {
+  if (!item) return null;
+  const crudo = item.cobra;
+  if (typeof crudo === "number" && crudo >= 1 && crudo <= 31) {
+    const h = startOfDay(hoy);
+    const enMes = (y, m) => {
+      const ultimo = new Date(y, m + 1, 0).getDate();
+      return new Date(y, m, Math.min(crudo, ultimo), 12, 0, 0, 0);
+    };
+    let d = enMes(h.getFullYear(), h.getMonth());
+    if (startOfDay(d) < h) d = enMes(h.getFullYear(), h.getMonth() + 1);
+    return d;
+  }
+  if (!crudo) return null;
+  // Una fecha sola ("2026-10-27") la lee el navegador como UTC, y en Perú eso
+  // la corre un día para atrás. Se arma a mano, al mediodía local.
+  const soloFecha = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(crudo).trim());
+  const d = soloFecha
+    ? new Date(Number(soloFecha[1]), Number(soloFecha[2]) - 1, Number(soloFecha[3]), 12, 0, 0, 0)
+    : new Date(crudo);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Días que faltan para el próximo cobro. null si no hay fecha.
+export function diasParaCobro(item, hoy = new Date()) {
+  const d = proximoCobroDe(item, hoy);
+  if (!d) return null;
+  return Math.round((startOfDay(d) - startOfDay(hoy)) / DIA_MS);
+}
+
+// Las pendientes, lo que urge primero. Las que no tienen fecha van al final.
+export function ordenaPorCancelar(lista, hoy = new Date()) {
+  return [...(lista || [])]
+    .filter(Boolean)
+    .map(i => ({ ...i, proximoCobro: proximoCobroDe(i, hoy), dias: diasParaCobro(i, hoy) }))
+    .sort((a, b) => {
+      if (a.dias === null && b.dias === null) return 0;
+      if (a.dias === null) return 1;
+      if (b.dias === null) return -1;
+      return a.dias - b.dias;
+    });
+}
+
+// Lo que le sigue costando al mes no haberlas cancelado todavía.
+export function costaNoCancelar(lista) {
+  const suma = (cur) => redondea((lista || [])
+    .filter(i => i && (i.currency === "USD") === (cur === "USD"))
+    .reduce((t, i) => t + (Number(i.monto) || 0), 0));
+  return { PEN: suma("PEN"), USD: suma("USD") };
+}

@@ -101,8 +101,16 @@ export function migrateData(data) {
     changed = true;
   }
 
-  if (!(typeof out.schemaVersion === "number" && out.schemaVersion >= 5)) {
-    out.schemaVersion = 5;
+  // v6: suscripciones que decidió dar de baja y todavía no da de baja (F44).
+  // Una suscripción que "hay que cancelar" se olvida en dos días; la fecha del
+  // próximo cobro es la que manda.
+  if (!Array.isArray(out.porCancelar)) {
+    out.porCancelar = [];
+    changed = true;
+  }
+
+  if (!(typeof out.schemaVersion === "number" && out.schemaVersion >= 6)) {
+    out.schemaVersion = 6;
     changed = true;
   }
 

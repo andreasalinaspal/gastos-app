@@ -2,7 +2,7 @@ import { C, FONT_TITLE, cardStyle } from "../../theme";
 import { subStyle, subHeader } from "../shared/subnav";
 import { fmtWith } from "../../lib/format";
 import { useStore } from "../../state/store";
-import { detectaSuscripciones } from "../../lib/suscripciones";
+import { detectaSuscripciones, ordenaPorCancelar, costaNoCancelar } from "../../lib/suscripciones";
 
 // F43: las suscripciones que Qori encuentra sola en sus gastos.
 //
@@ -55,8 +55,52 @@ function Fila({ s, fmt }) {
   );
 }
 
+// F44: lo que decidió cancelar y todavía no cancela. Va ARRIBA de todo, porque
+// es lo único de esta pantalla donde el tiempo cuesta plata.
+function PorCancelar({ items, fmt, onHecho }) {
+  if (!items || items.length === 0) return null;
+  const costo = costaNoCancelar(items);
+  const plazo = (d) => {
+    if (d === null) return null;
+    if (d < 0) return { txt: "ya te cobraron hace " + Math.abs(d) + (Math.abs(d) === 1 ? " día" : " días"), urge: true };
+    if (d === 0) return { txt: "te cobran HOY", urge: true };
+    if (d === 1) return { txt: "te cobran mañana", urge: true };
+    return { txt: "te cobran en " + d + " días", urge: d <= 5 };
+  };
+  return (
+    <div style={{ background: "#FFF4EE", border: `1.5px solid ${C.orange}`, borderRadius: 18, padding: "16px 16px 10px", marginBottom: 18 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.orange, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 4 }}>Tienes que cancelar</div>
+      <div style={{ fontSize: 13, color: C.black, lineHeight: 1.5, marginBottom: 12 }}>
+        Mientras no lo hagas te siguen cobrando <strong>{fmt(costo.PEN)}{costo.USD > 0 ? " + " + fmtWith(costo.USD, "USD") : ""}</strong> al mes.
+      </div>
+      {items.map(i => {
+        const p = plazo(i.dias);
+        return (
+          <div key={i.id} style={{ background: "#fff", borderRadius: 12, padding: "11px 13px", marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 700, color: C.black }}>{i.nombre}</div>
+              <div style={{ fontFamily: FONT_TITLE, fontSize: 15, fontWeight: 900, color: C.black, flexShrink: 0 }}>
+                {i.currency === "USD" ? fmtWith(i.monto, "USD") : fmt(i.monto)}
+              </div>
+            </div>
+            {p && <div style={{ fontSize: 12, fontWeight: 700, color: p.urge ? C.red : C.orange, marginTop: 2 }}>{p.txt}</div>}
+            {i.nota && <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.45, marginTop: 5 }}>{i.nota}</div>}
+            <button onClick={() => onHecho(i.id)}
+              style={{ marginTop: 9, padding: "7px 12px", borderRadius: 9, background: "#F0EDE4", color: C.black, border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              Ya la cancelé
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SuscripcionesScreen({ subScreen, setSubScreen, fmt }) {
   const data = useStore(s => s.data);
+  const setData = useStore(s => s.setData);
+  const pendientes = ordenaPorCancelar(data.porCancelar);
+  const marcarHecha = (id) => setData(p => ({ ...p, porCancelar: (p.porCancelar || []).filter(i => i && i.id !== id) }));
   const r = detectaSuscripciones(data.expenses);
   const hayAlgo = r.activas.length > 0 || r.inactivas.length > 0;
   const subieron = r.activas.filter(s => s.subioDePrecio);
@@ -65,6 +109,7 @@ export function SuscripcionesScreen({ subScreen, setSubScreen, fmt }) {
     <div style={subStyle(subScreen, "suscripciones")}>
       {subHeader("Suscripciones", () => setSubScreen(null))}
       <div style={{ padding: "0 20px 40px" }}>
+        <PorCancelar items={pendientes} fmt={fmt} onHecho={marcarHecha} />
         {r.activas.length > 0 && (
           <div style={{ background: "linear-gradient(135deg, #1B6B3A 0%, #2D9F5B 100%)", borderRadius: 20, padding: "22px 20px", marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Te cuestan al mes</div>
@@ -84,7 +129,7 @@ export function SuscripcionesScreen({ subScreen, setSubScreen, fmt }) {
           </div>
         )}
 
-        {!hayAlgo && (
+        {!hayAlgo && pendientes.length === 0 && (
           <div style={{ ...cardStyle, padding: "20px 18px" }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.black, marginBottom: 8 }}>Todavía no encuentro ninguna</div>
             <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.55 }}>

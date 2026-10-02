@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   claveComercio, montoParecido, cadenciaDe,
   detectaSuscripciones, resumenSuscripciones,
+  proximoCobroDe, diasParaCobro, ordenaPorCancelar, costaNoCancelar,
 } from "./suscripciones";
 
 const HOY = new Date(2026, 9, 2); // 2 oct 2026
@@ -152,5 +153,51 @@ describe("resumenSuscripciones", () => {
   it("saca a relucir las que subieron de precio", () => {
     const con = [...netflix, g("n6", "NETFLIX.COM", 59.9, dia(2026, 9, 1))];
     expect(resumenSuscripciones(con, fmt, HOY)).toContain("1 subió de precio");
+  });
+});
+
+// F44: el aviso de lo que decidió cancelar y todavía no cancela.
+describe("por cancelar", () => {
+  const hoy = new Date(2026, 9, 2); // 2 oct 2026
+
+  it("con fecha fija calcula los días que faltan", () => {
+    const i = { id: "a", nombre: "Paramount+", monto: 21.5, cobra: "2026-10-27" };
+    expect(diasParaCobro(i, hoy)).toBe(25);
+  });
+
+  it("con día del mes busca el próximo que todavía no pasa", () => {
+    expect(diasParaCobro({ cobra: 14 }, hoy)).toBe(12);          // 14 de este mes
+    expect(diasParaCobro({ cobra: 1 }, hoy)).toBe(30);           // ya pasó → el del mes que viene
+  });
+
+  it("el día 31 cae al último del mes cuando el mes es más corto", () => {
+    const d = proximoCobroDe({ cobra: 31 }, new Date(2026, 10, 1)); // noviembre tiene 30
+    expect(d.getDate()).toBe(30);
+  });
+
+  it("sin fecha no inventa un plazo", () => {
+    expect(diasParaCobro({ nombre: "algo" }, hoy)).toBe(null);
+    expect(diasParaCobro(null, hoy)).toBe(null);
+  });
+
+  it("ordena por urgencia y deja al final las que no tienen fecha", () => {
+    const r = ordenaPorCancelar([
+      { id: "sin", nombre: "Sin fecha" },
+      { id: "lejos", cobra: "2026-10-27" },
+      { id: "cerca", cobra: "2026-10-05" },
+    ], hoy);
+    expect(r.map(i => i.id)).toEqual(["cerca", "lejos", "sin"]);
+  });
+
+  it("suma lo que cuesta no haberlas cancelado, sin mezclar monedas", () => {
+    const r = costaNoCancelar([
+      { monto: 26.9 }, { monto: 21.5 }, { monto: 95.2, currency: "USD" },
+    ]);
+    expect(r).toEqual({ PEN: 48.4, USD: 95.2 });
+  });
+
+  it("sin nada pendiente devuelve ceros", () => {
+    expect(costaNoCancelar([])).toEqual({ PEN: 0, USD: 0 });
+    expect(ordenaPorCancelar(null)).toEqual([]);
   });
 });

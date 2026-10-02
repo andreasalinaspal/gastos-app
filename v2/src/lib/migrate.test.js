@@ -18,9 +18,9 @@ const v1Blob = () => ({
 });
 
 describe("migrateData — blob v1", () => {
-  it("agrega paymentMethods default (efectivo y débito), cardPayments, education, deudas y schemaVersion 5", () => {
+  it("agrega paymentMethods default (efectivo y débito), cardPayments, education, deudas y schemaVersion 6", () => {
     const m = migrateData(v1Blob());
-    expect(m.schemaVersion).toBe(5);
+    expect(m.schemaVersion).toBe(6);
     expect(m.paymentMethods).toHaveLength(2);
     expect(m.paymentMethods.map(p => p.type).sort()).toEqual(["debito", "efectivo"]);
     expect(m.paymentMethods.every(p => p.id && p.name)).toBe(true);
@@ -65,7 +65,7 @@ describe("migrateData — idempotencia", () => {
     const partial = { ...v1Blob(), schemaVersion: 2, paymentMethods: [{ id: "pm1", type: "efectivo", name: "Efectivo" }] };
     delete partial.cardPayments;
     const m = migrateData(partial);
-    expect(m.schemaVersion).toBe(5);
+    expect(m.schemaVersion).toBe(6);
     expect(m.paymentMethods).toEqual([{ id: "pm1", type: "efectivo", name: "Efectivo" }]); // no se pisa
     expect(m.cardPayments).toEqual([]);
     expect(m.education).toEqual({ completedLessons: [], quizResult: null, simulatorState: null });
@@ -94,7 +94,7 @@ describe("migrateData — v3: deuda previa en tarjetas", () => {
     const card = m.paymentMethods.find(p => p.id === "c1");
     expect(card.openingBalance).toBe(0);
     expect(card.openingDate).toBe(LEGACY_OPENING_DATE);
-    expect(m.schemaVersion).toBe(5);
+    expect(m.schemaVersion).toBe(6);
   });
 
   it("no toca ningún otro campo de la tarjeta", () => {
@@ -152,10 +152,10 @@ describe("migrateData — v4: lines.PEN / lines.USD", () => {
     ],
   });
 
-  it("mueve la línea plana a lines.PEN y sube a schemaVersion 5", () => {
+  it("mueve la línea plana a lines.PEN y sube a schemaVersion 6", () => {
     const m = migrateData(withCard());
     const card = m.paymentMethods.find(p => p.id === "c1");
-    expect(m.schemaVersion).toBe(5);
+    expect(m.schemaVersion).toBe(6);
     expect(card.lines.PEN).toEqual({ creditLine: 3000, openingBalance: 850 });
   });
 
@@ -224,7 +224,7 @@ describe("v5 · deudas por cobrar", () => {
   it("agrega deudas vacío a un blob que no lo tenía", () => {
     const m = migrateData(v1Blob());
     expect(m.deudas).toEqual([]);
-    expect(m.schemaVersion).toBe(5);
+    expect(m.schemaVersion).toBe(6);
   });
 
   it("respeta las deudas que ya estaban", () => {
@@ -237,5 +237,24 @@ describe("v5 · deudas por cobrar", () => {
   it("es idempotente: migrar dos veces devuelve el MISMO objeto", () => {
     const una = migrateData(v1Blob());
     expect(migrateData(una)).toBe(una);
+  });
+});
+
+// v6: la lista de suscripciones que decidió cancelar (F44).
+describe("migrateData — v6 porCancelar", () => {
+  it("agrega porCancelar vacío a un blob que no lo tenía", () => {
+    const out = migrateData({ expenses: [], fixed: [], incomeFixed: [], incomeExtra: [] });
+    expect(out.porCancelar).toEqual([]);
+    expect(out.schemaVersion).toBe(6);
+  });
+
+  it("no pisa lo que ya estaba anotado", () => {
+    const mio = [{ id: "a", nombre: "HBO Max", monto: 26.9, cobra: 14 }];
+    expect(migrateData({ expenses: [], porCancelar: mio }).porCancelar).toEqual(mio);
+  });
+
+  it("es idempotente: correrla dos veces no cambia nada", () => {
+    const una = migrateData({ expenses: [] });
+    expect(migrateData(una)).toEqual(una);
   });
 });
