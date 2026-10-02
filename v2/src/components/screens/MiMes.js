@@ -268,7 +268,7 @@ export default function MiMes({
               ); })())}
               {movimientos.some(m => m.tipo === "pago-tc") && (
                 <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, padding: "2px 2px 6px" }}>
-                  Los pagos de tarjeta salen acá para que veas a dónde se fue tu plata, pero <strong style={{ color: C.black }}>no suman a tus gastos</strong>: estás pagando compras que ya registraste cuando las hiciste.
+                  Los pagos de tarjeta cuentan en <strong style={{ color: C.black }}>“Salió de tu cuenta”</strong>, que es la plata que de verdad se fue de tu banco. No entran en “Diarios” porque ese número alimenta tus presupuestos por categoría, y un pago de tarjeta no tiene categoría: lo que compraste ya quedó anotado en la suya el día que lo compraste.
                 </div>
               )}
               {movimientos.some(m => m.tipo === "ingreso" && m.pendiente) && (

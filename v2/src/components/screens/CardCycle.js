@@ -324,7 +324,7 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast,
             <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>…y {abonos.length - 8} abonos más.</div>
           )}
           <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45, marginTop: 10, paddingTop: 9, borderTop: "1px solid #F0EDE4" }}>
-            Abonar no es un gasto: estás pagando compras que ya registraste. Por eso baja tu saldo y lo que te toca pagar, pero no suma a tus gastos del mes.
+            Cada abono cuenta en <strong style={{ color: C.black }}>“Salió de tu cuenta”</strong> de ese mes, y baja tu saldo y lo que te toca pagar. No entra en “Diarios” porque ahí van tus compras por categoría, y lo que compraste ya quedó anotado el día que lo compraste.
           </div>
         </div>
       )}

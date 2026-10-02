@@ -168,7 +168,7 @@ export default function Home({
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 15, fontWeight: 500, color: "rgba(255,255,255,0.9)" }}>Pago a {tc ? tc.name : "tu tarjeta"}</div>
                         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
-                          💳 Pago de tarjeta · {mov.fecha.toLocaleDateString("es-PE", { day: "numeric", month: "short" })} · no suma a tus gastos
+                          💳 Pago de tarjeta · {mov.fecha.toLocaleDateString("es-PE", { day: "numeric", month: "short" })} · cuenta en lo que salió de tu cuenta
                         </div>
                       </div>
                       <span style={{ fontSize: 16, fontWeight: 600, color: "rgba(255,255,255,0.75)", marginRight: 10, whiteSpace: "nowrap" }}>
