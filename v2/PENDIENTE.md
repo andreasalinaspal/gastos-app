@@ -1,4 +1,4 @@
-# Dónde quedamos — 1 oct 2026
+# Dónde quedamos — 2 oct 2026
 
 Registro automático de gastos, por dos vías: Apple Pay y correos del banco.
 
@@ -22,7 +22,9 @@ Registro automático de gastos, por dos vías: Apple Pay y correos del banco.
   en el código.
 - **Primera prueba real OK**: una "Constancia de Pago Plin" devolvió `201 registrado:true`,
   salió la franja en Inicio y la confirmó. Falta ver una COMPRA entrando sola.
-- `lib/correoBancos.js` — lectores de **Interbank** y **BBVA**, con 25 pruebas sobre correos reales.
+- `lib/correoBancos.js` — lectores de **Interbank** y **BBVA**, con 34 pruebas sobre correos reales.
+- Interbank lee: consumo, Constancia de Pago Plin y **Constancia de transferencia** (F47).
+  Cada asunto nuevo del banco hay que enseñarlo: lo que no reconoce NO se registra.
 - BBVA (F37): plantilla distinta — moneda en campo propio (`PEN`/`USD`), monto pelado, hora 24h.
   Sin moneda reconocible NO se registra. El filtro de Gmail ya tiene los dos remitentes.
 - `/api/ingest-correo` — recibe el correo crudo y decide.
@@ -41,14 +43,21 @@ Si no llega, diagnosticar en este orden:
 2. ¿Llegó pero no hay banner? → token mal pegado (espacio de más, o falta `Bearer `).
 3. ¿Hay banner pero sin comercio? → las variables quedaron como texto, no como burbujita azul.
 
-### 2. Correos que faltan
+### 2. Suscripciones (F43-F46)
+Ella lleva su propia lista en Config → Suscripciones: agregar/editar/eliminar, con
+monto, moneda, cadencia y día de cobro. La detección automática quedó como ayuda
+(propone lo que ve repetido en los gastos). "Por cancelar" avisa lo que decidió dar
+de baja y todavía no da, con los días que faltan.
+Cargadas sus 12 activas y 3 avisos (HBO Max, Paramount+, Claude Max→Pro).
+
+### 3. Correos que faltan
 - **Interbank · pago de tarjeta de crédito** — solo el asunto. Ahora mismo lo ignoro
   por asuntos adivinados (`"pago de tu tarjeta"`, `"pago de tarjeta"`). Si el real es
   distinto, caería en "no-reconocido": inofensivo, pero no acierta.
 - **BCP y Ripley** — un consumo con tarjeta de cada uno (remitente, asunto, cuerpo).
   BBVA ya está hecho.
 
-### 3. Que la bandeja sepa crear PAGOS de tarjeta, no solo gastos
+### 4. Que la bandeja sepa crear PAGOS de tarjeta, no solo gastos
 El correo de BBVA "Constancia Pago de Tarjetas propias" trae todo lo necesario:
 importe, fecha y los últimos 4 (`Número de tarjeta • 1849`). Hoy se reconoce y se
 descarta, porque un pago tiene que hacer DOS cosas —contar como gasto y bajar el
@@ -58,7 +67,7 @@ quedaría contado dos veces.
 Trabajo: tipo nuevo en `inbox`, variante en la pantalla de confirmación, y emparejar
 los 4 dígitos con una tarjeta de `paymentMethods`.
 
-### 4. El selector S/ | US$ de la bandeja
+### 5. El selector S/ | US$ de la bandeja
 La bandeja se vio funcionando a clics con el Plin (en soles). El selector de moneda
 sigue sin probarse: hace falta que entre un pendiente en dólares.
 
@@ -80,7 +89,7 @@ sigue sin probarse: hace falta que entre un pendiente en dólares.
 - **Nada entra sin confirmación.** Todo cae en la bandeja y ella decide categoría y
   medio de pago antes de que sea un gasto.
 
-### 5. Datos de ella que faltan
+### 6. Datos de ella que faltan
 - Saldo actual + línea de las otras tres tarjetas (la Amex BBVA ••1849 ya cuadra con su banco).
 - Ingresos fijos de setiembre con sus fechas.
 
