@@ -45,20 +45,16 @@ export const getMonthData = (data, offset, hoy = new Date()) => {
   const fixd = data.fixed.filter(f => f.month === mk);
   const incF = data.incomeFixed.filter(i => i.month === mk);
   const incE = data.incomeExtra.filter(i => i.month === mk);
-  const totalDiarios = exps.filter(isPEN).reduce((s, e) => s + e.amount, 0);
+  const totalCompras = exps.filter(isPEN).reduce((s, e) => s + e.amount, 0);
   const totalDiariosUSD = sumUSD(exps); // aparte, nunca sumado a los soles
   const totalFijos = fixd.filter(f => f.paid).reduce((s, f) => s + f.amount, 0);
   const totalFijosAll = fixd.reduce((s, f) => s + f.amount, 0);
 
   // F31: los pagos que le hizo a sus tarjetas ESE mes.
   //
-  // Se muestran, pero NO suman a los gastos: pagar la tarjeta salda compras que
-  // ya se registraron cuando ocurrieron (P1). Contarlo de nuevo le infló un mes
-  // en S/6,404 en sus datos reales.
-  //
-  // Lo que sí responden es otra pregunta: cuánta plata salió de su cuenta. Ahí
-  // el pago de tarjeta cuenta, y en cambio una compra hecha CON la tarjeta no
-  // —esa sale de la cuenta recién el día que paga la tarjeta.
+  // `salioDeTuCuenta` responde "cuánta plata se fue de mi banco": ahí el pago
+  // cuenta, y una compra hecha CON la tarjeta no —esa sale recién el día que la
+  // paga.
   const pagosTC = (data.cardPayments || []).filter(p => p && p.date && monthLabelOf(new Date(p.date)) === mk);
   const totalPagosTC = redondea(pagosTC.filter(p => curOf(p) !== "USD").reduce((s, p) => s + (Number(p.amount) || 0), 0));
   const totalPagosTCUSD = redondea(pagosTC.filter(p => curOf(p) === "USD").reduce((s, p) => s + (Number(p.amount) || 0), 0));
@@ -66,6 +62,17 @@ export const getMonthData = (data, offset, hoy = new Date()) => {
   const idsCredito = new Set((data.paymentMethods || []).filter(m => m && m.type === "credito").map(m => m.id));
   const diariosDeCuenta = exps.filter(isPEN).filter(e => !idsCredito.has(e.paymentMethodId)).reduce((s, e) => s + e.amount, 0);
   const salioDeTuCuenta = redondea(diariosDeCuenta + totalFijos + totalPagosTC);
+
+  // F32: los pagos de tarjeta SÍ cuentan como gasto. Decisión de ella, dicha
+  // tres veces: "pero debe contar como gasto porque estoy pagando una deuda".
+  //
+  // Lo que eso implica, y está dicho en pantalla: la compra ya sumó el día que
+  // la hizo, así que esa plata aparece dos veces en el mes — una al comprar y
+  // otra al pagar. `totalCompras` queda aparte para poder mostrar el desglose.
+  //
+  // Los presupuestos por categoría NO se ven afectados: `catSpend` lee los
+  // gastos directamente, y un pago de tarjeta no tiene categoría.
+  const totalDiarios = redondea(totalCompras + totalPagosTC);
 
   // F24: los ingresos en dólares solo entran al total en soles si ella declaró
   // el tipo de cambio que le dieron. Los que no, van aparte (`totalIncUSD`).
@@ -80,7 +87,7 @@ export const getMonthData = (data, offset, hoy = new Date()) => {
   // hoy?"— y va aparte, nunca mezclado.
   const { recibidos, pendientes, totalRecibido, totalPendiente, totalRecibidoUSD, totalPendienteUSD } = separaIngresos(todosInc, hoy);
   return {
-    exps, ingresos: todosInc, totalDiarios, totalDiariosUSD, totalFijos, totalFijosAll,
+    exps, ingresos: todosInc, totalDiarios, totalCompras, totalDiariosUSD, totalFijos, totalFijosAll,
     totalInc, totalIncUSD, balance,
     pagosTC, totalPagosTC, totalPagosTCUSD, salioDeTuCuenta,
     ingresosRecibidos: recibidos, ingresosPendientes: pendientes,

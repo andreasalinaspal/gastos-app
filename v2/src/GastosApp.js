@@ -524,11 +524,13 @@ export default function App() {
   const curMonth = getCurrentMonthLabel();
   const todayExp = data.expenses.filter(e => new Date(e.date).toDateString() === new Date().toDateString());
   // Los dólares no se suman a los soles (F10): van en su propia línea.
-  const todayTotal = todayExp.filter(isPEN).reduce((s, e) => s + e.amount, 0);
+  // F32: los pagos de tarjeta cuentan como gasto, así que los de hoy entran acá.
+  const mismoDia = (iso) => { const d = new Date(iso); const h = new Date(); return d.getFullYear() === h.getFullYear() && d.getMonth() === h.getMonth() && d.getDate() === h.getDate(); };
+  const pagosHoy = (data.cardPayments || []).filter(p => p && p.date && p.currency !== "USD" && mismoDia(p.date)).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const todayTotal = todayExp.filter(isPEN).reduce((s, e) => s + e.amount, 0) + pagosHoy;
   const todayTotalUSD = sumUSD(todayExp);
-  // F31: "Últimos movimientos" son movimientos, no solo gastos. Los pagos de
-  // tarjeta se ven acá igual que en Mi Mes — salió plata de su cuenta y quiere
-  // verlo — pero siguen sin sumar a los gastos: saldan compras ya registradas.
+  // F31: "Últimos movimientos" son movimientos, no solo gastos: los pagos de
+  // tarjeta se ven acá igual que en Mi Mes.
   const recentExp = [
     ...data.expenses.map(e => ({ tipo: "gasto", id: e.id, fecha: new Date(e.date), e })),
     ...(data.cardPayments || []).filter(p => p && p.date).map(p => ({ tipo: "pago-tc", id: p.id, fecha: new Date(p.date), p })),

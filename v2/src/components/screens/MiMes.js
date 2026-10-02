@@ -137,6 +137,10 @@ export default function MiMes({
               <div style={{ minWidth: 110, background: C.purple, borderRadius: 14, padding: "14px 12px", color: "#fff", flexShrink: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.8 }}>Diarios</div>
                 <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap", fontFamily: FONT_TITLE }}>{fmt(d.totalDiarios)}</div>
+                {/* F32: de dónde sale ese número, para que no parezca inflado sin motivo */}
+                {d.totalPagosTC > 0 && (
+                  <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2, lineHeight: 1.3, opacity: 0.85 }}>incluye {fmt(d.totalPagosTC)} de pagos TC</div>
+                )}
                 {/* Los gastos en dólares no entran al total en soles (F10) */}
                 {d.totalDiariosUSD > 0 && (
                   <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2, whiteSpace: "nowrap", opacity: 0.85 }}>+ {fmtWith(d.totalDiariosUSD, "USD")}</div>
@@ -268,7 +272,7 @@ export default function MiMes({
               ); })())}
               {movimientos.some(m => m.tipo === "pago-tc") && (
                 <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, padding: "2px 2px 6px" }}>
-                  Los pagos de tarjeta cuentan en <strong style={{ color: C.black }}>“Salió de tu cuenta”</strong>, que es la plata que de verdad se fue de tu banco. No entran en “Diarios” porque ese número alimenta tus presupuestos por categoría, y un pago de tarjeta no tiene categoría: lo que compraste ya quedó anotado en la suya el día que lo compraste.
+                  Los pagos de tarjeta <strong style={{ color: C.black }}>suman a tus gastos del mes</strong>. Ten en cuenta que la compra ya sumó el día que la hiciste, así que esa plata aparece dos veces: una al comprar y otra al pagar. Tus presupuestos por categoría no la cuentan dos veces — ahí solo van las compras.
                 </div>
               )}
               {movimientos.some(m => m.tipo === "ingreso" && m.pendiente) && (

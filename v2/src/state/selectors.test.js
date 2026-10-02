@@ -79,11 +79,30 @@ describe("pagos de tarjeta y salida de caja", () => {
     cardPayments: [{ id: "p1", cardId: "tc", amount: 200, date: diaDelMes(5) }],
   });
 
-  it("el pago NO entra en los gastos del mes", () => {
+  // F32: decisión de ella, dicha tres veces. El pago de tarjeta cuenta como
+  // gasto. La compra ya sumó el día que la hizo, así que esa plata aparece dos
+  // veces en el mes — eso se dice en pantalla, no se esconde.
+  it("el pago SÍ entra en los gastos del mes", () => {
     const d = getMonthData(base(), 0);
-    expect(d.totalDiarios).toBe(140); // 100 + 40, sin los 200 del pago
+    expect(d.totalCompras).toBe(140);  // 100 con tarjeta + 40 en efectivo
     expect(d.totalPagosTC).toBe(200);
+    expect(d.totalDiarios).toBe(340);  // compras + pago
     expect(d.pagosTC).toHaveLength(1);
+  });
+
+  it("el balance del mes también lo descuenta", () => {
+    const d2 = base();
+    d2.incomeFixed = [{ id: "i", amount: 5000, month: mes }];
+    const d = getMonthData(d2, 0);
+    // 5000 ingresos − 950 fijos pagados − 340 (compras + pago) = 3710
+    expect(d.balance).toBe(3710);
+  });
+
+  it("los presupuestos por categoría NO lo cuentan: un pago no tiene categoría", () => {
+    const d2 = base();
+    d2.expenses[0].category = { id: "comida", name: "Comida" };
+    d2.budgets = { comida: 500 };
+    expect(catSpend(d2, mes).comida).toBe(100); // solo la compra, no el pago
   });
 
   it("lo que salió de la cuenta sí lo incluye, y no cuenta lo pagado con tarjeta", () => {
