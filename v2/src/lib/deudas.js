@@ -7,9 +7,11 @@
 // convierten solos. Una deuda en dólares se cobra en dólares y se totaliza
 // aparte; nunca se suma a los soles.
 //
-// Lo que NO hace, a propósito: cuando le pagan, eso no se registra como
-// ingreso. Que te devuelvan una plata que ya era tuya no es plata nueva, y
-// meterla en los ingresos del mes le inflaría el balance.
+// F40: cuando le pagan, eso SÍ cuenta como ingreso del mes. Acá decía lo
+// contrario —"que te devuelvan una plata que ya era tuya no es plata nueva"—
+// y estaba mal: con el modelo de caja, ese día entra plata a su cuenta y la
+// puede gastar. Los cobros se derivan de los pagos de cada deuda, no se copian
+// a `incomeExtra`: la deuda sigue siendo la única fuente de verdad.
 
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 const redondea = (n) => Math.round(n * 100) / 100;

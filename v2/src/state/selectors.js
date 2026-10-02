@@ -1,5 +1,6 @@
 import { getMonthLabel, monthLabelOf } from "../lib/dates";
 import { curOf } from "../lib/cycles";
+import { curOfDeuda } from "../lib/deudas";
 import { separaIngresos, montoEnSoles, montoEnDolaresSinCambiar } from "../lib/ingresos";
 import { CAT_PAGO_TC } from "../constants";
 
@@ -38,6 +39,40 @@ export const pagosComoGastos = (data, mes) => {
     .filter(p => p && p.date && (Number(p.amount) || 0) > 0)
     .filter(p => !mes || monthLabelOf(new Date(p.date)) === mes)
     .map(p => pagoComoGasto(p, cat));
+};
+
+// F40: cuando le pagan una deuda, eso SÍ es un ingreso.
+//
+// Antes no se contaba, con el argumento de que devolverle una plata que ya era
+// suya no es plata nueva. Con el modelo de caja (ver F33) eso no se sostiene:
+// ese día entra plata a su cuenta y la puede gastar. Ella lo dijo derecho — "las
+// deudas que me pagaron no se registraron como ingreso".
+//
+// Se arman al vuelo desde los pagos de cada deuda, igual que los pagos de
+// tarjeta con [[pagoComoGasto]]: una sola fuente de verdad, la deuda.
+export const cobroComoIngreso = (deuda, pago) => ({
+  id: "cobro-" + pago.id,
+  name: "Te pagó " + (String(deuda.name || "").trim() || "una deuda"),
+  amount: Number(pago.amount) || 0,
+  date: pago.date,
+  month: pago.date ? monthLabelOf(new Date(pago.date)) : null,
+  ...(curOfDeuda(deuda) === "USD" ? { currency: "USD" } : {}),
+  ...(pago.rate ? { rate: pago.rate } : {}),
+  esCobroDeuda: true,
+});
+
+// Los cobros de un mes. `mes` es la etiqueta ("Octubre 2026") o null para todos.
+export const cobrosComoIngresos = (data, mes) => {
+  const out = [];
+  for (const d of data?.deudas || []) {
+    if (!d) continue;
+    for (const p of d.pagos || []) {
+      if (!p || !p.date || !((Number(p.amount) || 0) > 0)) continue;
+      if (mes && monthLabelOf(new Date(p.date)) !== mes) continue;
+      out.push(cobroComoIngreso(d, p));
+    }
+  }
+  return out;
 };
 
 // Funciones puras extraídas del monolito GastosApp.js (misma lógica, firmas puras).
@@ -112,7 +147,8 @@ export const getMonthData = (data, offset, hoy = new Date()) => {
 
   // F24: los ingresos en dólares solo entran al total en soles si ella declaró
   // el tipo de cambio que le dieron. Los que no, van aparte (`totalIncUSD`).
-  const todosInc = [...incF, ...incE];
+  // F40: los cobros de deudas entran como un ingreso más del mes.
+  const todosInc = [...incF, ...incE, ...cobrosComoIngresos(data, mk)];
   const totalInc = Math.round(todosInc.reduce((s, i) => s + montoEnSoles(i), 0) * 100) / 100;
   const totalIncUSD = Math.round(todosInc.reduce((s, i) => s + montoEnDolaresSinCambiar(i), 0) * 100) / 100;
   const balance = totalInc - totalFijos - totalDiarios;

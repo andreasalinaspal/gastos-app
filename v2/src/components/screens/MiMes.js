@@ -39,8 +39,8 @@ export default function MiMes({
       ...d.ingresos
         .filter(i => (Number(i.amount) || 0) > 0)
         .map(i => ({ tipo: "ingreso", id: i.id, fecha: fechaEfectiva(i), pendiente: !esRecibido(i), i })),
-      // F31: los pagos a la tarjeta se VEN, pero no suman a los gastos: saldan
-      // compras que ya están registradas. Van marcados para que se note.
+      // F33/F35: los pagos a la tarjeta SÍ suman a los gastos del mes —ese día
+      // sale la plata— y van marcados con su categoría para que se note.
       ...d.pagosTC.map(p => ({ tipo: "pago-tc", id: p.id, fecha: new Date(p.date), p })),
     ].sort((a, b) => {
       if (!a.fecha && !b.fecha) return 0;

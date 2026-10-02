@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { catSpend, getMonthData, isPEN, sumUSD, buildCatMap, categoriaPagoTC, pagosComoGastos } from "./selectors";
+import { catSpend, getMonthData, isPEN, sumUSD, buildCatMap, categoriaPagoTC, pagosComoGastos, cobrosComoIngresos } from "./selectors";
 import { getMonthLabel } from "../lib/dates";
 
 // F10: los gastos en dólares NUNCA entran a los totales en soles.
@@ -235,5 +235,59 @@ describe("balanceHoy", () => {
     const data = conPendiente();
     data.expenses = [{ id: "e1", amount: 1500, month: mesHoy, category: null }];
     expect(getMonthData(data, 0, hoy).balanceHoy).toBe(-700); // 1000 − 200 − 1500
+  });
+});
+
+// F40: cuando le pagan una deuda, esa plata entra a su cuenta y cuenta.
+describe("cobros de deudas como ingresos", () => {
+  const hoy = new Date(2026, 9, 20); // 20 oct 2026
+  const mesHoy = getMonthLabel(0, hoy);
+  const base = () => ({
+    expenses: [], fixed: [], incomeFixed: [], incomeExtra: [],
+    categories: { gastos: [] }, budgets: {},
+    deudas: [
+      { id: "d1", name: "Mamá", amount: 1000, pagos: [
+        { id: "p1", amount: 300, date: new Date(2026, 9, 5).toISOString() },   // este mes
+        { id: "p2", amount: 200, date: new Date(2026, 8, 5).toISOString() },   // el mes pasado
+      ]},
+      { id: "d2", name: "Jose", amount: 500, currency: "USD", pagos: [
+        { id: "p3", amount: 80, date: new Date(2026, 9, 7).toISOString() },    // en dólares, sin tasa
+      ]},
+    ],
+  });
+
+  it("solo trae los cobros del mes pedido", () => {
+    const c = cobrosComoIngresos(base(), mesHoy);
+    expect(c).toHaveLength(2);
+    expect(c.map(i => i.id)).toEqual(["cobro-p1", "cobro-p3"]);
+    expect(c[0].name).toBe("Te pagó Mamá");
+  });
+
+  it("suman al total del mes y a lo que ya tiene hoy", () => {
+    const d = getMonthData(base(), 0, hoy);
+    expect(d.totalInc).toBe(300);        // los 80 dólares no se convierten
+    expect(d.totalIncRecibido).toBe(300);
+    expect(d.balanceHoy).toBe(300);
+  });
+
+  it("un cobro en dólares se queda en dólares, no se convierte", () => {
+    const d = getMonthData(base(), 0, hoy);
+    expect(d.totalIncUSD).toBe(80);
+  });
+
+  it("un cobro futuro cuenta como pendiente, no como recibido", () => {
+    const data = base();
+    data.deudas[0].pagos = [{ id: "p9", amount: 400, date: new Date(2026, 9, 28).toISOString() }];
+    data.deudas[1].pagos = [];
+    const d = getMonthData(data, 0, hoy);
+    expect(d.totalIncRecibido).toBe(0);
+    expect(d.totalIncPendiente).toBe(400);
+  });
+
+  it("sin deudas no cambia nada", () => {
+    const data = base();
+    delete data.deudas;
+    expect(cobrosComoIngresos(data, mesHoy)).toEqual([]);
+    expect(getMonthData(data, 0, hoy).totalInc).toBe(0);
   });
 });
