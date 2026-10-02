@@ -63,16 +63,21 @@ export const getMonthData = (data, offset, hoy = new Date()) => {
   const diariosDeCuenta = exps.filter(isPEN).filter(e => !idsCredito.has(e.paymentMethodId)).reduce((s, e) => s + e.amount, 0);
   const salioDeTuCuenta = redondea(diariosDeCuenta + totalFijos + totalPagosTC);
 
-  // F32: los pagos de tarjeta SÍ cuentan como gasto. Decisión de ella, dicha
-  // tres veces: "pero debe contar como gasto porque estoy pagando una deuda".
+
+  // F33: el gasto es cuando SALE la plata, no cuando se compra.
   //
-  // Lo que eso implica, y está dicho en pantalla: la compra ya sumó el día que
-  // la hizo, así que esa plata aparece dos veces en el mes — una al comprar y
-  // otra al pagar. `totalCompras` queda aparte para poder mostrar el desglose.
+  // Ella lo explicó así: "lo que gasté con la tarjeta no fue un gasto real
+  // porque la tarjeta no es dinero real; yo lo estoy pagando. Si gasté en
+  // setiembre y lo pago en octubre, esa plata sale de mi bolsillo en octubre".
   //
-  // Los presupuestos por categoría NO se ven afectados: `catSpend` lee los
-  // gastos directamente, y un pago de tarjeta no tiene categoría.
-  const totalDiarios = redondea(totalCompras + totalPagosTC);
+  // Es un modelo completo y sin doble conteo: una compra con tarjeta no cuenta
+  // al comprarla, cuenta cuando se paga la tarjeta. Las de efectivo y débito
+  // cuentan el mismo día, porque ahí la plata sale al toque.
+  //
+  // `totalCompras` (todo lo consumido, se haya pagado o no) se mantiene aparte:
+  // es lo que miran los presupuestos por categoría, que sí son de consumo.
+  const totalConTarjeta = redondea(totalCompras - diariosDeCuenta);
+  const totalDiarios = redondea(diariosDeCuenta + totalPagosTC);
 
   // F24: los ingresos en dólares solo entran al total en soles si ella declaró
   // el tipo de cambio que le dieron. Los que no, van aparte (`totalIncUSD`).
@@ -87,7 +92,7 @@ export const getMonthData = (data, offset, hoy = new Date()) => {
   // hoy?"— y va aparte, nunca mezclado.
   const { recibidos, pendientes, totalRecibido, totalPendiente, totalRecibidoUSD, totalPendienteUSD } = separaIngresos(todosInc, hoy);
   return {
-    exps, ingresos: todosInc, totalDiarios, totalCompras, totalDiariosUSD, totalFijos, totalFijosAll,
+    exps, ingresos: todosInc, totalDiarios, totalCompras, totalConTarjeta, totalDiariosUSD, totalFijos, totalFijosAll,
     totalInc, totalIncUSD, balance,
     pagosTC, totalPagosTC, totalPagosTCUSD, salioDeTuCuenta,
     ingresosRecibidos: recibidos, ingresosPendientes: pendientes,

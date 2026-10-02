@@ -79,23 +79,33 @@ describe("pagos de tarjeta y salida de caja", () => {
     cardPayments: [{ id: "p1", cardId: "tc", amount: 200, date: diaDelMes(5) }],
   });
 
-  // F32: decisión de ella, dicha tres veces. El pago de tarjeta cuenta como
-  // gasto. La compra ya sumó el día que la hizo, así que esa plata aparece dos
-  // veces en el mes — eso se dice en pantalla, no se esconde.
-  it("el pago SÍ entra en los gastos del mes", () => {
+  // F33: el gasto es cuando SALE la plata. Sus palabras: "lo que gasté con la
+  // tarjeta no fue un gasto real porque la tarjeta no es dinero real; si gasté
+  // en setiembre y lo pago en octubre, esa plata sale de mi bolsillo en octubre".
+  it("una compra con tarjeta no cuenta como gasto hasta que se paga", () => {
     const d = getMonthData(base(), 0);
-    expect(d.totalCompras).toBe(140);  // 100 con tarjeta + 40 en efectivo
-    expect(d.totalPagosTC).toBe(200);
-    expect(d.totalDiarios).toBe(340);  // compras + pago
-    expect(d.pagosTC).toHaveLength(1);
+    expect(d.totalCompras).toBe(140);     // todo lo consumido: 100 con TC + 40 efectivo
+    expect(d.totalConTarjeta).toBe(100);  // eso todavía no sale del bolsillo
+    expect(d.totalPagosTC).toBe(200);     // lo que sí pagó este mes
+    expect(d.totalDiarios).toBe(240);     // 40 en efectivo + 200 de pago
   });
 
-  it("el balance del mes también lo descuenta", () => {
+  it("no hay doble conteo: la misma plata no suma al comprar y al pagar", () => {
+    // Un solo movimiento: compra de 100 con tarjeta, sin pagos.
+    const solo = { ...base(), cardPayments: [], fixed: [] };
+    solo.expenses = [{ id: "e1", amount: 100, month: mes, paymentMethodId: "tc" }];
+    expect(getMonthData(solo, 0).totalDiarios).toBe(0); // todavía no sale plata
+
+    // El mes que la paga, ahí sí.
+    const pagado = { ...solo, cardPayments: [{ id: "p", cardId: "tc", amount: 100, date: diaDelMes(5) }] };
+    expect(getMonthData(pagado, 0).totalDiarios).toBe(100);
+  });
+
+  it("el balance del mes usa lo que salió del bolsillo", () => {
     const d2 = base();
     d2.incomeFixed = [{ id: "i", amount: 5000, month: mes }];
-    const d = getMonthData(d2, 0);
-    // 5000 ingresos − 950 fijos pagados − 340 (compras + pago) = 3710
-    expect(d.balance).toBe(3710);
+    // 5000 ingresos − 950 fijos pagados − 240 (efectivo + pago) = 3810
+    expect(getMonthData(d2, 0).balance).toBe(3810);
   });
 
   it("los presupuestos por categoría NO lo cuentan: un pago no tiene categoría", () => {
