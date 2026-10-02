@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   tramoDelMes, ritmoDiario, proyectaResto,
   cuantoAbonar, prioridadDeAbono, repartoSugerido,
+  agendaDePagos, pisoDelMes, escaleraDePago, diasParaVencer,
 } from "./abonos";
 
 const HOY = new Date(2026, 9, 10); // 10 oct 2026 — octubre tiene 31 días
@@ -119,5 +120,51 @@ describe("repartoSugerido", () => {
   it("sin plata o sin deudas no sugiere nada", () => {
     expect(repartoSugerido(usos, 0)).toEqual([]);
     expect(repartoSugerido([], 500)).toEqual([]);
+  });
+});
+
+// F49: el piso, la agenda y la escalera, con sus tarjetas reales de octubre.
+describe("piso, agenda y escalera", () => {
+  const hoy = new Date(2026, 9, 2); // 2 oct 2026
+  const tc = (over) => ({ type: "credito", ...over });
+  const cards = [
+    tc({ id: "amex", name: "AMEX", tcea: 19.42, venceEl: "2026-10-05", minimoPEN: 0, minimoUSD: 12.02, pagoMesPEN: 3559.67, pagoMesUSD: 284.54 }),
+    tc({ id: "bbva", name: "BBVA", tcea: 99.99, venceEl: "2026-10-16", minimoPEN: 215.52, minimoUSD: 16.24, pagoMesPEN: 993.42, pagoMesUSD: 132.63 }),
+    tc({ id: "bcp", name: "BCP", tcea: 95.89, venceEl: "2026-10-20", minimoPEN: 37.16, pagoMesPEN: 1217.33 }),
+    tc({ id: "ripley", name: "Ripley", tcea: 109.83, venceEl: "2026-10-20", minimoPEN: 48.90, pagoMesPEN: 253.67 }),
+    tc({ id: "vacia", name: "Sin datos", archived: false }),
+  ];
+
+  it("la agenda ordena por fecha y deja fuera la que no tiene datos", () => {
+    const a = agendaDePagos(cards, hoy);
+    expect(a.map(x => x.card.name)).toEqual(["AMEX", "BBVA", "BCP", "Ripley"]);
+    expect(a[0].dias).toBe(3);
+  });
+
+  it("el piso suma los mínimos sin mezclar monedas", () => {
+    expect(pisoDelMes(cards)).toEqual({ PEN: 301.58, USD: 28.26 });
+  });
+
+  it("la escalera sube de la tarjeta más cara a la más barata", () => {
+    const e = escaleraDePago(cards, hoy);
+    expect(e[0].acumuladoPEN).toBe(301.58);
+    expect(e.slice(1).map(p => p.card.name)).toEqual(["Ripley", "BBVA", "BCP", "AMEX"]);
+  });
+
+  it("cada escalón acumula lo que falta para dejar esa tarjeta al día", () => {
+    const e = escaleraDePago(cards, hoy);
+    expect(e[1].acumuladoPEN).toBe(506.35);   // + Ripley (253.67 − 48.90)
+    expect(e[2].acumuladoPEN).toBe(1284.25);  // + BBVA   (993.42 − 215.52)
+    expect(e[3].acumuladoPEN).toBe(2464.42);  // + BCP    (1217.33 − 37.16)
+  });
+
+  it("una tarjeta archivada no entra", () => {
+    const con = [...cards, tc({ id: "x", name: "Vieja", archived: true, minimoPEN: 500 })];
+    expect(pisoDelMes(con).PEN).toBe(301.58);
+  });
+
+  it("sin tarjetas con datos no hay escalera", () => {
+    expect(escaleraDePago([], hoy)).toEqual([]);
+    expect(pisoDelMes(null)).toEqual({ PEN: 0, USD: 0 });
   });
 });

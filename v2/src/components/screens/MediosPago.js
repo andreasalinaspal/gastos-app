@@ -17,7 +17,7 @@ const hintStyle = { fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom
 // 6 colores de la paleta para identificar tarjetas.
 const CARD_COLORS = [C.purple, C.purpleLight, C.orange, C.green, C.greenLight, C.black];
 
-const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", openingBalance: "", usdOn: false, usdOpeningBalance: "", usdRate: "", cycleBudget: "", tcea: "", color: CARD_COLORS[0] };
+const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", openingBalance: "", usdOn: false, usdOpeningBalance: "", usdRate: "", cycleBudget: "", tcea: "", minimoPEN: "", minimoUSD: "", pagoMesPEN: "", pagoMesUSD: "", venceEl: "", color: CARD_COLORS[0] };
 
 export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setConfirm }) {
   const data = useStore(s => s.data);
@@ -70,6 +70,11 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
       usdRate: card.usdRate ? String(card.usdRate) : "",
       cycleBudget: card.cycleBudget ? String(card.cycleBudget) : "",
       tcea: card.tcea ? String(card.tcea) : "",
+      minimoPEN: card.minimoPEN ? String(card.minimoPEN) : "",
+      minimoUSD: card.minimoUSD ? String(card.minimoUSD) : "",
+      pagoMesPEN: card.pagoMesPEN ? String(card.pagoMesPEN) : "",
+      pagoMesUSD: card.pagoMesUSD ? String(card.pagoMesUSD) : "",
+      venceEl: card.venceEl ? String(card.venceEl).slice(0, 10) : "",
       color: card.color || CARD_COLORS[0],
     });
   };
@@ -97,6 +102,13 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
     if (cycleBudget !== null && (!Number.isFinite(cycleBudget) || cycleBudget <= 0)) { setFormError("El presupuesto por ciclo debe ser mayor a 0"); return; }
     const tcea = cardForm.tcea === "" ? null : Number(cardForm.tcea);
     if (tcea !== null && (!Number.isFinite(tcea) || tcea <= 0 || tcea > 500)) { setFormError("La TCEA debe ser un porcentaje entre 0 y 500"); return; }
+    const banco = {
+      minimoPEN: Number(cardForm.minimoPEN) || 0,
+      minimoUSD: Number(cardForm.minimoUSD) || 0,
+      pagoMesPEN: Number(cardForm.pagoMesPEN) || 0,
+      pagoMesUSD: Number(cardForm.pagoMesUSD) || 0,
+      venceEl: cardForm.venceEl || null,
+    };
     const openingBalance = cardForm.openingBalance === "" ? 0 : Number(cardForm.openingBalance);
     if (!Number.isFinite(openingBalance) || openingBalance < 0) { setFormError("El saldo actual no puede ser negativo"); return; }
     if (openingBalance > creditLine) { setFormError("El saldo actual no puede pasar la línea de crédito"); return; }
@@ -136,7 +148,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
         PEN: { creditLine, openingBalance, openingDate: penCambio ? ahora : (prevPen.openingDate || prev.openingDate || ahora) },
         ...(usdLine ? { USD: { ...usdLine, openingDate: usdCambio || !prevUsd ? ahora : (prevUsd.openingDate || prev.openingDate || ahora) } } : {}),
       };
-      const patch = { name, cutoffDay, paymentDay, creditLine, cycleBudget, tcea, color: cardForm.color, lines, usdRate };
+      const patch = { name, cutoffDay, paymentDay, creditLine, cycleBudget, tcea, ...banco, color: cardForm.color, lines, usdRate };
       if (penCambio) {
         patch.openingBalance = openingBalance; // campos planos: se mantienen por compatibilidad
         patch.openingDate = ahora;
@@ -149,7 +161,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
         PEN: { creditLine, openingBalance, openingDate: ahora },
         ...(usdLine ? { USD: { ...usdLine, openingDate: ahora } } : {}),
       };
-      setData(p => ({ ...p, paymentMethods: [...p.paymentMethods, { id: genId(), type: "credito", name, cutoffDay, paymentDay, creditLine, openingBalance, lines, usdRate, openingDate: ahora, cycleBudget, tcea, color: cardForm.color, archived: false }] }));
+      setData(p => ({ ...p, paymentMethods: [...p.paymentMethods, { id: genId(), type: "credito", name, cutoffDay, paymentDay, creditLine, openingBalance, lines, usdRate, openingDate: ahora, cycleBudget, tcea, ...banco, color: cardForm.color, archived: false }] }));
       showToast("Tarjeta " + name + " agregada");
     }
     setCardForm(null); setFormError("");
@@ -311,6 +323,35 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
             <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 14 }}>
               La tasa anual que te cobran, de tu estado de cuenta. Con la de todas tus tarjetas, Qori te dice a cuál abonar primero.
             </div>
+
+            {/* F49: lo que el banco le pide ESTE mes. No se calcula — se copia
+                de la app del banco, y con eso Qori arma el piso y la agenda. */}
+            <div style={{ ...labelStyle, marginTop: 4 }}>Lo que te pide el banco este mes</div>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 10 }}>
+              Cópialo de tu estado de cuenta. Con esto Qori te avisa antes de cada fecha y te dice hasta dónde te alcanza.
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ ...labelStyle, fontSize: 10 }}>Mínimo S/</div>
+                <input type="number" inputMode="decimal" placeholder="0" value={cardForm.minimoPEN} onChange={e => setCardForm(f => ({ ...f, minimoPEN: e.target.value }))} style={{ ...inputStyle, color: C.black }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ ...labelStyle, fontSize: 10 }}>Mínimo US$</div>
+                <input type="number" inputMode="decimal" placeholder="0" value={cardForm.minimoUSD} onChange={e => setCardForm(f => ({ ...f, minimoUSD: e.target.value }))} style={{ ...inputStyle, color: C.black }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ ...labelStyle, fontSize: 10 }}>Pago del mes S/</div>
+                <input type="number" inputMode="decimal" placeholder="0" value={cardForm.pagoMesPEN} onChange={e => setCardForm(f => ({ ...f, pagoMesPEN: e.target.value }))} style={{ ...inputStyle, color: C.black }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ ...labelStyle, fontSize: 10 }}>Pago del mes US$</div>
+                <input type="number" inputMode="decimal" placeholder="0" value={cardForm.pagoMesUSD} onChange={e => setCardForm(f => ({ ...f, pagoMesUSD: e.target.value }))} style={{ ...inputStyle, color: C.black }} />
+              </div>
+            </div>
+            <div style={{ ...labelStyle, fontSize: 10 }}>Último día de pago</div>
+            <input type="date" value={cardForm.venceEl} onChange={e => setCardForm(f => ({ ...f, venceEl: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 14 }} />
 
             <div style={labelStyle}>Presupuesto por ciclo (opcional)</div>
             <input type="number" inputMode="decimal" placeholder="Ej: 600" value={cardForm.cycleBudget} onChange={e => setCardForm(f => ({ ...f, cycleBudget: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />

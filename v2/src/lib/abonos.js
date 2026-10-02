@@ -111,3 +111,104 @@ export function repartoSugerido(usos, monto) {
   if (sobra > 0 && orden[1]) out.push({ ...orden[1], abono: Math.min(sobra, orden[1].balance) });
   return out;
 }
+
+// ── F49: el piso, la agenda y la escalera ────────────────────────────────
+//
+// Los mínimos y el pago del mes los pone el banco, no Qori: son el dato que
+// ella copia de la app de cada banco. Van en la tarjeta como `minimoPEN`,
+// `minimoUSD`, `pagoMesPEN`, `pagoMesUSD` y `venceEl` (fecha ISO del último día
+// de pago, que no siempre coincide con el `paymentDay` del ciclo).
+
+const num = (x) => { const n = Number(x); return Number.isFinite(n) && n > 0 ? n : 0; };
+
+// Una fecha sola ("2026-10-05") la lee el navegador como UTC, y en Perú eso la
+// corre un día para atrás. Se arma a mano, al mediodía local.
+export function parseFecha(crudo) {
+  if (!crudo) return null;
+  const sola = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(crudo).trim());
+  const d = sola
+    ? new Date(Number(sola[1]), Number(sola[2]) - 1, Number(sola[3]), 12, 0, 0, 0)
+    : new Date(crudo);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Días que faltan para el último día de pago. null si no hay fecha.
+export function diasParaVencer(card, hoy = new Date()) {
+  if (!card || !card.venceEl) return null;
+  const d = parseFecha(card.venceEl);
+  if (!d) return null;
+  return Math.round((startOfDay(d) - startOfDay(hoy)) / (24 * 60 * 60 * 1000));
+}
+
+// Lo que el banco le pide este mes, ordenado por urgencia. Las que no tienen
+// fecha van al final: no se puede decir que urgen.
+export function agendaDePagos(cards, hoy = new Date()) {
+  return (cards || [])
+    .filter(c => c && c.type === "credito" && !c.archived)
+    .map(c => ({
+      card: c,
+      dias: diasParaVencer(c, hoy),
+      minimoPEN: num(c.minimoPEN), minimoUSD: num(c.minimoUSD),
+      pagoMesPEN: num(c.pagoMesPEN), pagoMesUSD: num(c.pagoMesUSD),
+    }))
+    .filter(x => x.minimoPEN > 0 || x.minimoUSD > 0 || x.pagoMesPEN > 0 || x.pagoMesUSD > 0)
+    .sort((a, b) => {
+      if (a.dias === null && b.dias === null) return 0;
+      if (a.dias === null) return 1;
+      if (b.dias === null) return -1;
+      return a.dias - b.dias;
+    });
+}
+
+// La suma de los mínimos: por debajo de esto hay mora y reporte.
+export function pisoDelMes(cards) {
+  const a = agendaDePagos(cards);
+  return {
+    PEN: redondea(a.reduce((t, x) => t + x.minimoPEN, 0)),
+    USD: redondea(a.reduce((t, x) => t + x.minimoUSD, 0)),
+  };
+}
+
+/**
+ * La escalera: hasta dónde llega según cuánto pueda poner.
+ *
+ * El primer escalón es el piso (todos los mínimos). Después, de la tarjeta MÁS
+ * CARA a la más barata, se suma lo que falta para dejar su pago del mes en cero.
+ * Así cada sol extra va siempre al interés más alto.
+ *
+ * → [{ nivel, etiqueta, acumuladoPEN, acumuladoUSD, detalle }]
+ */
+export function escaleraDePago(cards, hoy = new Date()) {
+  const agenda = agendaDePagos(cards, hoy);
+  if (agenda.length === 0) return [];
+  const piso = pisoDelMes(cards);
+  const pasos = [{
+    nivel: 0,
+    etiqueta: "Los mínimos de todas",
+    acumuladoPEN: piso.PEN, acumuladoUSD: piso.USD,
+    detalle: "Por debajo de esto hay mora y te reportan.",
+  }];
+
+  // De la más cara a la más barata. Sin tasa va al final: no se puede afirmar
+  // que urge más que una que sí la tiene.
+  const porTasa = [...agenda].sort((a, b) => (Number(b.card.tcea) || -1) - (Number(a.card.tcea) || -1));
+  let accPEN = piso.PEN, accUSD = piso.USD;
+  let nivel = 1;
+  for (const x of porTasa) {
+    const faltaPEN = Math.max(0, x.pagoMesPEN - x.minimoPEN);
+    const faltaUSD = Math.max(0, x.pagoMesUSD - x.minimoUSD);
+    if (faltaPEN <= 0 && faltaUSD <= 0) continue;
+    accPEN = redondea(accPEN + faltaPEN);
+    accUSD = redondea(accUSD + faltaUSD);
+    const tasa = Number(x.card.tcea) > 0 ? " (" + x.card.tcea + "%)" : "";
+    pasos.push({
+      nivel,
+      etiqueta: "+ " + x.card.name + " al día" + tasa,
+      acumuladoPEN: accPEN, acumuladoUSD: accUSD,
+      detalle: "Deja su pago del mes en cero.",
+      card: x.card,
+    });
+    nivel++;
+  }
+  return pasos;
+}

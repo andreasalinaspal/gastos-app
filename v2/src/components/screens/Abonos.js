@@ -6,7 +6,7 @@ import { useStore } from "../../state/store";
 import { getMonthData } from "../../state/selectors";
 import { getSharedUsage } from "../../lib/cycles";
 import { tasaVigente } from "../../lib/fx";
-import { cuantoAbonar, prioridadDeAbono, tramoDelMes } from "../../lib/abonos";
+import { cuantoAbonar, prioridadDeAbono, tramoDelMes, agendaDePagos, pisoDelMes, escaleraDePago, parseFecha } from "../../lib/abonos";
 
 // F48: cuánto puede abonar a sus tarjetas sin quedarse corta.
 //
@@ -58,6 +58,9 @@ export function AbonosScreen({ subScreen, setSubScreen, fmt }) {
     return { card, pct: u.pct, balance: u.usado, available: u.available };
   });
   const orden = prioridadDeAbono(usos);
+  const agenda = agendaDePagos(tarjetas, hoy);
+  const piso = pisoDelMes(tarjetas);
+  const escalera = escaleraDePago(tarjetas, hoy);
   const hayTasas = orden.length > 0 && orden.every(u => Number(u.card.tcea) > 0);
 
   return (
@@ -119,6 +122,79 @@ export function AbonosScreen({ subScreen, setSubScreen, fmt }) {
             </div>
           )}
         </div>
+
+        {/* F49: lo que el banco le pide y cuándo. Primero las fechas, porque
+            un mínimo pagado tarde cuesta mora aunque la plata estuviera. */}
+        {agenda.length > 0 && (
+          <>
+            <div style={{ ...lbl, margin: "4px 0 10px" }}>Tu piso de este mes</div>
+            <div style={{ background: "#FFF4EE", border: `1.5px solid ${C.orange}`, borderRadius: 16, padding: "14px 16px", marginBottom: 14 }}>
+              <div style={{ fontFamily: FONT_TITLE, fontSize: 26, fontWeight: 900, color: C.black, letterSpacing: -0.6 }}>
+                {fmt(piso.PEN)}{piso.USD > 0 ? <span style={{ fontSize: 17 }}> + {fmtWith(piso.USD, "USD")}</span> : null}
+              </div>
+              <div style={{ fontSize: 12.5, color: C.black, lineHeight: 1.5, marginTop: 4 }}>
+                La suma de los mínimos. Por debajo de esto hay mora y te reportan.
+              </div>
+              {agenda.map(x => {
+                const urge = x.dias !== null && x.dias <= 3;
+                return (
+                  <div key={x.card.id} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, padding: "6px 0", borderTop: "1px solid #F3E2D7" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: C.black }}>{x.card.name}</div>
+                      <div style={{ fontSize: 11.5, color: urge ? C.red : C.muted, fontWeight: urge ? 800 : 600 }}>
+                        {x.dias === null ? "sin fecha"
+                          : x.dias < 0 ? "venció hace " + Math.abs(x.dias) + " días"
+                          : x.dias === 0 ? "VENCE HOY"
+                          : x.dias === 1 ? "vence mañana"
+                          : "vence en " + x.dias + " días"}
+                        {x.card.venceEl ? " · " + parseFecha(x.card.venceEl).toLocaleDateString("es-PE", { day: "numeric", month: "short" }) : ""}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 13.5, fontWeight: 800, color: C.black, whiteSpace: "nowrap", textAlign: "right" }}>
+                      {x.minimoPEN > 0 ? fmt(x.minimoPEN) : null}
+                      {x.minimoPEN > 0 && x.minimoUSD > 0 ? " + " : null}
+                      {x.minimoUSD > 0 ? fmtWith(x.minimoUSD, "USD") : null}
+                      {x.minimoPEN === 0 && x.minimoUSD === 0 ? "—" : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* La escalera: hasta dónde llega según cuánto pueda poner. */}
+        {escalera.length > 1 && (
+          <>
+            <div style={{ ...lbl, margin: "4px 0 6px" }}>Hasta dónde te alcanza</div>
+            <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, marginBottom: 10 }}>
+              Cada escalón suma la siguiente tarjeta más cara. Llega hasta donde puedas: lo que pongas
+              de más siempre va al interés más alto.
+            </div>
+            <div style={{ ...cardStyle, padding: "6px 16px 12px", marginBottom: 16 }}>
+              {escalera.map((p, i) => {
+                const cubre = r.disponible >= p.acumuladoPEN;
+                return (
+                  <div key={i} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, padding: "10px 0", borderBottom: i < escalera.length - 1 ? "1px solid #EDE9E0" : "none" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: C.black }}>
+                        {cubre ? "✓ " : ""}{p.etiqueta}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{p.detalle}</div>
+                    </div>
+                    <div style={{ fontFamily: FONT_TITLE, fontSize: 15, fontWeight: 900, color: cubre ? C.green : C.muted, whiteSpace: "nowrap" }}>
+                      {fmt(p.acumuladoPEN)}
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginTop: 8 }}>
+                El ✓ marca hasta dónde llegas con los {fmt(r.disponible)} que te quedan este mes.
+                {escalera.some(p => p.acumuladoUSD > 0) && <> Los dólares van aparte: {fmtWith(escalera[escalera.length - 1].acumuladoUSD, "USD")} para dejarlo todo al día.</>}
+              </div>
+            </div>
+          </>
+        )}
 
         {orden.length > 0 && (
           <>
