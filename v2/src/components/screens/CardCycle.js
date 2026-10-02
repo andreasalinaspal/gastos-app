@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { C, FONT_TITLE, cardStyle } from "../../theme";
 import { subStyle } from "../shared/subnav";
-import { getCycleFor, getSharedUsage, getLineUsage, getBalanceBreakdown, getNextPayment, cardCurrencies, curOf, buildStatementEntry } from "../../lib/cycles";
+import { getCycleFor, getSharedUsage, getLineUsage, getBalanceBreakdown, getNextPayment, getCardPayments, cardCurrencies, curOf, buildStatementEntry } from "../../lib/cycles";
 import { tasaVigente, textoTasa } from "../../lib/fx";
 import { StatementBanner, StatementSheet, StatementDiffNote, nextPaymentSourceLabel } from "../shared/StatementSheet";
 import { buildCatMap } from "../../state/selectors";
@@ -22,8 +22,9 @@ const fmtDay = (d) => d.toLocaleDateString("es-PE", { day: "numeric", month: "sh
 // para reusar la pantalla en el simulador; sin props se comporta igual que siempre
 // (lee del store y usa la fecha real). `screenId` y `topSlot` permiten montarla como
 // otra sub-pantalla con un banner/panel extra arriba.
-export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast, expenses, cardPayments, now, budgets, screenId, topSlot }) {
+export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast, setConfirm, expenses, cardPayments, now, budgets, screenId, topSlot }) {
   const data = useStore(s => s.data);
+  const setData = useStore(s => s.setData);
   const [showRule30, setShowRule30] = useState(false);
   // Moneda que se está mirando (F10). La tarjeta del simulador tiene una sola
   // moneda, así que el selector ni aparece y todo funciona igual que antes.
@@ -98,6 +99,16 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast,
     ? getBalanceBreakdown(card, allExps, allPayments, now ? new Date(now) : new Date(), activeCur, data.cardStatements)
     : null;
   const hayDeuda = esReal && curs.some(c => getLineUsage(card, allExps, allPayments, c).balance > 0);
+  // F30: los abonos de ESTA moneda, para mostrarlos y poder deshacer uno.
+  const abonos = esReal ? getCardPayments(card, allPayments, activeCur) : [];
+  const totalAbonado = abonos.reduce((s2, p) => s2 + p.amount, 0);
+  const borrarAbono = (p) => setConfirm({
+    message: `¿Borrar el abono de ${fmtCur(p.amount)}${p.fecha ? " del " + fmtDay(p.fecha) : ""}? Tu saldo vuelve a subir.`,
+    onConfirm: () => {
+      setData(prev => ({ ...prev, cardPayments: (prev.cardPayments || []).filter(x => x.id !== p.id) }));
+      showToast("Abono borrado");
+    },
+  });
 
   const linePct = lineUsage.pct;
   const linePctRound = Math.round(linePct);
@@ -200,6 +211,13 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast,
               <div style={{ fontSize: 13, fontWeight: 700, color: C.black }}>Ya facturado</div>
               <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.4, marginTop: 1 }}>
                 {desglose.facturado > 0 ? <>Vence el {fmtDay(desglose.dueDate)} · {nextPaymentSourceLabel(desglose.source)}</> : "Nada pendiente de cobrar"}
+                {/* F30: si ya abonó algo contra esto, se dice. Si no, el número
+                    baja solo y parece que la app se equivocó. */}
+                {desglose.pagado > 0 && (
+                  <div style={{ marginTop: 2, color: C.green, fontWeight: 600 }}>
+                    Eran {fmtCur(desglose.brutoFacturado)} · ya abonaste {fmtCur(desglose.pagado)}
+                  </div>
+                )}
               </div>
             </div>
             <div style={{ fontSize: 15, fontWeight: 800, color: desglose.facturado > 0 ? C.orange : C.green, whiteSpace: "nowrap" }}>{fmtCur(desglose.facturado)}</div>
@@ -273,6 +291,43 @@ export function CardCycleScreen({ card, subScreen, setSubScreen, fmt, showToast,
         </div>
       )}
       {pagando && <PayCardSheet card={card} fmt={fmt} showToast={showToast} onClose={() => setPagando(false)} />}
+
+      {/* F30: los abonos que le hizo a esta tarjeta.
+          Ella abona de a pocos, y hasta ahora esos pagos se usaban para la
+          cuenta pero no se veían: el saldo bajaba sin que nada dijera por qué. */}
+      {esReal && abonos.length > 0 && (
+        <div style={{ ...cardStyle, margin: "0 16px 12px", padding: "14px 16px" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase" }}>
+              Lo que has abonado{curs.length > 1 ? " en " + CUR_LABEL[activeCur] : ""}
+            </div>
+            <div style={{ fontFamily: FONT_TITLE, fontSize: 18, fontWeight: 900, color: C.green, letterSpacing: -0.3 }}>
+              {fmtCur(totalAbonado)}
+            </div>
+          </div>
+          {abonos.slice(0, 8).map((p, i) => (
+            <div key={p.id || i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderTop: i === 0 ? "none" : "1px solid #F0EDE4" }}>
+              <div style={{ fontSize: 13, color: C.black }}>
+                {p.fecha ? fmtDay(p.fecha) : "sin fecha"}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: C.green, whiteSpace: "nowrap" }}>−{fmtCur(p.amount)}</div>
+                <button
+                  onClick={() => borrarAbono(p)}
+                  title="Borrar este abono"
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 2, fontSize: 15, color: C.muted, fontFamily: "inherit", lineHeight: 1 }}
+                >✕</button>
+              </div>
+            </div>
+          ))}
+          {abonos.length > 8 && (
+            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>…y {abonos.length - 8} abonos más.</div>
+          )}
+          <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45, marginTop: 10, paddingTop: 9, borderTop: "1px solid #F0EDE4" }}>
+            Abonar no es un gasto: estás pagando compras que ya registraste. Por eso baja tu saldo y lo que te toca pagar, pero no suma a tus gastos del mes.
+          </div>
+        </div>
+      )}
 
       {/* Gasto acumulado del ciclo vs presupuesto del ciclo */}
       <div style={{ background: accent, borderRadius: 16, margin: "0 16px 12px", padding: "18px 18px" }}>

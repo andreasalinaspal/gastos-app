@@ -1118,7 +1118,7 @@ export default function App() {
       />
       {/* Pantallas de ciclo por tarjeta de crédito activa (key `card-{id}`) */}
       {(data.paymentMethods || []).filter(m => m.type === "credito" && !m.archived).map(card => (
-        <CardCycleScreen key={card.id} card={card} subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} showToast={showToast} />
+        <CardCycleScreen key={card.id} card={card} subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} showToast={showToast} setConfirm={setConfirm} />
       ))}
       {/* Aprende sub-screen (educación crediticia) */}
       <AprendeScreen subScreen={subScreen} setSubScreen={setSubScreen} />

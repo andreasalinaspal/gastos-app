@@ -99,7 +99,22 @@ export function PayCardSheet({ card, fmt, showToast, onClose }) {
         {/* Monto a pagar */}
         <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>Monto a pagar ({CUR_SYMBOL[activa]})</div>
         <input type="number" inputMode="decimal" value={amt} onChange={e => setAmt(e.target.value)} style={{ ...inputStyle, color: C.black, fontSize: 24, fontWeight: 800, textAlign: "center", marginBottom: 6, padding: 14 }} />
-        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>Este pago liquida gastos ya registrados: no se crea ningún gasto nuevo.</div>
+        {/* F30: abonar de a pocos es su forma de pagar. El monto viene lleno con
+            el saldo entero, y sin decirlo parece que hay que pagar todo. */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <button onClick={() => setAmt(redondea(balance))}
+            style={{ flex: 1, padding: "9px 0", borderRadius: 10, background: "#F0EDE4", color: C.black, border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            Todo ({fmtCur(balance, activa)})
+          </button>
+          <button onClick={() => setAmt("")}
+            style={{ flex: 1, padding: "9px 0", borderRadius: 10, background: "#F0EDE4", color: C.black, border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            Otro monto
+          </button>
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          <strong style={{ color: C.black }}>Puedes abonar menos del total.</strong> Lo que pongas se descuenta de tu saldo y de lo que te toca pagar, y queda anotado en la tarjeta.
+          <div style={{ marginTop: 4 }}>Esto no crea ningún gasto nuevo: liquida compras que ya registraste.</div>
+        </div>
         <button onClick={confirmar} disabled={!valid} style={{ width: "100%", padding: 16, borderRadius: 14, background: valid ? C.green : "#D4D0C8", color: "#fff", border: "none", fontSize: 16, fontWeight: 700, cursor: valid ? "pointer" : "default", fontFamily: "inherit", marginBottom: 10 }}>Confirmar pago</button>
         <button onClick={onClose} style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F0EDE4", color: "#666", border: "none", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
       </div>

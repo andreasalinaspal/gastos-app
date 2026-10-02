@@ -298,7 +298,28 @@ export function getNextPayment(card, expenses, cardPayments, now = new Date(), c
     source: st ? "banco" : "estimado",
     estimateGross,
     statementAmount: st ? Number(st.amount) || 0 : null,
+    // F30: cuánto lleva abonado contra esta deuda. El monto de arriba ya lo
+    // descuenta, pero sin este dato ella ve bajar el número sin saber por qué.
+    pagado: paid,
+    bruto: gross,
   };
+}
+
+// F30: los abonos que le hizo a una tarjeta, del más reciente al más viejo.
+// Abonar de a pocos es su forma de pagar, y hasta ahora los pagos se usaban
+// para la cuenta pero no se veían en ninguna pantalla.
+export function getCardPayments(card, cardPayments, currency = "PEN") {
+  if (!card) return [];
+  const cur = normCur(currency);
+  return (cardPayments || [])
+    .filter(p => p && p.cardId === card.id && curOf(p) === cur && (Number(p.amount) || 0) > 0)
+    .map(p => ({ ...p, amount: Number(p.amount) || 0, fecha: p.date ? new Date(p.date) : null }))
+    .sort((a, b) => {
+      if (!a.fecha && !b.fecha) return 0;
+      if (!a.fecha) return 1;
+      if (!b.fecha) return -1;
+      return b.fecha - a.fecha;
+    });
 }
 
 // En qué está partido el saldo de una tarjeta, en UNA moneda (F19).
@@ -357,6 +378,9 @@ export function getBalanceBreakdown(card, expenses, cardPayments, now = new Date
   return {
     saldo,
     facturado,
+    // F30: lo abonado contra lo ya facturado, para explicar por qué bajó.
+    pagado: next.pagado || 0,
+    brutoFacturado: next.bruto || 0,
     faltaEstadoDeCuenta,
     delCiclo,
     registrado,

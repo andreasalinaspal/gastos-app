@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getCycleFor, getCycleSpend, getLineUsage, getSharedUsage, getBalanceBreakdown, getNextPayment, getUpcomingTotal, getCardLine, cardCurrencies, hasLine, getStatementPrompt, findStatement, getClosedCycle, curOf, buildStatementEntry } from "./cycles";
+import { getCycleFor, getCycleSpend, getLineUsage, getSharedUsage, getBalanceBreakdown, getNextPayment, getCardPayments, getUpcomingTotal, getCardLine, cardCurrencies, hasLine, getStatementPrompt, findStatement, getClosedCycle, curOf, buildStatementEntry } from "./cycles";
 
 const card = (over = {}) => ({
   id: "card-1", type: "credito", name: "Visa BCP",
@@ -969,5 +969,67 @@ describe("F23 · saldo de hoy dentro del ciclo abierto", () => {
     const d = getBalanceBreakdown(tarjeta(4357.36, hoy), anotados, [], hoy, "PEN", st);
     expect(d.registrado).toBeCloseTo(622.36);
     expect(d.sinRegistrar).toBe(0);
+  });
+});
+
+// ── F30: los abonos parciales se ven ──────────────────────────────────────
+// Ella abona de a pocos ("abono 200 pero no es el pago total"). Esos pagos ya
+// descontaban, pero no se veían en ninguna pantalla.
+
+describe("getCardPayments", () => {
+  const c = card({ cutoffDay: 25, paymentDay: 15, creditLine: 6000, openingBalance: 1000 });
+  const pagos = [
+    { id: "p1", cardId: "card-1", amount: 200, date: new Date(2026, 8, 10).toISOString() },
+    { id: "p2", cardId: "card-1", amount: 150, date: new Date(2026, 8, 28).toISOString() },
+    { id: "p3", cardId: "card-2", amount: 999, date: new Date(2026, 8, 20).toISOString() },
+    { id: "p4", cardId: "card-1", amount: 50, currency: "USD", date: new Date(2026, 8, 22).toISOString() },
+  ];
+
+  it("solo los de esa tarjeta y esa moneda, del más nuevo al más viejo", () => {
+    const r = getCardPayments(c, pagos, "PEN");
+    expect(r.map(p => p.id)).toEqual(["p2", "p1"]);
+    expect(getCardPayments(c, pagos, "USD").map(p => p.id)).toEqual(["p4"]);
+  });
+
+  it("los sin fecha van al final, no se pierden", () => {
+    const r = getCardPayments(c, [...pagos, { id: "px", cardId: "card-1", amount: 10 }], "PEN");
+    expect(r[r.length - 1].id).toBe("px");
+  });
+
+  it("descarta montos en cero o rotos", () => {
+    const r = getCardPayments(c, [{ id: "z", cardId: "card-1", amount: 0 }, { id: "y", cardId: "card-1", amount: "x" }], "PEN");
+    expect(r).toEqual([]);
+  });
+
+  it("sin tarjeta o sin pagos no rompe", () => {
+    expect(getCardPayments(null, pagos)).toEqual([]);
+    expect(getCardPayments(c, null)).toEqual([]);
+  });
+});
+
+describe("el abono parcial se explica", () => {
+  // Corte 25, pago 15. Estado de cuenta de S/1,000 y ella abonó S/200.
+  const c = card({ cutoffDay: 25, paymentDay: 15, openingDate: new Date(2026, 7, 1).toISOString(), lines: { PEN: { creditLine: 6000, openingBalance: 1000 } } });
+  const hoy = new Date(2026, 9, 1);
+  const st = [{ id: "s", cardId: "card-1", cycleKey: "2026-09-25", currency: "PEN", amount: 1000 }];
+  const abono = [{ id: "p", cardId: "card-1", amount: 200, date: new Date(2026, 8, 30).toISOString() }];
+
+  it("el próximo pago baja y dice de cuánto era y cuánto se abonó", () => {
+    const n = getNextPayment(c, [], abono, hoy, "PEN", st);
+    expect(n.amount).toBe(800);   // 1000 − 200
+    expect(n.bruto).toBe(1000);   // de cuánto era
+    expect(n.pagado).toBe(200);   // lo que ella abonó
+  });
+
+  it("el desglose lo lleva, para que el número que baja tenga explicación", () => {
+    const d = getBalanceBreakdown(c, [], abono, hoy, "PEN", st);
+    expect(d.facturado).toBe(800);
+    expect(d.brutoFacturado).toBe(1000);
+    expect(d.pagado).toBe(200);
+    expect(d.saldo).toBe(800); // el saldo vivo también baja
+  });
+
+  it("sin abonos no aparece la explicación", () => {
+    expect(getBalanceBreakdown(c, [], [], hoy, "PEN", st).pagado).toBe(0);
   });
 });
