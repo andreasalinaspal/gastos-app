@@ -129,6 +129,21 @@ function openingCutoff(card, currency = "PEN") {
   return isNaN(d) ? null : startOfDay(d);
 }
 
+// El instante exacto en que se tomó la foto del saldo, sin truncar al día.
+//
+// Para los GASTOS el corte va por día (`openingCutoff`): ella elige la fecha a
+// mano y muchos quedan a medianoche, así que un gasto del mismo día tiene que
+// contar. Para los PAGOS no: llevan la hora real en que los registró, y un
+// abono hecho a las 8pm sí es anterior a una foto tomada a las 9pm — el banco
+// ya lo tenía descontado en el número que ella copió.
+function openingMoment(card, currency = "PEN") {
+  const line = getCardLine(card, currency);
+  const raw = line ? line.openingDate : card && card.openingDate;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return isNaN(d) ? null : d;
+}
+
 // Σ gastos de la tarjeta EN UNA MONEDA desde `openingDate` (inclusive) hasta
 // `until` (inclusive, opcional).
 function spentSince(card, expenses, until, currency = "PEN") {
@@ -163,14 +178,14 @@ function openingAt(card, until, currency = "PEN") {
 function paidTotal(card, cardPayments, currency = "PEN", until = null, from = null) {
   const cur = normCur(currency);
   const to = until ? startOfDay(until) : null;
-  const desde = from ? startOfDay(from) : null;
+  const desde = from ? new Date(from).getTime() : null;
   return (cardPayments || []).reduce((sum, p) => {
     if (!p || p.cardId !== card.id) return sum;
     if (curOf(p) !== cur) return sum;
     if (p.date) {
-      const d = startOfDay(new Date(p.date));
-      if (to && d > to) return sum;      // pago futuro
-      if (desde && d < desde) return sum; // ya está dentro de la foto del saldo
+      const d = new Date(p.date);
+      if (to && startOfDay(d) > to) return sum;       // pago futuro
+      if (desde !== null && d.getTime() < desde) return sum; // ya está dentro del punto de partida
     }
     return sum + (Number(p.amount) || 0);
   }, 0);
@@ -190,7 +205,7 @@ export function getLineUsage(card, expenses, cardPayments, currency = "PEN") {
   const line = getCardLine(card, cur);
   if (!line) return { balance: 0, pct: 0, available: 0, creditLine: 0, currency: cur };
   const spent = spentSince(card, expenses, null, cur);
-  const paid = paidTotal(card, cardPayments, cur, null, openingCutoff(card, cur));
+  const paid = paidTotal(card, cardPayments, cur, null, openingMoment(card, cur));
   const balance = Math.max(0, line.openingBalance + spent - paid);
   const pct = line.creditLine ? (balance / line.creditLine) * 100 : 0;
   const available = line.creditLine ? Math.max(0, line.creditLine - balance) : 0;
@@ -284,7 +299,7 @@ export function getNextPayment(card, expenses, cardPayments, now = new Date(), c
   //     corte, así que solo cuentan los pagos posteriores al corte.
   //   - sin estado de cuenta: el estimado parte de la foto del saldo, así que
   //     cuentan los pagos posteriores a esa foto.
-  const desde = st ? closed.end : openingCutoff(card, cur);
+  const desde = st ? closed.end : openingMoment(card, cur);
   const paid = paidTotal(card, cardPayments, cur, now, desde);
   const gross = st ? Number(st.amount) || 0 : estimateGross;
   const amount = Math.max(0, gross - paid);

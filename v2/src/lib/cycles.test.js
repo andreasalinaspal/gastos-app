@@ -225,6 +225,21 @@ describe("getLineUsage — deuda previa y disponible", () => {
     expect(u.available).toBe(400);
   });
 
+  it("F36: el abono del MISMO día, hecho antes de la foto, no se resta otra vez", () => {
+    // El caso real: abona S/175 a las 8pm, el banco ya se lo descuenta, ella
+    // copia ese saldo a Qori a las 9pm. Comparando solo por día ambos caían el
+    // mismo 1 de octubre y el abono se restaba de nuevo: le sobraban S/175 de
+    // disponible.
+    const foto = new Date(2026, 9, 1, 21, 0);
+    const c2 = card({ creditLine: 6000, openingBalance: 4229.63, openingDate: foto.toISOString() });
+    const antes = [{ id: "p1", cardId: "card-1", amount: 175, date: new Date(2026, 9, 1, 20, 0).toISOString() }];
+    expect(getLineUsage(c2, [], antes).balance).toBe(4229.63);
+
+    // Pero uno hecho DESPUÉS de la foto sí descuenta: eso el banco todavía no lo refleja.
+    const despues = [{ id: "p2", cardId: "card-1", amount: 175, date: new Date(2026, 9, 1, 22, 0).toISOString() }];
+    expect(getLineUsage(c2, [], despues).balance).toBe(4054.63);
+  });
+
   it("creditLine 0 → pct y available en 0", () => {
     const u = getLineUsage(card({ creditLine: 0 }), expenses, []);
     expect(u.pct).toBe(0);
