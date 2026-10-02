@@ -179,6 +179,15 @@ export default function Config({ fmt, curMonth, setSubScreen, setConfirm, showTo
             </div>
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
           </div>
+          {/* F48: cuánto puede abonar a sus tarjetas sin quedarse corta */}
+          <div onClick={() => setSubScreen("abonos")} style={cfgRowStyle}>
+            <span style={{ fontSize: 22 }}>🧮</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>¿Cuánto abonar?</div>
+              <div style={{ fontSize: 12, color: C.muted }}>Cuánto puedes pagarle a tus tarjetas sin quedarte corta</div>
+            </div>
+            <span style={{ fontSize: 20, color: C.muted }}>›</span>
+          </div>
           {/* F43: no se registran a mano — salen de sus propios gastos */}
           <div onClick={() => setSubScreen("suscripciones")} style={{ ...cfgRowStyle, borderBottom: "none" }}>
             <span style={{ fontSize: 22 }}>🔁</span>

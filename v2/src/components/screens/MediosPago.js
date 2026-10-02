@@ -17,7 +17,7 @@ const hintStyle = { fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom
 // 6 colores de la paleta para identificar tarjetas.
 const CARD_COLORS = [C.purple, C.purpleLight, C.orange, C.green, C.greenLight, C.black];
 
-const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", openingBalance: "", usdOn: false, usdOpeningBalance: "", usdRate: "", cycleBudget: "", color: CARD_COLORS[0] };
+const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", openingBalance: "", usdOn: false, usdOpeningBalance: "", usdRate: "", cycleBudget: "", tcea: "", color: CARD_COLORS[0] };
 
 export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setConfirm }) {
   const data = useStore(s => s.data);
@@ -68,7 +68,9 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
       usdOn: !!usd,
       usdOpeningBalance: usd && usd.openingBalance ? String(usd.openingBalance) : "",
       usdRate: card.usdRate ? String(card.usdRate) : "",
-      cycleBudget: card.cycleBudget ? String(card.cycleBudget) : "", color: card.color || CARD_COLORS[0],
+      cycleBudget: card.cycleBudget ? String(card.cycleBudget) : "",
+      tcea: card.tcea ? String(card.tcea) : "",
+      color: card.color || CARD_COLORS[0],
     });
   };
   const reactivateCard = (card) => {
@@ -93,6 +95,8 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
     if (!creditLine || creditLine <= 0) { setFormError("Ingresa una línea de crédito mayor a 0"); return; }
     const cycleBudget = cardForm.cycleBudget === "" ? null : Number(cardForm.cycleBudget);
     if (cycleBudget !== null && (!Number.isFinite(cycleBudget) || cycleBudget <= 0)) { setFormError("El presupuesto por ciclo debe ser mayor a 0"); return; }
+    const tcea = cardForm.tcea === "" ? null : Number(cardForm.tcea);
+    if (tcea !== null && (!Number.isFinite(tcea) || tcea <= 0 || tcea > 500)) { setFormError("La TCEA debe ser un porcentaje entre 0 y 500"); return; }
     const openingBalance = cardForm.openingBalance === "" ? 0 : Number(cardForm.openingBalance);
     if (!Number.isFinite(openingBalance) || openingBalance < 0) { setFormError("El saldo actual no puede ser negativo"); return; }
     if (openingBalance > creditLine) { setFormError("El saldo actual no puede pasar la línea de crédito"); return; }
@@ -132,7 +136,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
         PEN: { creditLine, openingBalance, openingDate: penCambio ? ahora : (prevPen.openingDate || prev.openingDate || ahora) },
         ...(usdLine ? { USD: { ...usdLine, openingDate: usdCambio || !prevUsd ? ahora : (prevUsd.openingDate || prev.openingDate || ahora) } } : {}),
       };
-      const patch = { name, cutoffDay, paymentDay, creditLine, cycleBudget, color: cardForm.color, lines, usdRate };
+      const patch = { name, cutoffDay, paymentDay, creditLine, cycleBudget, tcea, color: cardForm.color, lines, usdRate };
       if (penCambio) {
         patch.openingBalance = openingBalance; // campos planos: se mantienen por compatibilidad
         patch.openingDate = ahora;
@@ -145,7 +149,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
         PEN: { creditLine, openingBalance, openingDate: ahora },
         ...(usdLine ? { USD: { ...usdLine, openingDate: ahora } } : {}),
       };
-      setData(p => ({ ...p, paymentMethods: [...p.paymentMethods, { id: genId(), type: "credito", name, cutoffDay, paymentDay, creditLine, openingBalance, lines, usdRate, openingDate: ahora, cycleBudget, color: cardForm.color, archived: false }] }));
+      setData(p => ({ ...p, paymentMethods: [...p.paymentMethods, { id: genId(), type: "credito", name, cutoffDay, paymentDay, creditLine, openingBalance, lines, usdRate, openingDate: ahora, cycleBudget, tcea, color: cardForm.color, archived: false }] }));
       showToast("Tarjeta " + name + " agregada");
     }
     setCardForm(null); setFormError("");
@@ -300,6 +304,14 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
                 </div>
               )}
             </div>
+            {/* F48: con la TCEA de TODAS sus tarjetas, "¿Cuánto abonar?" ordena
+                por tasa en vez de por saturación — que es lo que de verdad manda. */}
+            <div style={labelStyle}>TCEA (opcional)</div>
+            <input type="number" inputMode="decimal" step="0.01" placeholder="Ej: 89.9" value={cardForm.tcea} onChange={e => setCardForm(f => ({ ...f, tcea: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 14 }}>
+              La tasa anual que te cobran, de tu estado de cuenta. Con la de todas tus tarjetas, Qori te dice a cuál abonar primero.
+            </div>
+
             <div style={labelStyle}>Presupuesto por ciclo (opcional)</div>
             <input type="number" inputMode="decimal" placeholder="Ej: 600" value={cardForm.cycleBudget} onChange={e => setCardForm(f => ({ ...f, cycleBudget: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />
             <div style={hintStyle}>Cuánto quieres gastar como máximo entre corte y corte.</div>
