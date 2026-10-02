@@ -136,6 +136,31 @@ function interbankPlin(cuerpo) {
   };
 }
 
+// F47: transferencia enviada. Es plata que sale de su cuenta, así que es un
+// gasto — pero el destinatario puede ser cualquiera (un colegio, una persona,
+// incluso otra cuenta suya), así que el nombre va tal cual y ella decide en la
+// bandeja. El monto que importa es el TOTAL: la comisión también salió.
+function interbankTransferencia(cuerpo) {
+  const monto = campo(cuerpo, "Monto total") || campo(cuerpo, "Monto y moneda") || campo(cuerpo, "Monto");
+  if (!monto) return { accion: "no-reconocido", motivo: "no encontré el monto" };
+  const fecha = fechaTextual(campo(cuerpo, "Fecha y hora"));
+  const destino = campo(cuerpo, "Cuenta destino");
+  return {
+    accion: "registrar",
+    tipo: "transferencia",
+    payload: {
+      amount: monto,
+      merchant: destino ? "Transferencia a " + destino : "Transferencia",
+      // De qué cuenta salió: "Ahorro Sueldo". El banco la escribe de las dos
+      // formas según la plantilla.
+      cardHint: campo(cuerpo, "Cuenta a cargo") || campo(cuerpo, "Cuenta cargo"),
+      occurredAt: fecha ? fecha.toISOString() : null,
+      source: "correo",
+      externalId: campo(cuerpo, "Código de operación") || undefined,
+    },
+  };
+}
+
 // Asuntos que NO son un gasto. Se reconocen a propósito para descartarlos con
 // motivo, en vez de dejarlos caer en "no-reconocido" y no saber nunca por qué.
 const IGNORAR_INTERBANK = [
@@ -154,6 +179,7 @@ export function leeInterbank({ asunto, cuerpo }) {
   }
   if (a.includes("realizaste un consumo")) return interbankConsumo(asunto, cuerpo);
   if (a.includes("constancia de pago plin")) return interbankPlin(cuerpo);
+  if (a.includes("constancia de transferencia")) return interbankTransferencia(cuerpo);
   return { accion: "no-reconocido", motivo: "asunto no reconocido" };
 }
 

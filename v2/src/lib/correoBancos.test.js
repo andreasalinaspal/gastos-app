@@ -367,3 +367,83 @@ describe("BBVA", () => {
     expect(r.accion).toBe("no-reconocido");
   });
 });
+
+// F47: transferencia enviada. Cuerpo copiado tal cual de su correo del 2 oct 2026.
+const TRANSFERENCIA = {
+  remitente: "Interbank Servicio al Cliente <" + IBK + ">",
+  asunto: "Constancia de transferencia",
+  cuerpo: `Hola ANDREA, te enviamos tu
+
+Constancia de transferencia
+
+Código de operación
+
+00379847
+
+Fecha y hora
+
+02 Oct 2026 10:59 AM
+
+Cuenta a cargo
+
+Ahorro Sueldo
+
+200 3269087426
+
+Cuenta destino
+
+Colegio De Enfermeros Del Peru
+
+01128500010005629244
+
+Tipo de operación
+
+Transferencia inmediata
+
+Monto y moneda
+
+S/ 341.00
+
+Comisión
+
+S/ 0.00
+
+Monto total
+
+S/ 341.00`,
+};
+
+describe("Interbank — transferencia enviada", () => {
+  it("la registra con el destinatario y el monto total", () => {
+    const r = leeAvisoBancario(TRANSFERENCIA);
+    expect(r.accion).toBe("registrar");
+    expect(r.tipo).toBe("transferencia");
+    expect(r.payload.merchant).toBe("Transferencia a Colegio De Enfermeros Del Peru");
+    expect(r.payload.cardHint).toBe("Ahorro Sueldo");
+    expect(r.payload.externalId).toBe("00379847");
+    expect(normalizeTransaction(r.payload).value.amount).toBe(341);
+  });
+
+  it("usa la fecha del correo, no la de hoy", () => {
+    const d = new Date(leeAvisoBancario(TRANSFERENCIA).payload.occurredAt);
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2026, 9, 2]);
+    expect(d.getHours()).toBe(10);
+  });
+
+  it("cobra el TOTAL, que incluye la comisión", () => {
+    const conComision = { ...TRANSFERENCIA, cuerpo: TRANSFERENCIA.cuerpo
+      .replace("Comisión\n\nS/ 0.00", "Comisión\n\nS/ 3.50")
+      .replace(/Monto total\n\nS\/ 341\.00$/, "Monto total\n\nS/ 344.50") };
+    expect(normalizeTransaction(leeAvisoBancario(conComision).payload).value.amount).toBe(344.5);
+  });
+
+  it("aguanta la plantilla que dice 'Cuenta cargo' sin la 'a'", () => {
+    const otra = { ...TRANSFERENCIA, cuerpo: TRANSFERENCIA.cuerpo.replace("Cuenta a cargo", "Cuenta cargo") };
+    expect(leeAvisoBancario(otra).payload.cardHint).toBe("Ahorro Sueldo");
+  });
+
+  it("sin monto no se registra", () => {
+    const rota = { ...TRANSFERENCIA, cuerpo: TRANSFERENCIA.cuerpo.replace(/Monto/g, "Importe") };
+    expect(leeAvisoBancario(rota).accion).toBe("no-reconocido");
+  });
+});
