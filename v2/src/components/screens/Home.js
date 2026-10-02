@@ -1,4 +1,4 @@
-import { C, FONT_TITLE, inputStyle, usageColor } from "../../theme";
+import { C, FONT_TITLE, inputStyle, usageColor, alTope } from "../../theme";
 import { TrashIcon } from "../shared/icons";
 import { getToday } from "../../lib/dates";
 import { buildCatMap, isPEN, sumUSD, pagosComoGastos } from "../../state/selectors";
@@ -92,19 +92,35 @@ export default function Home({
           const upcoming = getUpcomingTotal(data.paymentMethods, data.expenses, data.cardPayments, new Date(), data.cardStatements);
           const { total30, items } = upcoming.PEN;
           const usd30 = upcoming.USD.total30;
-          const proximo = items.find(i => i.status === "por-vencer");
+          // F41: "el más cercano vence en 4 días" no responde la pregunta que ella
+          // se hace, que es CUÁL pagar primero. Se busca entre las dos monedas
+          // —la que vence antes puede ser la deuda en dólares— y se nombra.
+          const todos = [...items, ...upcoming.USD.items];
+          const proximo = todos
+            .filter(i => i.status === "por-vencer")
+            .sort((a, b) => a.dueDate - b.dueDate)[0];
+          // F23: con deuda viva pero sin estado de cuenta no se sabe cuánto vence.
+          // Decir "estás al día" ahí sería mentir.
+          const sinDato = !proximo && todos.some(i => i.status === "sin-dato");
           return (
             <div style={{ padding: "18px 20px 0" }}>
               <div onClick={() => setSubScreen("proximos-pagos")} style={{ background: "#fff", borderRadius: 18, padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 4px 18px rgba(0,0,0,0.18)" }}>
-                <div style={{ width: 44, height: 44, borderRadius: 13, background: proximo ? "#FDEDE0" : C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{proximo ? "📅" : "✅"}</div>
+                <div style={{ width: 44, height: 44, borderRadius: 13, background: proximo ? "#FDEDE0" : (sinDato ? "#FDEDE0" : C.purpleSoft), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{proximo ? "📅" : (sinDato ? "🧾" : "✅")}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.2, textTransform: "uppercase" }}>Próximos pagos</div>
                   <div style={{ fontFamily: FONT_TITLE, fontSize: 24, fontWeight: 900, color: C.black, letterSpacing: -0.8, lineHeight: 1.2 }}>{fmt(total30)}</div>
                   {usd30 > 0 && (
                     <div style={{ fontSize: 12, color: C.muted, fontWeight: 600, marginTop: 1 }}>+ {fmtWith(usd30, "USD")} en dólares</div>
                   )}
-                  <div style={{ fontSize: 12, color: proximo ? C.orange : C.green, fontWeight: 600, marginTop: 2 }}>
-                    {proximo ? `El más cercano ${plazoLabel(proximo.days)}` : "Estás al día con tus tarjetas"}
+                  {/* Primero la tarjeta que toca pagar, con su nombre: es la
+                      pregunta real ("¿cuál pago primero?"). El monto va con su
+                      propia moneda, que puede no ser la del total de arriba. */}
+                  <div style={{ fontSize: 12, color: proximo || sinDato ? C.orange : C.green, fontWeight: 600, marginTop: 2, lineHeight: 1.4 }}>
+                    {proximo
+                      ? <>Paga primero <strong style={{ color: C.black }}>{proximo.card.name}</strong>: {fmtWith(proximo.amount, proximo.currency)}, {plazoLabel(proximo.days)}</>
+                      : sinDato
+                        ? "Falta tu estado de cuenta para saber cuánto vence"
+                        : "Estás al día con tus tarjetas"}
                   </div>
                 </div>
                 <div style={{ fontSize: 22, color: C.muted, flexShrink: 0 }}>›</div>
@@ -128,18 +144,25 @@ export default function Home({
                 const uso = getSharedUsage(card, data.expenses, data.cardPayments, vigente && vigente.tasa);
                 const { available, pct } = uso;
                 const accent = card.color || C.purple;
+                // F42: al 90% o más la tarjeta está a nada de sobregirarse. Tiene
+                // que verse distinta —no igual que un uso alto pero tranquilo—
+                // porque es la diferencia entre "ojo" y "no pases esta".
+                const critica = alTope(pct);
                 return (
-                  <div key={card.id} onClick={() => setSubScreen("card-" + card.id)} style={{ flex: "0 0 auto", width: 152, scrollSnapAlign: "start", background: "rgba(255,255,255,0.94)", borderRadius: 16, padding: "12px 14px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.12)" }}>
+                  <div key={card.id} onClick={() => setSubScreen("card-" + card.id)} style={{ flex: "0 0 auto", width: 152, scrollSnapAlign: "start", background: "rgba(255,255,255,0.94)", borderRadius: 16, padding: "12px 14px", cursor: "pointer", boxShadow: critica ? "0 0 0 2px " + C.red + ", 0 2px 10px rgba(0,0,0,0.12)" : "0 2px 10px rgba(0,0,0,0.12)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                       <div style={{ width: 26, height: 26, borderRadius: 8, background: accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>💳</div>
                       <div style={{ fontSize: 12.5, fontWeight: 700, color: C.black, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.name}</div>
                     </div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: 0.8, textTransform: "uppercase" }}>Disponible</div>
-                    <div style={{ fontFamily: FONT_TITLE, fontSize: 19, fontWeight: 900, color: C.black, letterSpacing: -0.5, lineHeight: 1.2 }}>{fmt(available)}</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: critica ? C.red : C.muted, letterSpacing: 0.8, textTransform: "uppercase" }}>{critica ? "Te queda" : "Disponible"}</div>
+                    <div style={{ fontFamily: FONT_TITLE, fontSize: 19, fontWeight: 900, color: critica ? C.red : C.black, letterSpacing: -0.5, lineHeight: 1.2 }}>{fmt(available)}</div>
                     <div style={{ height: 5, background: "#F0EDE4", borderRadius: 99, overflow: "hidden", marginTop: 7 }}>
                       <div style={{ height: "100%", width: `${Math.min(Math.round(pct), 100)}%`, background: usageColor(pct), borderRadius: 99 }} />
                     </div>
-                    <div style={{ fontSize: 10.5, fontWeight: 600, color: C.muted, marginTop: 5, whiteSpace: "nowrap" }}>{Math.round(pct)}% usado · día {cycle.dayOfCycle}/{cycle.totalDays}</div>
+                    <div style={{ fontSize: 10.5, fontWeight: critica ? 800 : 600, color: critica ? C.red : C.muted, marginTop: 5, whiteSpace: "nowrap" }}>{Math.round(pct)}% usado · día {cycle.dayOfCycle}/{cycle.totalDays}</div>
+                    {critica && (
+                      <div style={{ fontSize: 10.5, fontWeight: 800, color: C.red, marginTop: 2, lineHeight: 1.3 }}>⚠️ Casi sin línea</div>
+                    )}
                     {/* Deuda en dólares (F18): no es un cupo aparte — ya está contada
                         arriba dentro del disponible. Se muestra porque se paga aparte
                         y en dólares. */}
