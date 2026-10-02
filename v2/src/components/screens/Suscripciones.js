@@ -3,8 +3,10 @@ import { subStyle, subHeader } from "../shared/subnav";
 import { fmtWith } from "../../lib/format";
 import { useStore } from "../../state/store";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { inputStyle } from "../../theme";
 import { genId } from "../../lib/format";
+import { useKeyboardInset, sheetStyle } from "../../lib/useKeyboardInset";
 import {
   detectaSuscripciones, ordenaPorCancelar, costaNoCancelar,
   ordenaSuscripciones, totalMensualDeLista, costoMensual, esAnual, detectadasNoAnotadas,
@@ -134,11 +136,24 @@ function FilaMia({ s, fmt, onEditar, onCancelar }) {
   );
 }
 
+// Va en una hoja aparte, no empotrada en la lista: metida arriba, al editar algo
+// del fondo el formulario quedaba fuera de pantalla y parecía que el botón no
+// hacía nada.
 function FormSuscripcion({ form, setForm, onGuardar, onBorrar, onCerrar }) {
+  const kb = useKeyboardInset();
   const lbl = { fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 5 };
   const valido = String(form.nombre).trim() && Number(form.monto) > 0;
-  return (
-    <div style={{ ...cardStyle, padding: "16px 16px 18px", marginBottom: 14, border: `1.5px solid ${C.purple}` }}>
+  // Va por portal al body a propósito: el contenedor de la sub-pantalla tiene un
+  // `transform` para la animación de entrada, y un ancestro con transform hace
+  // que `position: fixed` se posicione contra ÉL y no contra la ventana. Sin
+  // esto la hoja salía cortada a un costado.
+  if (typeof document === "undefined") return null;
+  return createPortal((
+    <div style={{ position: "fixed", inset: 0, zIndex: 420 }} onClick={onCerrar}>
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} />
+      <div onClick={e => e.stopPropagation()} style={sheetStyle(kb)}>
+      <div style={{ width: 40, height: 4, background: "#E0DCD4", borderRadius: 2, margin: "0 auto 18px" }} />
+      <div style={{ fontSize: 20, fontWeight: 800, color: C.black, marginBottom: 16 }}>{form.id ? "Editar suscripción" : "Nueva suscripción"}</div>
       <div style={lbl}>Nombre</div>
       <input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} placeholder="Ej: Netflix" style={{ ...inputStyle, color: C.black, marginBottom: 12 }} />
 
@@ -180,11 +195,12 @@ function FormSuscripcion({ form, setForm, onGuardar, onBorrar, onCerrar }) {
         <button onClick={onCerrar} style={{ flex: 1, padding: 12, borderRadius: 13, background: "#F0EDE4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
         {onBorrar && <button onClick={onBorrar} style={{ flex: 1, padding: 12, borderRadius: 13, background: "transparent", color: C.orange, border: `1px solid ${C.orange}`, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Eliminar</button>}
       </div>
+      </div>
     </div>
-  );
+  ), document.body);
 }
 
-export function SuscripcionesScreen({ subScreen, setSubScreen, fmt }) {
+export function SuscripcionesScreen({ subScreen, setSubScreen, fmt, showToast }) {
   const data = useStore(s => s.data);
   const setData = useStore(s => s.setData);
   const [form, setForm] = useState(null);   // null | {…vacia, id?}
@@ -218,13 +234,14 @@ export function SuscripcionesScreen({ subScreen, setSubScreen, fmt }) {
   };
   // Pasarla a "tienes que cancelar" sin sacarla de la lista: sigue cobrando
   // hasta que de verdad la cancele, y eso es justo lo que hay que ver.
-  const quieroCancelar = (s) => setData(p => {
-    const ya = (p.porCancelar || []).some(i => i && i.nombre === s.nombre);
-    if (ya) return p;
-    return { ...p, porCancelar: [...(p.porCancelar || []), {
+  const quieroCancelar = (s) => {
+    const ya = (data.porCancelar || []).some(i => i && i.nombre === s.nombre);
+    if (ya) { if (showToast) showToast(s.nombre + " ya estaba en la lista de arriba"); return; }
+    setData(p => ({ ...p, porCancelar: [...(p.porCancelar || []), {
       id: genId(), nombre: s.nombre, monto: s.monto, currency: s.currency, cobra: s.cobra || null, nota: s.nota || null,
-    }] };
-  });
+    }] }));
+    if (showToast) showToast(s.nombre + " anotada arriba, para que no se te pase");
+  };
 
   const r = detectaSuscripciones(data.expenses);
   const hayAlgo = mias.length > 0 || r.inactivas.length > 0;
@@ -233,6 +250,10 @@ export function SuscripcionesScreen({ subScreen, setSubScreen, fmt }) {
   return (
     <div style={subStyle(subScreen, "suscripciones")}>
       {subHeader("Suscripciones", () => setSubScreen(null))}
+      {form && (
+        <FormSuscripcion form={form} setForm={setForm} onGuardar={guardar}
+          onBorrar={form.id ? borrar : null} onCerrar={() => setForm(null)} />
+      )}
       <div style={{ padding: "0 20px 40px" }}>
         <PorCancelar items={pendientes} fmt={fmt} onHecho={marcarHecha} />
         {mias.length > 0 && (
@@ -275,10 +296,6 @@ export function SuscripcionesScreen({ subScreen, setSubScreen, fmt }) {
               style={{ padding: "7px 13px", borderRadius: 10, background: C.purple, color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>+ Agregar</button>
           )}
         </div>
-        {form && (
-          <FormSuscripcion form={form} setForm={setForm} onGuardar={guardar}
-            onBorrar={form.id ? borrar : null} onCerrar={() => setForm(null)} />
-        )}
         {mias.map(s => (
           <FilaMia key={s.id} s={s} fmt={fmt}
             onEditar={(x) => setForm({ ...x, monto: String(x.monto), cobra: x.cobra == null ? "" : String(x.cobra), nota: x.nota || "" })}

@@ -1151,7 +1151,7 @@ export default function App() {
       {/* F25: deudas por cobrar */}
       <DeudasScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} showToast={showToast} setConfirm={setConfirm} />
       {/* F43: las suscripciones que Qori encuentra sola en sus gastos */}
-      <SuscripcionesScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} />
+      <SuscripcionesScreen subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt} showToast={showToast} />
       {/* Próximos pagos: cuánto vence y si alcanza el mes (key `proximos-pagos`) */}
       <ProximosPagosScreen
         subScreen={subScreen} setSubScreen={setSubScreen} fmt={fmt}
