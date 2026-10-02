@@ -71,12 +71,25 @@ export function fechaTextual(raw) {
 
 // "07:52 PM" → { h: 19, min: 52 }. Sin hora reconocible, mediodía: así la fecha
 // no se corre de día por la zona horaria.
+//
+// BBVA la manda en 24 horas y sin AM/PM ("19:09:47"), así que si no hay AM/PM se
+// intenta leerla así. El orden importa: primero AM/PM, porque "07:52 PM" también
+// calza con el patrón de 24 horas y daría las 7 de la mañana.
 export function horaAMPM(raw) {
-  const m = /(\d{1,2}):(\d{2})\s*([AP])\.?M\.?/i.exec(limpia(raw));
-  if (!m) return { h: 12, min: 0 };
-  let h = Number(m[1]) % 12;
-  if (m[3].toUpperCase() === "P") h += 12;
-  return { h, min: Number(m[2]) };
+  const txt = limpia(raw);
+  const m = /(\d{1,2}):(\d{2})\s*([AP])\.?M\.?/i.exec(txt);
+  if (m) {
+    let h = Number(m[1]) % 12;
+    if (m[3].toUpperCase() === "P") h += 12;
+    return { h, min: Number(m[2]) };
+  }
+  const m24 = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(txt);
+  if (m24) {
+    const h = Number(m24[1]);
+    const min = Number(m24[2]);
+    if (h <= 23 && min <= 59) return { h, min };
+  }
+  return { h: 12, min: 0 };
 }
 
 // ── Interbank ─────────────────────────────────────────────────────────────
@@ -144,10 +157,88 @@ export function leeInterbank({ asunto, cuerpo }) {
   return { accion: "no-reconocido", motivo: "asunto no reconocido" };
 }
 
+// ── BBVA ──────────────────────────────────────────────────────────────────
+// Plantilla distinta a la de Interbank: la moneda viene en su propio campo
+// ("PEN"/"USD"), el monto va pelado y sin símbolo ("21.50"), y la hora en 24h.
+
+const SIMBOLO = { PEN: "S/", USD: "US$" };
+
+// "PEN" | "Soles" | "S/" → "PEN". Lo que no se reconozca devuelve null: sin
+// moneda no se inventa nada.
+function monedaBBVA(raw) {
+  const m = plano(raw);
+  if (!m) return null;
+  if (m.includes("usd") || m.includes("dolar") || m.includes("us$")) return "USD";
+  if (m.includes("pen") || m.includes("sol") || m.includes("s/")) return "PEN";
+  return null;
+}
+
+function bbvaConsumo(cuerpo) {
+  const monto = campo(cuerpo, "Monto");
+  if (!monto) return { accion: "no-reconocido", motivo: "no encontré el monto" };
+  const moneda = monedaBBVA(campo(cuerpo, "Moneda"));
+  if (!moneda) return { accion: "no-reconocido", motivo: "no encontré la moneda" };
+
+  const fecha = fechaDMY(campo(cuerpo, "Fecha"), campo(cuerpo, "Hora"));
+  // "Este se cargará a tu tarjeta terminada en *1849" — los últimos 4 son lo
+  // único que distingue una tarjeta de otra en este correo.
+  const mt = /terminada en\s*\*?\s*(\d{4})/i.exec(limpia(cuerpo));
+
+  return {
+    accion: "registrar",
+    tipo: "consumo",
+    payload: {
+      // El monto viaja con símbolo para que la ingesta deduzca la moneda por el
+      // mismo camino que los demás bancos, ya probado.
+      amount: SIMBOLO[moneda] + " " + monto,
+      merchant: campo(cuerpo, "Comercio") || "Compra",
+      cardHint: mt ? "BBVA ••" + mt[1] : "BBVA",
+      occurredAt: fecha ? fecha.toISOString() : null,
+      source: "correo",
+    },
+  };
+}
+
+// Pago de tarjeta propia. Con el modelo de caja SÍ es un gasto —la plata sale de
+// su cuenta ese día— pero la bandeja de pendientes solo sabe crear gastos
+// sueltos, y un pago además tiene que bajar el saldo de UNA tarjeta.
+// Registrarlo acá como gasto a secas dejaría la deuda intacta, y si después lo
+// anota desde la tarjeta quedaría contado dos veces.
+// Por eso se reconoce y se descarta con su motivo, hasta que la bandeja aprenda
+// a crear pagos. El motivo lleva los últimos 4 para que se sepa cuál era.
+function bbvaPagoTarjeta(cuerpo) {
+  const mt = /n[uú]mero de tarjeta\s*\n+\s*[•*]?\s*(\d{4})/i.exec(String(cuerpo || ""));
+  const cual = mt ? " (la ••" + mt[1] + ")" : "";
+  return {
+    accion: "ignorar",
+    motivo: "es un pago de tarjeta" + cual + ": anótalo desde la tarjeta, así baja tu saldo y cuenta como gasto",
+  };
+}
+
+const IGNORAR_BBVA = [
+  { clave: "estado de cuenta", motivo: "es el resumen del mes, no un movimiento" },
+  { clave: "recibiste", motivo: "es un ingreso, no un gasto" },
+  { clave: "abono", motivo: "es un ingreso, no un gasto" },
+  { clave: "clave", motivo: "no es un movimiento" },
+];
+
+export function leeBBVA({ asunto, cuerpo }) {
+  const a = plano(asunto);
+  if (a.includes("pago de tarjeta") || a.includes("pagar tarjetas propias") || a.includes("pago de tarjetas")) {
+    return bbvaPagoTarjeta(cuerpo);
+  }
+  for (const r of IGNORAR_BBVA) {
+    if (a.includes(r.clave)) return { accion: "ignorar", motivo: r.motivo };
+  }
+  if (a.includes("realizado un consumo")) return bbvaConsumo(cuerpo);
+  return { accion: "no-reconocido", motivo: "asunto no reconocido" };
+}
+
 // ── Punto de entrada ──────────────────────────────────────────────────────
 
 const BANCOS = [
   { nombre: "Interbank", dominios: ["netinterbank.com.pe", "interbank.pe", "interbank.com.pe"], lee: leeInterbank },
+  { nombre: "BBVA", dominios: ["bbva.com.pe", "bbva.pe", "bbvacontinental.pe"], lee: leeBBVA },
 ];
 
 export function bancoDe(remitente) {

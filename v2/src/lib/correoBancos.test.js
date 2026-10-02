@@ -250,3 +250,120 @@ describe("aguanta cómo Gmail arma el texto plano", () => {
     expect(r.payload.amount).toBe("S/. 38.00");
   });
 });
+
+// ── BBVA ──────────────────────────────────────────────────────────────────
+// Cuerpos copiados tal cual de sus correos (29 set y 15 set 2026).
+
+const BBVA = "procesos@bbva.com.pe";
+
+const BBVA_CONSUMO = {
+  remitente: "BBVA <" + BBVA + ">",
+  asunto: "Has realizado un consumo con tu tarjeta BBVA",
+  cuerpo: `BBVA
+Hola, ANDREA
+BBVA
+Has realizado el siguiente consumo:
+Comercio:
+
+APPLE.COM/BILL
+
+Monto:
+
+21.50
+
+Moneda:
+
+PEN
+
+Fecha:
+
+29/09/2026
+
+Hora:
+
+19:09:47
+
+alerta\t
+Este se cargará a tu tarjeta terminada en *1849`,
+};
+
+const BBVA_PAGO_TC = {
+  remitente: BBVA,
+  asunto: "BBVA - Constancia Pago de Tarjetas propias",
+  cuerpo: `Hola, Andrea
+Has realizado con éxito la operación:
+
+Pagar tarjetas propias
+
+Importe transferido
+
+S/ 73.87
+
+DETALLES DE LA OPERACIÓN
+Tipo de operación
+
+Pagar tarjetas propias
+
+Número de operación
+
+000000047
+
+Fecha y hora de la operación
+
+15 setiembre, 2026 08:37
+
+Cuenta de origen
+
+• 7155
+
+Número de tarjeta
+
+• 1849`,
+};
+
+describe("BBVA", () => {
+  it("reconoce el remitente", () => {
+    expect(bancoDe("BBVA <procesos@bbva.com.pe>").nombre).toBe("BBVA");
+  });
+
+  it("lee un consumo en soles con su comercio, monto y fecha", () => {
+    const r = leeAvisoBancario(BBVA_CONSUMO);
+    expect(r.accion).toBe("registrar");
+    expect(r.banco).toBe("BBVA");
+    expect(r.payload.merchant).toBe("APPLE.COM/BILL");
+    expect(r.payload.cardHint).toBe("BBVA ••1849");
+    const d = new Date(r.payload.occurredAt);
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2026, 8, 29]);
+    expect(d.getHours()).toBe(19); // 19:09:47, hora de 24h sin AM/PM
+  });
+
+  it("el monto sale en soles de punta a punta", () => {
+    const r = leeAvisoBancario(BBVA_CONSUMO);
+    const t = normalizeTransaction(r.payload).value;
+    expect(t.amount).toBe(21.5);
+    expect(t.currency).toBe("PEN");
+  });
+
+  it("un consumo en dólares no se convierte ni se confunde con soles", () => {
+    const r = leeAvisoBancario({ ...BBVA_CONSUMO, cuerpo: BBVA_CONSUMO.cuerpo.replace("PEN", "USD") });
+    const t = normalizeTransaction(r.payload).value;
+    expect(t.amount).toBe(21.5);
+    expect(t.currency).toBe("USD");
+  });
+
+  it("sin moneda no se registra: no se asume soles", () => {
+    const r = leeAvisoBancario({ ...BBVA_CONSUMO, cuerpo: BBVA_CONSUMO.cuerpo.replace("Moneda:", "Divisa:") });
+    expect(r.accion).toBe("no-reconocido");
+  });
+
+  it("el pago de tarjeta se descarta y dice cuál era", () => {
+    const r = leeAvisoBancario(BBVA_PAGO_TC);
+    expect(r.accion).toBe("ignorar");
+    expect(r.motivo).toContain("1849");
+  });
+
+  it("un asunto que no conoce no se registra", () => {
+    const r = leeAvisoBancario({ ...BBVA_CONSUMO, asunto: "BBVA te informa sobre tu seguro" });
+    expect(r.accion).toBe("no-reconocido");
+  });
+});
