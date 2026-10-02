@@ -1,6 +1,8 @@
-import { getMonthLabel } from "../lib/dates";
+import { getMonthLabel, monthLabelOf } from "../lib/dates";
 import { curOf } from "../lib/cycles";
 import { separaIngresos, montoEnSoles, montoEnDolaresSinCambiar } from "../lib/ingresos";
+
+const redondea = (n) => Math.round(n * 100) / 100;
 
 // Los gastos en dólares NO entran a los totales en soles (F10): se muestran
 // siempre como una línea aparte. Nada de tipos de cambio inventados.
@@ -47,6 +49,24 @@ export const getMonthData = (data, offset, hoy = new Date()) => {
   const totalDiariosUSD = sumUSD(exps); // aparte, nunca sumado a los soles
   const totalFijos = fixd.filter(f => f.paid).reduce((s, f) => s + f.amount, 0);
   const totalFijosAll = fixd.reduce((s, f) => s + f.amount, 0);
+
+  // F31: los pagos que le hizo a sus tarjetas ESE mes.
+  //
+  // Se muestran, pero NO suman a los gastos: pagar la tarjeta salda compras que
+  // ya se registraron cuando ocurrieron (P1). Contarlo de nuevo le infló un mes
+  // en S/6,404 en sus datos reales.
+  //
+  // Lo que sí responden es otra pregunta: cuánta plata salió de su cuenta. Ahí
+  // el pago de tarjeta cuenta, y en cambio una compra hecha CON la tarjeta no
+  // —esa sale de la cuenta recién el día que paga la tarjeta.
+  const pagosTC = (data.cardPayments || []).filter(p => p && p.date && monthLabelOf(new Date(p.date)) === mk);
+  const totalPagosTC = redondea(pagosTC.filter(p => curOf(p) !== "USD").reduce((s, p) => s + (Number(p.amount) || 0), 0));
+  const totalPagosTCUSD = redondea(pagosTC.filter(p => curOf(p) === "USD").reduce((s, p) => s + (Number(p.amount) || 0), 0));
+
+  const idsCredito = new Set((data.paymentMethods || []).filter(m => m && m.type === "credito").map(m => m.id));
+  const diariosDeCuenta = exps.filter(isPEN).filter(e => !idsCredito.has(e.paymentMethodId)).reduce((s, e) => s + e.amount, 0);
+  const salioDeTuCuenta = redondea(diariosDeCuenta + totalFijos + totalPagosTC);
+
   // F24: los ingresos en dólares solo entran al total en soles si ella declaró
   // el tipo de cambio que le dieron. Los que no, van aparte (`totalIncUSD`).
   const todosInc = [...incF, ...incE];
@@ -62,6 +82,7 @@ export const getMonthData = (data, offset, hoy = new Date()) => {
   return {
     exps, ingresos: todosInc, totalDiarios, totalDiariosUSD, totalFijos, totalFijosAll,
     totalInc, totalIncUSD, balance,
+    pagosTC, totalPagosTC, totalPagosTCUSD, salioDeTuCuenta,
     ingresosRecibidos: recibidos, ingresosPendientes: pendientes,
     totalIncRecibido: totalRecibido, totalIncPendiente: totalPendiente,
     totalIncRecibidoUSD: totalRecibidoUSD, totalIncPendienteUSD: totalPendienteUSD,

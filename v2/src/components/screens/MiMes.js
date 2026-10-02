@@ -39,6 +39,9 @@ export default function MiMes({
       ...d.ingresos
         .filter(i => (Number(i.amount) || 0) > 0)
         .map(i => ({ tipo: "ingreso", id: i.id, fecha: fechaEfectiva(i), pendiente: !esRecibido(i), i })),
+      // F31: los pagos a la tarjeta se VEN, pero no suman a los gastos: saldan
+      // compras que ya están registradas. Van marcados para que se note.
+      ...d.pagosTC.map(p => ({ tipo: "pago-tc", id: p.id, fecha: new Date(p.date), p })),
     ].sort((a, b) => {
       if (!a.fecha && !b.fecha) return 0;
       if (!a.fecha) return 1;   // sin fecha, siempre al final
@@ -139,6 +142,16 @@ export default function MiMes({
                   <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2, whiteSpace: "nowrap", opacity: 0.85 }}>+ {fmtWith(d.totalDiariosUSD, "USD")}</div>
                 )}
               </div>
+              {/* F31: la otra pregunta — cuánta plata salió de verdad de su
+                  cuenta. Acá el pago de tarjeta SÍ cuenta, y una compra hecha
+                  CON la tarjeta no: esa sale el día que paga la tarjeta. */}
+              <div style={{ minWidth: 118, background: C.black, borderRadius: 14, padding: "14px 12px", color: "#fff", flexShrink: 0 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: 0.75 }}>Salió de tu cuenta</div>
+                <div style={{ fontSize: "clamp(14px, 4vw, 20px)", fontWeight: 900, marginTop: 4, whiteSpace: "nowrap", fontFamily: FONT_TITLE }}>{fmt(d.salioDeTuCuenta)}</div>
+                {d.totalPagosTC > 0 && (
+                  <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2, whiteSpace: "nowrap", opacity: 0.8 }}>incluye {fmt(d.totalPagosTC)} de tarjetas</div>
+                )}
+              </div>
             </div>
             <div style={{ padding: "0 24px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
@@ -157,7 +170,27 @@ export default function MiMes({
               {/* F22: los ingresos van en la misma lista que los gastos. Los que
                   todavía no entran salen marcados como pendientes, no como plata
                   que ya tiene. */}
-              {movimientos.map(mov => mov.tipo === "ingreso" ? (() => { const { i, pendiente, fecha } = mov; return (
+              {movimientos.map(mov => mov.tipo === "pago-tc" ? (() => {
+                const p = mov.p;
+                const tc = (data.paymentMethods || []).find(m => m.id === p.cardId);
+                const esUsd = (p.currency === "USD");
+                return (
+                <div key={"pago-" + p.id} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, background: "#F7F5FF" }}>
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: C.purpleSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, marginRight: 14, flexShrink: 0 }}>💳</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 500, color: C.black }}>Pago a {tc ? tc.name : "tu tarjeta"}</div>
+                      <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+                        <span>{DAYS[mov.fecha.getDay()].toLowerCase().slice(0,3)}, {mov.fecha.getDate()} {MONTHS_SHORT[mov.fecha.getMonth()].toLowerCase()}.</span>
+                        <span style={{ background: C.purpleSoft, color: C.purple, borderRadius: 20, padding: "1px 8px", fontSize: 11, fontWeight: 700 }}>💳 Pago de tarjeta</span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: C.purple, marginRight: 8, whiteSpace: "nowrap" }}>
+                      −{esUsd ? fmtWith(p.amount, "USD") : fmt(p.amount)}
+                    </div>
+                  </div>
+                </div>
+                ); })() : mov.tipo === "ingreso" ? (() => { const { i, pendiente, fecha } = mov; return (
                 <div key={"inc-" + i.id} style={{ ...cardStyle, padding: "14px 16px", marginBottom: 10, opacity: pendiente ? 0.75 : 1, border: pendiente ? "1.5px dashed #CFCABF" : undefined }}>
                   <div style={{ display: "flex", alignItems: "center" }}>
                     <div style={{ width: 40, height: 40, borderRadius: "50%", background: pendiente ? "#F2F0EA" : "#E8F5EE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: pendiente ? C.muted : C.green, marginRight: 14, flexShrink: 0 }}>
@@ -233,6 +266,11 @@ export default function MiMes({
                   )}
                 </div>
               ); })())}
+              {movimientos.some(m => m.tipo === "pago-tc") && (
+                <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, padding: "2px 2px 6px" }}>
+                  Los pagos de tarjeta salen acá para que veas a dónde se fue tu plata, pero <strong style={{ color: C.black }}>no suman a tus gastos</strong>: estás pagando compras que ya registraste cuando las hiciste.
+                </div>
+              )}
               {movimientos.some(m => m.tipo === "ingreso" && m.pendiente) && (
                 <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, padding: "2px 2px 6px" }}>
                   Los ingresos con línea punteada todavía no entran: aparecen para que los tengas en cuenta, pero no se cuentan como plata que ya tienes. El día que les toca pasan a contar solos.
