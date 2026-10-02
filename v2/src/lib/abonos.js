@@ -24,21 +24,44 @@ export function tramoDelMes(hoy = new Date()) {
   return { total, van: vanConHoy, faltan: Math.max(0, total - vanConHoy) };
 }
 
-// Cuánto gasta por día, en promedio, de su propio bolsillo.
+// La ventana sobre la que se mide el ritmo. 30 días: lo que lleva del mes NO
+// sirve.
 //
-// Solo cuenta los gastos diarios de cuenta: los pagos de tarjeta son montos
-// grandes y esporádicos, y meterlos acá inflaría el promedio y le diría que no
-// le alcanza para nada.
-export function ritmoDiario(gastoDiarioDelMes, hoy = new Date()) {
-  const { van } = tramoDelMes(hoy);
-  if (van <= 0) return 0;
-  return redondea((Number(gastoDiarioDelMes) || 0) / van);
+// F50: con 2 días de mes, un gasto grande (un pasaje, una compra) se convierte
+// en "gastas S/2,382 por día" y la proyección se dispara a decenas de miles. Le
+// pasó: la pantalla le dijo que le faltaban S/55,583. Una ventana fija de 30
+// días aguanta los picos y siempre tiene suficientes datos detrás.
+export const VENTANA_DIAS = 30;
+
+// Cuánto sale de su bolsillo por día, medido sobre los últimos 30 días.
+// `gastoVentana` ya viene filtrado: solo gastos de cuenta, sin pagos de tarjeta,
+// que son grandes y esporádicos e inflarían el promedio.
+export function ritmoDiario(gastoVentana, dias = VENTANA_DIAS) {
+  const d = Number(dias) || VENTANA_DIAS;
+  if (d <= 0) return 0;
+  return redondea((Number(gastoVentana) || 0) / d);
 }
 
-// Lo que le queda por gastar del mes, al ritmo que lleva.
-export function proyectaResto(gastoDiarioDelMes, hoy = new Date()) {
+// Lo que le queda por gastar del mes, a ese ritmo.
+export function proyectaResto(gastoVentana, hoy = new Date(), dias = VENTANA_DIAS) {
   const { faltan } = tramoDelMes(hoy);
-  return redondea(ritmoDiario(gastoDiarioDelMes, hoy) * faltan);
+  return redondea(ritmoDiario(gastoVentana, dias) * faltan);
+}
+
+// Suma lo que salió de su bolsillo en los últimos `dias` días: efectivo y
+// débito. Las compras con tarjeta no cuentan —esas salen el día que paga la
+// tarjeta— y los pagos de tarjeta tampoco, por lo mismo del promedio.
+export function gastoDeLaVentana(expenses, idsCredito, hoy = new Date(), dias = VENTANA_DIAS) {
+  const desde = startOfDay(hoy).getTime() - (Number(dias) || VENTANA_DIAS) * 24 * 60 * 60 * 1000;
+  const credito = idsCredito instanceof Set ? idsCredito : new Set(idsCredito || []);
+  return redondea((expenses || []).reduce((t, e) => {
+    if (!e || !e.date) return t;
+    if (e.currency === "USD") return t;              // los dólares van aparte
+    if (credito.has(e.paymentMethodId)) return t;    // no salió de su cuenta
+    const d = startOfDay(new Date(e.date)).getTime();
+    if (isNaN(d) || d < desde || d > startOfDay(hoy).getTime()) return t;
+    return t + (Number(e.amount) || 0);
+  }, 0));
 }
 
 /**
@@ -47,7 +70,8 @@ export function proyectaResto(gastoDiarioDelMes, hoy = new Date()) {
  * `ingresos`      — todo lo que entra este mes (recibido + por entrar)
  * `fijosPagados`  — fijos que ya salieron
  * `fijosTotales`  — todos los fijos del mes
- * `gastoDiario`   — lo gastado de su cuenta (sin pagos de tarjeta)
+ * `gastoDiario`   — lo gastado de su cuenta este mes (sin pagos de tarjeta)
+ * `gastoVentana`  — lo gastado de su cuenta en los últimos 30 días, para el ritmo
  * `abonosHechos`  — lo que ya abonó a tarjetas este mes
  * `colchon`       — lo que quiere dejarse aparte, por si acaso (opcional)
  *
@@ -56,10 +80,12 @@ export function proyectaResto(gastoDiarioDelMes, hoy = new Date()) {
  */
 export function cuantoAbonar({
   ingresos = 0, fijosPagados = 0, fijosTotales = 0,
-  gastoDiario = 0, abonosHechos = 0, colchon = 0,
+  gastoDiario = 0, gastoVentana = null, abonosHechos = 0, colchon = 0,
 } = {}, hoy = new Date()) {
   const fijosPorPagar = redondea(Math.max(0, (Number(fijosTotales) || 0) - (Number(fijosPagados) || 0)));
-  const estimadoResto = proyectaResto(gastoDiario, hoy);
+  // Sin ventana todavía (datos recién migrados), se cae al gasto del mes: es
+  // peor, pero nunca peor que no decir nada.
+  const estimadoResto = proyectaResto(gastoVentana === null ? gastoDiario : gastoVentana, hoy);
   const yaSalio = redondea((Number(fijosPagados) || 0) + (Number(gastoDiario) || 0) + (Number(abonosHechos) || 0));
   const disponible = redondea(
     (Number(ingresos) || 0) - yaSalio - fijosPorPagar - estimadoResto - (Number(colchon) || 0)

@@ -6,7 +6,7 @@ import { useStore } from "../../state/store";
 import { getMonthData } from "../../state/selectors";
 import { getSharedUsage } from "../../lib/cycles";
 import { tasaVigente } from "../../lib/fx";
-import { cuantoAbonar, prioridadDeAbono, tramoDelMes, agendaDePagos, pisoDelMes, escaleraDePago, parseFecha } from "../../lib/abonos";
+import { cuantoAbonar, prioridadDeAbono, tramoDelMes, agendaDePagos, pisoDelMes, escaleraDePago, parseFecha, gastoDeLaVentana, ritmoDiario, VENTANA_DIAS } from "../../lib/abonos";
 
 // F48: cuánto puede abonar a sus tarjetas sin quedarse corta.
 //
@@ -42,16 +42,22 @@ export function AbonosScreen({ subScreen, setSubScreen, fmt }) {
   // promedio hasta decirle que no le alcanza para nada.
   const gastoDiario = Math.max(0, Math.round((d.totalDiarios - d.totalPagosTC) * 100) / 100);
 
+  const tarjetas = (data.paymentMethods || []).filter(m => m && m.type === "credito" && !m.archived);
+  const idsCredito = new Set((data.paymentMethods || []).filter(m => m && m.type === "credito").map(m => m.id));
+  // F50: el ritmo se mide sobre 30 días, no sobre lo que va del mes. Con dos
+  // días de mes un gasto grande se volvía "gastas S/2,382 por día".
+  const gastoVentana = gastoDeLaVentana(data.expenses, idsCredito, hoy);
+  const ritmo = ritmoDiario(gastoVentana);
+
   const r = cuantoAbonar({
     ingresos: d.totalInc,
     fijosPagados: d.totalFijos,
     fijosTotales: d.totalFijosAll,
     gastoDiario,
+    gastoVentana,
     abonosHechos: d.totalPagosTC,
     colchon,
   }, hoy);
-
-  const tarjetas = (data.paymentMethods || []).filter(m => m && m.type === "credito" && !m.archived);
   const usos = tarjetas.map(card => {
     const vig = tasaVigente(card, data);
     const u = getSharedUsage(card, data.expenses, data.cardPayments, vig && vig.tasa);
@@ -94,7 +100,9 @@ export function AbonosScreen({ subScreen, setSubScreen, fmt }) {
             <Linea texto="Te queda para abonar" monto={r.disponible} fmt={fmt} fuerte />
           </div>
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginTop: 8 }}>
-            Lo que te queda por gastar sale de tu propio ritmo: llevas {fmt(gastoDiario)} en {tramo.van} días.
+            Tu ritmo sale de los últimos {VENTANA_DIAS} días: {fmt(gastoVentana)} de tu cuenta,
+            o sea <strong>{fmt(ritmo)} por día</strong>. No cuenta lo que compras con tarjeta
+            —eso sale el día que la pagas— ni los abonos.
           </div>
         </div>
 

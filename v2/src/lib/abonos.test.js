@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   tramoDelMes, ritmoDiario, proyectaResto,
   cuantoAbonar, prioridadDeAbono, repartoSugerido,
-  agendaDePagos, pisoDelMes, escaleraDePago, diasParaVencer,
+  agendaDePagos, pisoDelMes, escaleraDePago, diasParaVencer, gastoDeLaVentana,
 } from "./abonos";
 
 const HOY = new Date(2026, 9, 10); // 10 oct 2026 — octubre tiene 31 días
@@ -20,24 +20,55 @@ describe("tramoDelMes", () => {
 });
 
 describe("ritmo y proyección", () => {
-  it("promedia lo gastado entre los días que van", () => {
-    expect(ritmoDiario(1000, HOY)).toBe(100);
+  it("promedia sobre la ventana de 30 días, no sobre lo que va del mes", () => {
+    expect(ritmoDiario(3000)).toBe(100);
   });
   it("proyecta el resto del mes a ese ritmo", () => {
-    expect(proyectaResto(1000, HOY)).toBe(2100); // 100 × 21 días
+    expect(proyectaResto(3000, HOY)).toBe(2100); // 100 × 21 días
   });
   it("sin gasto no proyecta nada", () => {
     expect(proyectaResto(0, HOY)).toBe(0);
   });
   it("el último día del mes no proyecta nada más", () => {
-    expect(proyectaResto(3000, new Date(2026, 9, 31))).toBe(0);
+    expect(proyectaResto(9000, new Date(2026, 9, 31))).toBe(0);
+  });
+
+  // El caso real que la rompió: dos días de mes y un gasto grande.
+  it("un gasto fuerte el día 2 ya no dispara la proyección", () => {
+    const expl = proyectaResto(4763.9, new Date(2026, 9, 2));
+    expect(expl).toBeLessThan(5000);   // antes daba 69,076
+  });
+});
+
+describe("gastoDeLaVentana", () => {
+  const credito = new Set(["tc"]);
+  const g = (id, amount, date, pm, extra = {}) => ({ id, amount, date: new Date(date).toISOString(), paymentMethodId: pm, ...extra });
+
+  it("suma solo lo que salió de su cuenta en los últimos 30 días", () => {
+    const exps = [
+      g("a", 100, new Date(2026, 9, 9), "debito"),
+      g("b", 50, new Date(2026, 8, 20), "debito"),   // dentro de los 30
+      g("c", 999, new Date(2026, 7, 1), "debito"),   // fuera
+      g("d", 300, new Date(2026, 9, 8), "tc"),       // tarjeta: no salió de su cuenta
+      g("e", 40, new Date(2026, 9, 9), "debito", { currency: "USD" }), // dólares aparte
+    ];
+    expect(gastoDeLaVentana(exps, credito, HOY)).toBe(150);
+  });
+
+  it("un gasto futuro no cuenta", () => {
+    expect(gastoDeLaVentana([g("f", 500, new Date(2026, 9, 20), "debito")], credito, HOY)).toBe(0);
+  });
+
+  it("aguanta datos rotos", () => {
+    expect(gastoDeLaVentana([null, {}, { amount: 10 }], credito, HOY)).toBe(0);
+    expect(gastoDeLaVentana(null, credito, HOY)).toBe(0);
   });
 });
 
 describe("cuantoAbonar", () => {
   // Su caso real: entra 7,774; fijos 1,293 (214 pagados); lleva 1,000 de gastos
   // diarios y ya abonó 175 a la tarjeta.
-  const suyo = { ingresos: 7774, fijosPagados: 214, fijosTotales: 1293, gastoDiario: 1000, abonosHechos: 175 };
+  const suyo = { ingresos: 7774, fijosPagados: 214, fijosTotales: 1293, gastoDiario: 1000, gastoVentana: 3000, abonosHechos: 175 };
 
   it("descuenta lo que ya salió, lo que falta de fijos y lo que le queda por gastar", () => {
     const r = cuantoAbonar(suyo, HOY);
