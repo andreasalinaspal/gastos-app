@@ -382,6 +382,12 @@ export function AllCatsScreen({ subScreen, setSubScreen, fmt, setSelectedCatDeta
             {totalUSD > 0 && (
               <div style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, marginTop: 4 }}>+ {fmtWith(totalUSD, "USD")} en dólares</div>
             )}
+            {/* F34: acá se mide CONSUMO, no la plata que salió. Es otra lectura
+                que la de "Diarios", y sin decirlo los dos números no cuadran y
+                parece un error. */}
+            <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.45, marginTop: 10, paddingTop: 9, borderTop: "1px solid #F0EDE4" }}>
+              Acá ves <strong style={{ color: C.black }}>en qué consumes</strong>: cuentan todas tus compras, con tarjeta o sin ella, el día que las hiciste. Los pagos de tarjeta no salen como categoría porque esa plata ya está repartida en estas — por eso este total no es el mismo que “Diarios”.
+            </div>
           </div>
           {cats.map((cat, i) => {
             const pct = Math.round((cat.amount / max) * 100);
