@@ -265,14 +265,20 @@ describe("getNextPayment", () => {
     expect(n.status).toBe("al-dia");
   });
 
-  it("descuenta todo pago ya hecho, sin importar a qué ciclo quedó etiquetado", () => {
+  it("descuenta el pago sin importar a qué ciclo quedó etiquetado", () => {
     // Un pago registrado hoy lleva el cycleKey del ciclo ABIERTO, pero en la vida real
     // liquida el estado de cuenta que está por vencer: tiene que descontar igual.
-    const pagos = [
-      { id: "p1", cardId: "card-1", amount: 400, cycleKey: "2026-08-25", date: new Date(2026, 7, 20).toISOString() },
-      { id: "p2", cardId: "card-1", amount: 300, cycleKey: "2026-10-25", date: new Date(2026, 8, 27).toISOString() },
-    ];
-    expect(getNextPayment(c, expenses, pagos, NOW).amount).toBe(500); // 1200 − 400 − 300
+    const pagos = [{ id: "p2", cardId: "card-1", amount: 300, cycleKey: "2026-10-25", date: new Date(2026, 8, 27).toISOString() }];
+    expect(getNextPayment(c, expenses, pagos, NOW).amount).toBe(900); // 1200 − 300
+  });
+
+  it("F36: un pago anterior a la foto del saldo no se descuenta otra vez", () => {
+    // `openingBalance` es el saldo que le mostró el banco el 1 de setiembre, y
+    // ahí ese abono de agosto ya está descontado. Restarlo de nuevo le daba una
+    // deuda menor —y un disponible mayor— que el de su banco.
+    const pagos = [{ id: "p1", cardId: "card-1", amount: 400, cycleKey: "2026-08-25", date: new Date(2026, 7, 20).toISOString() }];
+    expect(getNextPayment(c, expenses, pagos, NOW).amount).toBe(1200);
+    expect(getLineUsage(c, expenses, pagos).balance).toBe(1300); // 1000 + 200 + 100
   });
 
   it("un pago con fecha futura todavía no descuenta", () => {
@@ -685,6 +691,17 @@ describe("getNextPayment — el estado de cuenta del banco le gana al estimado",
     expect(n.statementAmount).toBe(1275.4);
     expect(n.estimateGross).toBe(1200); // el estimado queda para comparar
     expect(ymd(n.dueDate)).toBe("2026-10-16");
+  });
+
+  it("F36: contra el estatement solo descuentan los pagos posteriores al corte", () => {
+    // El banco factura al 25 de setiembre lo que quedaba DESPUÉS de los abonos
+    // de ese ciclo. El del 10 de setiembre ya está dentro de los 1275.40.
+    const pagos = [
+      { id: "p1", cardId: "card-1", amount: 400, date: new Date(2026, 8, 10).toISOString() },
+      { id: "p2", cardId: "card-1", amount: 175, date: new Date(2026, 8, 26).toISOString() },
+    ];
+    const n = getNextPayment(c, expenses, pagos, NOW, "PEN", [statement()]);
+    expect(n.amount).toBe(1100.4); // 1275.40 − 175
   });
 
   it("el estatement de otra moneda no se cruza", () => {

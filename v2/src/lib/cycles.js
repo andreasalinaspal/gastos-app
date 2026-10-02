@@ -158,27 +158,39 @@ function openingAt(card, until, currency = "PEN") {
   return opening;
 }
 
-// Σ pagos de la tarjeta en una moneda (opcionalmente hasta `until` inclusive).
-function paidTotal(card, cardPayments, currency = "PEN", until = null) {
+// Σ pagos de la tarjeta en una moneda, entre `from` y `until` (ambos inclusive,
+// ambos opcionales). Un pago sin fecha se cuenta siempre: no se puede ubicar.
+function paidTotal(card, cardPayments, currency = "PEN", until = null, from = null) {
   const cur = normCur(currency);
   const to = until ? startOfDay(until) : null;
+  const desde = from ? startOfDay(from) : null;
   return (cardPayments || []).reduce((sum, p) => {
     if (!p || p.cardId !== card.id) return sum;
     if (curOf(p) !== cur) return sum;
-    if (to && p.date && startOfDay(new Date(p.date)) > to) return sum; // pago futuro
+    if (p.date) {
+      const d = startOfDay(new Date(p.date));
+      if (to && d > to) return sum;      // pago futuro
+      if (desde && d < desde) return sum; // ya está dentro de la foto del saldo
+    }
     return sum + (Number(p.amount) || 0);
   }, 0);
 }
 
 // Uso de línea de crédito en UNA moneda (F10): saldo vivo = deuda previa +
-// Σ gastos desde openingDate − Σ pagos, todo en esa misma moneda.
+// Σ gastos desde openingDate − Σ pagos desde openingDate, todo en esa misma moneda.
+//
+// F36: los pagos se cortan en `openingDate` igual que los gastos, y por la misma
+// razón. `openingBalance` es una FOTO del saldo que le muestra el banco, y el
+// banco ya le descontó los abonos que hizo antes de esa foto. Restarlos de nuevo
+// hacía que el disponible de Qori saliera más alto que el del banco, justo por
+// el monto abonado.
 // → { balance, pct, available, creditLine, currency }. Sin línea en esa moneda → todo 0.
 export function getLineUsage(card, expenses, cardPayments, currency = "PEN") {
   const cur = normCur(currency);
   const line = getCardLine(card, cur);
   if (!line) return { balance: 0, pct: 0, available: 0, creditLine: 0, currency: cur };
   const spent = spentSince(card, expenses, null, cur);
-  const paid = paidTotal(card, cardPayments, cur);
+  const paid = paidTotal(card, cardPayments, cur, null, openingCutoff(card, cur));
   const balance = Math.max(0, line.openingBalance + spent - paid);
   const pct = line.creditLine ? (balance / line.creditLine) * 100 : 0;
   const available = line.creditLine ? Math.max(0, line.creditLine - balance) : 0;
@@ -262,12 +274,18 @@ export function getNextPayment(card, expenses, cardPayments, now = new Date(), c
   const spent = spentSince(card, expenses, closed.end, cur);
   const opening = openingAt(card, closed.end, cur);
   const estimateGross = opening + spent;
-  // Todo pago ya hecho descuenta de este estado de cuenta: el banco aplica los pagos
-  // a la deuda más antigua primero, así que el `cycleKey` (que solo dice en qué ciclo
-  // se registró el pago) no limita a qué estado de cuenta se aplica.
-  const paid = paidTotal(card, cardPayments, cur, now);
-
   const st = findStatement(statements, card.id, closed.key, cur);
+
+  // Qué pagos descuentan de este estado de cuenta. El `cycleKey` del pago no
+  // manda —solo dice en qué ciclo se registró, y el banco aplica los abonos a la
+  // deuda más antigua primero—; manda la FECHA, porque cada punto de partida ya
+  // trae pagos adentro (F36):
+  //   - con estado de cuenta: el banco ya le descontó lo que abonó antes del
+  //     corte, así que solo cuentan los pagos posteriores al corte.
+  //   - sin estado de cuenta: el estimado parte de la foto del saldo, así que
+  //     cuentan los pagos posteriores a esa foto.
+  const desde = st ? closed.end : openingCutoff(card, cur);
+  const paid = paidTotal(card, cardPayments, cur, now, desde);
   const gross = st ? Number(st.amount) || 0 : estimateGross;
   const amount = Math.max(0, gross - paid);
   const dueDate = st && st.dueDate ? startOfDay(new Date(st.dueDate)) : closed.paymentDate;
