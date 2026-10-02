@@ -109,8 +109,15 @@ export function migrateData(data) {
     changed = true;
   }
 
-  if (!(typeof out.schemaVersion === "number" && out.schemaVersion >= 6)) {
-    out.schemaVersion = 6;
+  // v7: la lista de suscripciones que ella misma lleva (F45). La detección
+  // automática sigue existiendo, pero como ayuda: lo que manda es esta lista.
+  if (!Array.isArray(out.suscripciones)) {
+    out.suscripciones = [];
+    changed = true;
+  }
+
+  if (!(typeof out.schemaVersion === "number" && out.schemaVersion >= 7)) {
+    out.schemaVersion = 7;
     changed = true;
   }
 

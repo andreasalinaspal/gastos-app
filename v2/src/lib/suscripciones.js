@@ -231,3 +231,59 @@ export function costaNoCancelar(lista) {
     .reduce((t, i) => t + (Number(i.monto) || 0), 0));
   return { PEN: suma("PEN"), USD: suma("USD") };
 }
+
+// ── F45: la lista que ella lleva ──────────────────────────────────────────
+//
+// La detección automática (arriba) es una ayuda, no la fuente de verdad: pide
+// dos cobros para afirmar algo, y una suscripción recién puesta o anual tarda
+// meses en aparecer. Ella quiere VER y mantener su lista. Esto es esa lista.
+//
+// `suscripciones = [{ id, nombre, monto, currency, cobra, cadencia, nota }]`
+//   `cobra`: día del mes (1-31) o fecha ISO. `cadencia`: "mensual" | "anual".
+
+export const esAnual = (s) => s && s.cadencia === "anual";
+
+// Lo que cuesta al mes: una anual se reparte entre 12 para poder compararla.
+export const costoMensual = (s) => {
+  const m = Number(s && s.monto) || 0;
+  return esAnual(s) ? redondea(m / 12) : m;
+};
+
+// La lista lista para pintar: con su próximo cobro y ordenada por urgencia.
+export function ordenaSuscripciones(lista, hoy = new Date()) {
+  return [...(lista || [])]
+    .filter(Boolean)
+    .map(s => ({ ...s, proximoCobro: proximoCobroDe(s, hoy), dias: diasParaCobro(s, hoy) }))
+    .sort((a, b) => {
+      if (a.dias === null && b.dias === null) return (Number(b.monto) || 0) - (Number(a.monto) || 0);
+      if (a.dias === null) return 1;
+      if (b.dias === null) return -1;
+      return a.dias - b.dias;
+    });
+}
+
+// Lo que suman al mes, por moneda. Los dólares nunca se convierten.
+export function totalMensualDeLista(lista) {
+  const suma = (usd) => redondea((lista || [])
+    .filter(s => s && (s.currency === "USD") === usd)
+    .reduce((t, s) => t + costoMensual(s), 0));
+  return { PEN: suma(false), USD: suma(true) };
+}
+
+// Lo que Qori detectó en sus gastos y ella todavía no tiene anotado. Sirve para
+// ofrecerle agregarlas, en vez de mostrarlas como si ya fueran parte de la lista.
+export function detectadasNoAnotadas(gastos, lista, hoy = new Date()) {
+  const anotadas = new Set((lista || []).map(s => claveComercio(s && s.nombre)).filter(Boolean));
+  return detectaSuscripciones(gastos, hoy).activas
+    .filter(d => !anotadas.has(claveComercio(d.comercio)));
+}
+
+// Para Config, sin abrir la pantalla.
+export function resumenLista(lista, fmt) {
+  const n = (lista || []).length;
+  if (n === 0) return null;
+  const t = totalMensualDeLista(lista);
+  const partes = [n === 1 ? "1 activa" : n + " activas"];
+  if (t.PEN > 0) partes.push(fmt(t.PEN) + " al mes");
+  return partes.join(" · ");
+}

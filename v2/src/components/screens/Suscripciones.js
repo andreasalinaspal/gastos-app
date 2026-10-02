@@ -2,7 +2,13 @@ import { C, FONT_TITLE, cardStyle } from "../../theme";
 import { subStyle, subHeader } from "../shared/subnav";
 import { fmtWith } from "../../lib/format";
 import { useStore } from "../../state/store";
-import { detectaSuscripciones, ordenaPorCancelar, costaNoCancelar } from "../../lib/suscripciones";
+import { useState } from "react";
+import { inputStyle } from "../../theme";
+import { genId } from "../../lib/format";
+import {
+  detectaSuscripciones, ordenaPorCancelar, costaNoCancelar,
+  ordenaSuscripciones, totalMensualDeLista, costoMensual, esAnual, detectadasNoAnotadas,
+} from "../../lib/suscripciones";
 
 // F43: las suscripciones que Qori encuentra sola en sus gastos.
 //
@@ -96,13 +102,132 @@ function PorCancelar({ items, fmt, onHecho }) {
   );
 }
 
+const CADENCIAS_UI = [["mensual", "Cada mes"], ["anual", "Cada año"]];
+const vacia = { nombre: "", monto: "", currency: "PEN", cobra: "", cadencia: "mensual", nota: "" };
+
+// Una suscripción de SU lista. Acá sí se puede editar y dar de baja, porque es
+// un dato suyo y no una deducción de Qori.
+function FilaMia({ s, fmt, onEditar, onCancelar }) {
+  const fmtC = (n) => (s.currency === "USD" ? fmtWith(n, "USD") : fmt(n));
+  const cuando = enCuantoLabel(s.dias);
+  const urge = s.dias !== null && s.dias <= 5;
+  return (
+    <div style={{ ...cardStyle, padding: "13px 15px", marginBottom: 9 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.black }}>{s.nombre}</div>
+          <div style={{ fontSize: 12, color: urge ? C.orange : C.muted, fontWeight: urge ? 700 : 600, marginTop: 2 }}>
+            {esAnual(s) ? "cada año" : "cada mes"}{cuando ? " · " + cuando : ""}
+          </div>
+          {esAnual(s) && (
+            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>son {fmtC(costoMensual(s))} al mes</div>
+          )}
+          {s.nota && <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.45, marginTop: 5 }}>{s.nota}</div>}
+        </div>
+        <div style={{ fontFamily: FONT_TITLE, fontSize: 18, fontWeight: 900, color: C.black, letterSpacing: -0.4, flexShrink: 0 }}>{fmtC(s.monto)}</div>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button onClick={() => onEditar(s)} style={{ padding: "7px 12px", borderRadius: 9, background: "#F0EDE4", color: C.black, border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Editar</button>
+        <button onClick={() => onCancelar(s)} style={{ padding: "7px 12px", borderRadius: 9, background: "transparent", color: C.orange, border: `1px solid ${C.orange}`, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Quiero cancelarla</button>
+      </div>
+    </div>
+  );
+}
+
+function FormSuscripcion({ form, setForm, onGuardar, onBorrar, onCerrar }) {
+  const lbl = { fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 5 };
+  const valido = String(form.nombre).trim() && Number(form.monto) > 0;
+  return (
+    <div style={{ ...cardStyle, padding: "16px 16px 18px", marginBottom: 14, border: `1.5px solid ${C.purple}` }}>
+      <div style={lbl}>Nombre</div>
+      <input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} placeholder="Ej: Netflix" style={{ ...inputStyle, color: C.black, marginBottom: 12 }} />
+
+      <div style={lbl}>Monto</div>
+      <input type="number" inputMode="decimal" value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} placeholder="0.00" style={{ ...inputStyle, color: C.black, marginBottom: 8 }} />
+      <div style={{ display: "flex", background: "#F0EDE4", borderRadius: 12, padding: 4, marginBottom: 12 }}>
+        {[["PEN", "S/ Soles"], ["USD", "US$ Dólares"]].map(([v, l]) => (
+          <button key={v} onClick={() => setForm(f => ({ ...f, currency: v }))}
+            style={{ flex: 1, padding: "8px 0", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: form.currency === v ? 800 : 600, color: form.currency === v ? C.black : C.muted, background: form.currency === v ? "#fff" : "transparent" }}>{l}</button>
+        ))}
+      </div>
+
+      <div style={lbl}>Cada cuánto</div>
+      <div style={{ display: "flex", background: "#F0EDE4", borderRadius: 12, padding: 4, marginBottom: 12 }}>
+        {CADENCIAS_UI.map(([v, l]) => (
+          <button key={v} onClick={() => setForm(f => ({ ...f, cadencia: v }))}
+            style={{ flex: 1, padding: "8px 0", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: form.cadencia === v ? 800 : 600, color: form.cadencia === v ? C.black : C.muted, background: form.cadencia === v ? "#fff" : "transparent" }}>{l}</button>
+        ))}
+      </div>
+
+      <div style={lbl}>{form.cadencia === "anual" ? "Fecha del próximo cobro" : "Qué día del mes te cobran"}</div>
+      <input
+        type={form.cadencia === "anual" ? "date" : "number"}
+        inputMode={form.cadencia === "anual" ? undefined : "numeric"}
+        value={form.cobra}
+        onChange={e => setForm(f => ({ ...f, cobra: e.target.value }))}
+        placeholder={form.cadencia === "anual" ? "" : "Ej: 18"}
+        style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />
+      <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 12 }}>
+        Opcional, pero con esto Qori te avisa cuántos días faltan.
+      </div>
+
+      <div style={lbl}>Nota (opcional)</div>
+      <input value={form.nota} onChange={e => setForm(f => ({ ...f, nota: e.target.value }))} placeholder="Ej: dónde se cancela" style={{ ...inputStyle, color: C.black, marginBottom: 14 }} />
+
+      <button onClick={onGuardar} disabled={!valido}
+        style={{ width: "100%", padding: 14, borderRadius: 13, background: valido ? C.green : "#D4D0C8", color: "#fff", border: "none", fontSize: 15, fontWeight: 700, cursor: valido ? "pointer" : "default", fontFamily: "inherit", marginBottom: 8 }}>Guardar</button>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={onCerrar} style={{ flex: 1, padding: 12, borderRadius: 13, background: "#F0EDE4", color: "#666", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Cancelar</button>
+        {onBorrar && <button onClick={onBorrar} style={{ flex: 1, padding: 12, borderRadius: 13, background: "transparent", color: C.orange, border: `1px solid ${C.orange}`, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Eliminar</button>}
+      </div>
+    </div>
+  );
+}
+
 export function SuscripcionesScreen({ subScreen, setSubScreen, fmt }) {
   const data = useStore(s => s.data);
   const setData = useStore(s => s.setData);
+  const [form, setForm] = useState(null);   // null | {…vacia, id?}
   const pendientes = ordenaPorCancelar(data.porCancelar);
   const marcarHecha = (id) => setData(p => ({ ...p, porCancelar: (p.porCancelar || []).filter(i => i && i.id !== id) }));
+
+  // F45: SU lista manda. La detección queda como ayuda, abajo.
+  const mias = ordenaSuscripciones(data.suscripciones);
+  const total = totalMensualDeLista(data.suscripciones);
+  const sugeridas = detectadasNoAnotadas(data.expenses, data.suscripciones);
+
+  const guardar = () => {
+    const limpio = {
+      id: form.id || genId(),
+      nombre: String(form.nombre).trim(),
+      monto: Number(form.monto) || 0,
+      currency: form.currency === "USD" ? "USD" : "PEN",
+      cadencia: form.cadencia === "anual" ? "anual" : "mensual",
+      cobra: form.cadencia === "anual" ? (form.cobra || null) : (Number(form.cobra) || null),
+      nota: String(form.nota || "").trim() || null,
+    };
+    setData(p => {
+      const lista = p.suscripciones || [];
+      return { ...p, suscripciones: form.id ? lista.map(x => x.id === form.id ? limpio : x) : [...lista, limpio] };
+    });
+    setForm(null);
+  };
+  const borrar = () => {
+    setData(p => ({ ...p, suscripciones: (p.suscripciones || []).filter(x => x.id !== form.id) }));
+    setForm(null);
+  };
+  // Pasarla a "tienes que cancelar" sin sacarla de la lista: sigue cobrando
+  // hasta que de verdad la cancele, y eso es justo lo que hay que ver.
+  const quieroCancelar = (s) => setData(p => {
+    const ya = (p.porCancelar || []).some(i => i && i.nombre === s.nombre);
+    if (ya) return p;
+    return { ...p, porCancelar: [...(p.porCancelar || []), {
+      id: genId(), nombre: s.nombre, monto: s.monto, currency: s.currency, cobra: s.cobra || null, nota: s.nota || null,
+    }] };
+  });
+
   const r = detectaSuscripciones(data.expenses);
-  const hayAlgo = r.activas.length > 0 || r.inactivas.length > 0;
+  const hayAlgo = mias.length > 0 || r.inactivas.length > 0;
   const subieron = r.activas.filter(s => s.subioDePrecio);
 
   return (
@@ -110,15 +235,15 @@ export function SuscripcionesScreen({ subScreen, setSubScreen, fmt }) {
       {subHeader("Suscripciones", () => setSubScreen(null))}
       <div style={{ padding: "0 20px 40px" }}>
         <PorCancelar items={pendientes} fmt={fmt} onHecho={marcarHecha} />
-        {r.activas.length > 0 && (
+        {mias.length > 0 && (
           <div style={{ background: "linear-gradient(135deg, #1B6B3A 0%, #2D9F5B 100%)", borderRadius: 20, padding: "22px 20px", marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>Te cuestan al mes</div>
-            <div style={{ fontFamily: FONT_TITLE, fontSize: "clamp(26px, 9vw, 42px)", fontWeight: 900, color: "#fff", letterSpacing: -1 }}>{fmt(r.totalMensual)}</div>
-            {r.totalMensualUSD > 0 && (
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", fontWeight: 600, marginTop: 2 }}>+ {fmtWith(r.totalMensualUSD, "USD")} en dólares</div>
+            <div style={{ fontFamily: FONT_TITLE, fontSize: "clamp(26px, 9vw, 42px)", fontWeight: 900, color: "#fff", letterSpacing: -1 }}>{fmt(total.PEN)}</div>
+            {total.USD > 0 && (
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", fontWeight: 600, marginTop: 2 }}>+ {fmtWith(total.USD, "USD")} en dólares</div>
             )}
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.78)", marginTop: 8, lineHeight: 1.45 }}>
-              Son {fmt(Math.round(r.totalMensual * 12 * 100) / 100)} al año. Las anuales están repartidas entre 12 meses.
+              Son {fmt(Math.round(total.PEN * 12 * 100) / 100)} al año. Las anuales están repartidas entre 12 meses.
             </div>
           </div>
         )}
@@ -131,23 +256,48 @@ export function SuscripcionesScreen({ subScreen, setSubScreen, fmt }) {
 
         {!hayAlgo && pendientes.length === 0 && (
           <div style={{ ...cardStyle, padding: "20px 18px" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.black, marginBottom: 8 }}>Todavía no encuentro ninguna</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.black, marginBottom: 8 }}>Todavía no tienes ninguna anotada</div>
             <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.55 }}>
-              Qori las busca sola en tus gastos: cuando un mismo comercio te cobra un monto
-              parecido cada mes, la reconoce y aparece acá. No tienes que anotar nada.
+              Dale a <strong>+ Agregar</strong> y anota las que pagas: cuánto, cada cuánto y
+              qué día te cobran. Qori te va avisando cuáles se vienen.
               <div style={{ marginTop: 8 }}>
-                Hacen falta <strong>al menos dos cobros</strong> del mismo sitio para afirmarlo,
-                así que esto se llena solo conforme vayan entrando tus compras.
+                De paso las busca sola en tus gastos, y cuando vea un cobro repetido te la
+                propone acá para que la agregues de un toque.
               </div>
             </div>
           </div>
         )}
 
-        {r.activas.length > 0 && (
-          <>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.2, textTransform: "uppercase", margin: "4px 0 10px" }}>Activas</div>
-            {r.activas.map(s => <Fila key={s.id} s={s} fmt={fmt} />)}
-          </>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "4px 0 10px" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1.2, textTransform: "uppercase" }}>Activas</div>
+          {!form && (
+            <button onClick={() => setForm({ ...vacia })}
+              style={{ padding: "7px 13px", borderRadius: 10, background: C.purple, color: "#fff", border: "none", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>+ Agregar</button>
+          )}
+        </div>
+        {form && (
+          <FormSuscripcion form={form} setForm={setForm} onGuardar={guardar}
+            onBorrar={form.id ? borrar : null} onCerrar={() => setForm(null)} />
+        )}
+        {mias.map(s => (
+          <FilaMia key={s.id} s={s} fmt={fmt}
+            onEditar={(x) => setForm({ ...x, monto: String(x.monto), cobra: x.cobra == null ? "" : String(x.cobra), nota: x.nota || "" })}
+            onCancelar={quieroCancelar} />
+        ))}
+
+        {/* Lo que Qori vio en sus gastos y ella no tiene anotado. Se ofrece, no
+            se mete solo: la lista es suya. */}
+        {sugeridas.length > 0 && (
+          <div style={{ background: "#F0EDE4", borderRadius: 14, padding: "13px 15px", marginTop: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.black, marginBottom: 6 }}>Vi estos cobros repetidos en tus gastos</div>
+            {sugeridas.map(d => (
+              <div key={d.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0" }}>
+                <div style={{ fontSize: 13, color: C.black, overflow: "hidden", textOverflow: "ellipsis" }}>{d.comercio}</div>
+                <button onClick={() => setForm({ ...vacia, nombre: d.comercio, monto: String(d.monto), currency: d.currency, cadencia: d.cadencia })}
+                  style={{ padding: "5px 10px", borderRadius: 8, background: "#fff", color: C.purple, border: "none", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Agregar</button>
+              </div>
+            ))}
+          </div>
         )}
 
         {r.inactivas.length > 0 && (

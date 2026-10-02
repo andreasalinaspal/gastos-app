@@ -7,7 +7,7 @@ import { LESSONS } from "../../content/lessons";
 import { useStore } from "../../state/store";
 import { textoVersion, buscaVersion } from "../../lib/version";
 import { resumenDeudas } from "../../lib/deudas";
-import { resumenSuscripciones, ordenaPorCancelar } from "../../lib/suscripciones";
+import { resumenSuscripciones, ordenaPorCancelar, resumenLista } from "../../lib/suscripciones";
 
 // F25: resumen de una línea para la fila de Config.
 const resumenDeudasTexto = (deudas, fmt) => {
@@ -188,9 +188,9 @@ export default function Config({ fmt, curMonth, setSubScreen, setConfirm, showTo
                   que cuesta plata por no mirarlo. */}
               {(() => {
                 const n = ordenaPorCancelar(data.porCancelar).length;
-                return n > 0
-                  ? <div style={{ fontSize: 12, color: C.orange, fontWeight: 700 }}>⚠️ {n === 1 ? "1 que tienes que cancelar" : n + " que tienes que cancelar"}</div>
-                  : <div style={{ fontSize: 12, color: C.muted }}>{resumenSuscripciones(data.expenses, fmt)}</div>;
+                if (n > 0) return <div style={{ fontSize: 12, color: C.orange, fontWeight: 700 }}>⚠️ {n === 1 ? "1 que tienes que cancelar" : n + " que tienes que cancelar"}</div>;
+                const propio = resumenLista(data.suscripciones, fmt);
+                return <div style={{ fontSize: 12, color: C.muted }}>{propio || resumenSuscripciones(data.expenses, fmt)}</div>;
               })()}
             </div>
             <span style={{ fontSize: 20, color: C.muted }}>›</span>
