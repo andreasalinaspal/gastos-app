@@ -48,6 +48,23 @@ export function proyectaResto(gastoVentana, hoy = new Date(), dias = VENTANA_DIA
   return redondea(ritmoDiario(gastoVentana, dias) * faltan);
 }
 
+// F53: un gasto que en realidad es un pago de tarjeta.
+//
+// Qori registra los pagos en `cardPayments` y los deja fuera del ritmo porque
+// son montos grandes y esporádicos. Pero ella también los anota a mano como
+// gastos normales ("TC BCP", "Pago TC Ripley"), con una categoría suya llamada
+// "Pago Tarjeta". Por ese camino se colaban al promedio: S/1,953 de una ventana
+// de S/10,228 eran pagos de tarjeta, y la proyección del mes salía inflada.
+//
+// Se reconoce por la categoría —que es lo que ella controla— y se acepta
+// cualquier variante del nombre ("Pago de tarjeta", "Pago Tarjeta", "Pago TC").
+const sinTildes = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+export function esPagoDeTarjeta(gasto) {
+  const n = sinTildes(gasto && gasto.category && gasto.category.name);
+  if (!n) return false;
+  return n.includes("pago") && (n.includes("tarjeta") || /\btc\b/.test(n));
+}
+
 // Suma lo que salió de su bolsillo en los últimos `dias` días: efectivo y
 // débito. Las compras con tarjeta no cuentan —esas salen el día que paga la
 // tarjeta— y los pagos de tarjeta tampoco, por lo mismo del promedio.
@@ -58,6 +75,7 @@ export function gastoDeLaVentana(expenses, idsCredito, hoy = new Date(), dias = 
     if (!e || !e.date) return t;
     if (e.currency === "USD") return t;              // los dólares van aparte
     if (credito.has(e.paymentMethodId)) return t;    // no salió de su cuenta
+    if (esPagoDeTarjeta(e)) return t;                // es un abono, no su ritmo
     const d = startOfDay(new Date(e.date)).getTime();
     if (isNaN(d) || d < desde || d > startOfDay(hoy).getTime()) return t;
     return t + (Number(e.amount) || 0);

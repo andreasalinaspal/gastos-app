@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   tramoDelMes, ritmoDiario, proyectaResto,
   cuantoAbonar, prioridadDeAbono, repartoSugerido,
-  agendaDePagos, pisoDelMes, escaleraDePago, diasParaVencer, gastoDeLaVentana,
+  agendaDePagos, pisoDelMes, escaleraDePago, diasParaVencer, gastoDeLaVentana, esPagoDeTarjeta,
 } from "./abonos";
 
 const HOY = new Date(2026, 9, 10); // 10 oct 2026 — octubre tiene 31 días
@@ -197,5 +197,35 @@ describe("piso, agenda y escalera", () => {
   it("sin tarjetas con datos no hay escalera", () => {
     expect(escaleraDePago([], hoy)).toEqual([]);
     expect(pisoDelMes(null)).toEqual({ PEN: 0, USD: 0 });
+  });
+});
+
+// F53: los pagos de tarjeta anotados a mano no son su ritmo de gasto.
+describe("esPagoDeTarjeta y el ritmo", () => {
+  const cat = (name) => ({ category: { name } });
+
+  it("reconoce las variantes del nombre que ella usa", () => {
+    expect(esPagoDeTarjeta(cat("Pago de tarjeta"))).toBe(true);
+    expect(esPagoDeTarjeta(cat("Pago Tarjeta"))).toBe(true);
+    expect(esPagoDeTarjeta(cat("pago tc"))).toBe(true);
+    expect(esPagoDeTarjeta(cat("Pago TC"))).toBe(true);
+  });
+
+  it("no se lleva por delante categorías parecidas", () => {
+    expect(esPagoDeTarjeta(cat("Comida"))).toBe(false);
+    expect(esPagoDeTarjeta(cat("Tarjetas de regalo"))).toBe(false);
+    expect(esPagoDeTarjeta(cat("Pago de servicios"))).toBe(false);
+    expect(esPagoDeTarjeta({})).toBe(false);
+    expect(esPagoDeTarjeta(null)).toBe(false);
+  });
+
+  it("quedan fuera del ritmo, aunque se hayan anotado como gasto normal", () => {
+    const g = (id, amount, date, extra = {}) => ({ id, amount, date: new Date(date).toISOString(), paymentMethodId: "debito", ...extra });
+    const exps = [
+      g("a", 200, new Date(2026, 9, 1)),
+      g("b", 1366, new Date(2026, 9, 1), cat("Pago Tarjeta")),
+      g("c", 587, new Date(2026, 9, 2), cat("Pago de tarjeta")),
+    ];
+    expect(gastoDeLaVentana(exps, new Set(["tc"]), HOY)).toBe(200);
   });
 });
