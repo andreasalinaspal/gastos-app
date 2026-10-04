@@ -323,8 +323,15 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
                 factura. Es la diferencia entre su "Consumido" y su "Deuda total". */}
             <div style={labelStyle}>Compras en proceso (S/) (opcional)</div>
             <input type="number" inputMode="decimal" placeholder="0" value={cardForm.enProceso} onChange={e => setCardForm(f => ({ ...f, enProceso: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />
-            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 14 }}>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 8 }}>
               Compras que tu banco ya te descontó de la línea pero aún no factura. Es la resta entre el <strong>Consumido</strong> y la <strong>Deuda total</strong> de tu banco. Ocupan línea, pero no las debes todavía.
+            </div>
+            {/* F55: el error fácil de cometer. Actualizar el saldo sin actualizar
+                esto cuenta las mismas compras dos veces, y el disponible sale mal. */}
+            <div style={{ background: "#FFF4EE", borderLeft: `3px solid ${C.orange}`, borderRadius: 8, padding: "9px 11px", fontSize: 12, lineHeight: 1.5, color: C.black, marginBottom: 14 }}>
+              <strong>Actualiza este número junto con el saldo, o ninguno de los dos.</strong> Si cambias
+              uno solo, las mismas compras se cuentan dos veces. Mientras no toques nada, Qori se mantiene
+              al día solo: lo que el banco factura y lo que tú registras se compensan.
             </div>
 
             {/* F48: con la TCEA de TODAS sus tarjetas, "¿Cuánto abonar?" ordena
