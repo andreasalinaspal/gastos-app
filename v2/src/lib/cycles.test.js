@@ -1065,3 +1065,37 @@ describe("el abono parcial se explica", () => {
     expect(getBalanceBreakdown(c, [], [], hoy, "PEN", st).pagado).toBe(0);
   });
 });
+
+// F55: lo DEBIDO y lo OCUPADO no son lo mismo. El banco ya los separa.
+describe("getSharedUsage — compras en proceso", () => {
+  const base = card({
+    lines: {
+      PEN: { creditLine: 6000, openingBalance: 4035.90, openingDate: new Date(2026, 9, 4).toISOString() },
+      USD: { creditLine: 0, openingBalance: 424.86, openingDate: new Date(2026, 9, 4).toISOString() },
+    },
+  });
+
+  it("sin compras en proceso, lo ocupado es lo que debe", () => {
+    const u = getSharedUsage(base, [], [], 3.784);
+    expect(u.deuda).toBe(5643.57);
+    expect(u.usado).toBe(5643.57);
+    expect(u.available).toBe(356.43);
+  });
+
+  it("las compras en proceso ocupan línea pero NO son deuda", () => {
+    const u = getSharedUsage({ ...base, enProceso: 95.89 }, [], [], 3.784);
+    expect(u.deuda).toBe(5643.57);          // lo que debe no cambia
+    expect(u.usado).toBe(5739.46);          // lo que ocupa, sí
+    expect(u.available).toBe(260.54);       // y cuadra con su banco
+  });
+
+  it("un valor raro no rompe nada", () => {
+    expect(getSharedUsage({ ...base, enProceso: -50 }, [], [], 3.784).usado).toBe(5643.57);
+    expect(getSharedUsage({ ...base, enProceso: "x" }, [], [], 3.784).usado).toBe(5643.57);
+  });
+
+  it("el porcentaje usado mira lo ocupado, no la deuda", () => {
+    const u = getSharedUsage({ ...base, enProceso: 95.89 }, [], [], 3.784);
+    expect(Math.round(u.pct)).toBe(96);
+  });
+});

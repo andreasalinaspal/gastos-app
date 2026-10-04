@@ -17,7 +17,7 @@ const hintStyle = { fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom
 // 6 colores de la paleta para identificar tarjetas.
 const CARD_COLORS = [C.purple, C.purpleLight, C.orange, C.green, C.greenLight, C.black];
 
-const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", openingBalance: "", usdOn: false, usdOpeningBalance: "", usdRate: "", cycleBudget: "", tcea: "", minimoPEN: "", minimoUSD: "", pagoMesPEN: "", pagoMesUSD: "", venceEl: "", color: CARD_COLORS[0] };
+const emptyCardForm = { id: null, name: "", cutoffDay: "", paymentDay: "", creditLine: "", openingBalance: "", usdOn: false, usdOpeningBalance: "", usdRate: "", cycleBudget: "", tcea: "", enProceso: "", minimoPEN: "", minimoUSD: "", pagoMesPEN: "", pagoMesUSD: "", venceEl: "", color: CARD_COLORS[0] };
 
 export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setConfirm }) {
   const data = useStore(s => s.data);
@@ -70,6 +70,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
       usdRate: card.usdRate ? String(card.usdRate) : "",
       cycleBudget: card.cycleBudget ? String(card.cycleBudget) : "",
       tcea: card.tcea ? String(card.tcea) : "",
+      enProceso: card.enProceso ? String(card.enProceso) : "",
       minimoPEN: card.minimoPEN ? String(card.minimoPEN) : "",
       minimoUSD: card.minimoUSD ? String(card.minimoUSD) : "",
       pagoMesPEN: card.pagoMesPEN ? String(card.pagoMesPEN) : "",
@@ -100,6 +101,8 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
     if (!creditLine || creditLine <= 0) { setFormError("Ingresa una línea de crédito mayor a 0"); return; }
     const cycleBudget = cardForm.cycleBudget === "" ? null : Number(cardForm.cycleBudget);
     if (cycleBudget !== null && (!Number.isFinite(cycleBudget) || cycleBudget <= 0)) { setFormError("El presupuesto por ciclo debe ser mayor a 0"); return; }
+    const enProceso = Number(cardForm.enProceso) || 0;
+    if (enProceso < 0) { setFormError("Las compras en proceso no pueden ser negativas"); return; }
     const tcea = cardForm.tcea === "" ? null : Number(cardForm.tcea);
     if (tcea !== null && (!Number.isFinite(tcea) || tcea <= 0 || tcea > 500)) { setFormError("La TCEA debe ser un porcentaje entre 0 y 500"); return; }
     const banco = {
@@ -148,7 +151,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
         PEN: { creditLine, openingBalance, openingDate: penCambio ? ahora : (prevPen.openingDate || prev.openingDate || ahora) },
         ...(usdLine ? { USD: { ...usdLine, openingDate: usdCambio || !prevUsd ? ahora : (prevUsd.openingDate || prev.openingDate || ahora) } } : {}),
       };
-      const patch = { name, cutoffDay, paymentDay, creditLine, cycleBudget, tcea, ...banco, color: cardForm.color, lines, usdRate };
+      const patch = { name, cutoffDay, paymentDay, creditLine, cycleBudget, tcea, enProceso, ...banco, color: cardForm.color, lines, usdRate };
       if (penCambio) {
         patch.openingBalance = openingBalance; // campos planos: se mantienen por compatibilidad
         patch.openingDate = ahora;
@@ -161,7 +164,7 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
         PEN: { creditLine, openingBalance, openingDate: ahora },
         ...(usdLine ? { USD: { ...usdLine, openingDate: ahora } } : {}),
       };
-      setData(p => ({ ...p, paymentMethods: [...p.paymentMethods, { id: genId(), type: "credito", name, cutoffDay, paymentDay, creditLine, openingBalance, lines, usdRate, openingDate: ahora, cycleBudget, tcea, ...banco, color: cardForm.color, archived: false }] }));
+      setData(p => ({ ...p, paymentMethods: [...p.paymentMethods, { id: genId(), type: "credito", name, cutoffDay, paymentDay, creditLine, openingBalance, lines, usdRate, openingDate: ahora, cycleBudget, tcea, enProceso, ...banco, color: cardForm.color, archived: false }] }));
       showToast("Tarjeta " + name + " agregada");
     }
     setCardForm(null); setFormError("");
@@ -316,6 +319,14 @@ export function MediosPagoScreen({ subScreen, setSubScreen, fmt, showToast, setC
                 </div>
               )}
             </div>
+            {/* F55: lo que el banco ya le descontó de la línea pero todavía no
+                factura. Es la diferencia entre su "Consumido" y su "Deuda total". */}
+            <div style={labelStyle}>Compras en proceso (S/) (opcional)</div>
+            <input type="number" inputMode="decimal" placeholder="0" value={cardForm.enProceso} onChange={e => setCardForm(f => ({ ...f, enProceso: e.target.value }))} style={{ ...inputStyle, color: C.black, marginBottom: 6 }} />
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.45, marginBottom: 14 }}>
+              Compras que tu banco ya te descontó de la línea pero aún no factura. Es la resta entre el <strong>Consumido</strong> y la <strong>Deuda total</strong> de tu banco. Ocupan línea, pero no las debes todavía.
+            </div>
+
             {/* F48: con la TCEA de TODAS sus tarjetas, "¿Cuánto abonar?" ordena
                 por tasa en vez de por saturación — que es lo que de verdad manda. */}
             <div style={labelStyle}>TCEA (opcional)</div>

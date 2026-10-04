@@ -239,14 +239,29 @@ export function getSharedUsage(card, expenses, cardPayments, tasa = null) {
   const balanceUSD = usd.balance;
   const tieneUsd = balanceUSD > 0;
   const usdEnSoles = tieneUsd && tasaOk ? Math.round(balanceUSD * t * 100) / 100 : 0;
-  const usado = pen.balance + usdEnSoles;
+
+  // F55: lo DEBIDO y lo OCUPADO no son lo mismo, y el banco ya los separa:
+  // "Deuda total" es lo facturado; "Consumido" incluye además las compras
+  // autorizadas que todavía no factura. Esas ya le quitan línea aunque no las
+  // deba todavía, por eso su disponible real era menor que el de Qori.
+  //
+  // `enProceso` es ese colgado, en soles. No toca la deuda —así la prioridad de
+  // abono y la escalera siguen mirando lo que de verdad debe— pero sí ocupa
+  // línea.
+  const enProceso = Math.max(0, Number(card && card.enProceso) || 0);
+  const deuda = Math.round((pen.balance + usdEnSoles) * 100) / 100;
+  const usado = Math.round((deuda + enProceso) * 100) / 100;
   return {
     creditLine,
     balancePEN: pen.balance,
     balanceUSD,
     usdEnSoles,
+    enProceso,
+    deuda,
     usado,
-    available: creditLine ? Math.max(0, creditLine - usado) : 0,
+    // Redondeado: sin esto el disponible arrastra la basura de la coma flotante
+    // (6000 − 5739.46 = 260.53999999999996) y se ve en pantalla.
+    available: creditLine ? Math.max(0, Math.round((creditLine - usado) * 100) / 100) : 0,
     pct: creditLine ? (usado / creditLine) * 100 : 0,
     tieneUsd,
     faltaTasa: tieneUsd && !tasaOk,

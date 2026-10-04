@@ -61,7 +61,9 @@ export function AbonosScreen({ subScreen, setSubScreen, fmt }) {
   const usos = tarjetas.map(card => {
     const vig = tasaVigente(card, data);
     const u = getSharedUsage(card, data.expenses, data.cardPayments, vig && vig.tasa);
-    return { card, pct: u.pct, balance: u.usado, available: u.available };
+    // F55: para decidir a cuál abonar manda lo que DEBE, no lo que ocupa:
+    // las compras en proceso quitan línea pero todavía no generan interés.
+    return { card, pct: u.pct, balance: u.deuda, available: u.available };
   });
   const orden = prioridadDeAbono(usos);
   const agenda = agendaDePagos(tarjetas, hoy);
