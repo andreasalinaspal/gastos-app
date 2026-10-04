@@ -10,6 +10,7 @@ import { useStore } from "../../state/store";
 import { PaymentMethodPicker, PmChip } from "../shared/PaymentMethodPicker";
 import { CategoryPicker } from "../shared/CategoryPicker";
 import { InboxBanner } from "../shared/InboxSheet";
+import { agendaDePagos, parseFecha } from "../../lib/abonos";
 
 export default function Home({
   fmt, curMonth, todayTotal, todayTotalUSD, recentExp, budgetAlerts,
@@ -85,6 +86,41 @@ export default function Home({
           onOpen={() => setShowInbox(true)}
           fmt={fmt}
         />
+        {/* F54: el aviso de vencimiento. Ella lo pidió: "un día antes del mínimo
+            del BBVA y Ripley, BCP, me puedes avisar". Va acá arriba y no en una
+            pantalla aparte, porque un aviso que hay que ir a buscar no es un aviso.
+            Usa las fechas que ella copió del banco, no el cálculo del ciclo. */}
+        {(() => {
+          const porVencer = agendaDePagos(data.paymentMethods, new Date())
+            .filter(x => x.dias !== null && x.dias <= 3 && (x.minimoPEN > 0 || x.minimoUSD > 0));
+          if (porVencer.length === 0) return null;
+          const urge = porVencer.some(x => x.dias <= 1);
+          const cuando = (d) => d < 0 ? "venció hace " + Math.abs(d) + (Math.abs(d) === 1 ? " día" : " días")
+            : d === 0 ? "vence HOY" : d === 1 ? "vence mañana" : "vence en " + d + " días";
+          return (
+            <div style={{ padding: "18px 20px 0" }}>
+              <div onClick={() => setSubScreen("abonos")} style={{ background: urge ? C.red : C.orange, borderRadius: 16, padding: "13px 15px", cursor: "pointer", boxShadow: "0 3px 14px rgba(0,0,0,0.18)" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.75)", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 6 }}>
+                  {porVencer.length === 1 ? "Pago mínimo por vencer" : "Pagos mínimos por vencer"}
+                </div>
+                {porVencer.map(x => (
+                  <div key={x.card.id} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, padding: "3px 0" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", minWidth: 0 }}>
+                      {x.card.name} <span style={{ fontWeight: 600, opacity: 0.85 }}>· {cuando(x.dias)}</span>
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", whiteSpace: "nowrap" }}>
+                      {x.minimoPEN > 0 ? fmt(x.minimoPEN) : null}
+                      {x.minimoPEN > 0 && x.minimoUSD > 0 ? " + " : null}
+                      {x.minimoUSD > 0 ? fmtWith(x.minimoUSD, "USD") : null}
+                    </div>
+                  </div>
+                ))}
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", marginTop: 6 }}>Toca para ver cuánto puedes abonar ›</div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Próximos pagos (F6): lo primero que ve si tiene TC — cuánto vence y cuándo */}
         {creditCards.length > 0 && (() => {
           // Soles y dólares van separados (F10): el resumen de Inicio muestra los soles
