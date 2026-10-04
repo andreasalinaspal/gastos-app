@@ -1,4 +1,4 @@
-# Dónde quedamos — 2 oct 2026
+# Dónde quedamos — 3 oct 2026
 
 Registro automático de gastos, por dos vías: Apple Pay y correos del banco.
 
@@ -22,9 +22,15 @@ Registro automático de gastos, por dos vías: Apple Pay y correos del banco.
   en el código.
 - **Primera prueba real OK**: una "Constancia de Pago Plin" devolvió `201 registrado:true`,
   salió la franja en Inicio y la confirmó. Falta ver una COMPRA entrando sola.
-- `lib/correoBancos.js` — lectores de **Interbank** y **BBVA**, con 34 pruebas sobre correos reales.
+- `lib/correoBancos.js` — lectores de **Interbank**, **BBVA**, **BCP** y **Yape**, con 48
+  pruebas sobre correos reales. El filtro de Gmail ya tiene los cuatro remitentes.
 - Interbank lee: consumo, Constancia de Pago Plin y **Constancia de transferencia** (F47).
-  Cada asunto nuevo del banco hay que enseñarlo: lo que no reconoce NO se registra.
+- Tres formatos distintos de etiqueta/valor: Interbank y BBVA usan salto de línea o
+  `Etiqueta: valor`; **BCP usa un solo espacio en la misma línea** (`campoBCP`); Yape
+  mezcla los dos y prueba ambos extractores.
+- **Yape NO manda correo por los yapeos normales** (persona a persona ni QR en
+  comercios). Solo pagos de servicio y Yape Promos. Eso se anota a mano, siempre.
+- Cada asunto nuevo del banco hay que enseñarlo: lo que no reconoce NO se registra.
 - BBVA (F37): plantilla distinta — moneda en campo propio (`PEN`/`USD`), monto pelado, hora 24h.
   Sin moneda reconocible NO se registra. El filtro de Gmail ya tiene los dos remitentes.
 - `/api/ingest-correo` — recibe el correo crudo y decide.
@@ -52,10 +58,9 @@ Cargadas sus 12 activas y 3 avisos (HBO Max, Paramount+, Claude Max→Pro).
 
 ### 3. Correos que faltan
 - **Interbank · pago de tarjeta de crédito** — solo el asunto. Ahora mismo lo ignoro
-  por asuntos adivinados (`"pago de tu tarjeta"`, `"pago de tarjeta"`). Si el real es
-  distinto, caería en "no-reconocido": inofensivo, pero no acierta.
-- **BCP y Ripley** — un consumo con tarjeta de cada uno (remitente, asunto, cuerpo).
-  BBVA ya está hecho.
+  por asuntos adivinados. Si el real es distinto, cae en "no-reconocido": inofensivo.
+- **Ripley** — un consumo con tarjeta (remitente, asunto, cuerpo). Es su tarjeta más
+  cara (109.83%), así que es la que más conviene vigilar.
 
 ### 4. Que la bandeja sepa crear PAGOS de tarjeta, no solo gastos
 El correo de BBVA "Constancia Pago de Tarjetas propias" trae todo lo necesario:
