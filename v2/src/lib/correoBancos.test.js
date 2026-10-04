@@ -447,3 +447,151 @@ describe("Interbank — transferencia enviada", () => {
     expect(leeAvisoBancario(rota).accion).toBe("no-reconocido");
   });
 });
+
+// ── BCP ───────────────────────────────────────────────────────────────────
+// Cuerpo copiado tal cual de su correo del 3 oct 2026.
+const BCP = "notificaciones@notificacionesbcp.com.pe";
+
+const BCP_CONSUMO = {
+  remitente: "BCP Notificaciones <" + BCP + ">",
+  asunto: "Realizaste un consumo con tu Tarjeta de Crédito BCP - Servicio de Notificaciones BCP",
+  cuerpo: `Hola Andrea Carolina,
+
+Realizaste un consumo de S/ 380.86 con tu Tarjeta de Crédito BCP en RIPLEY MIRAFLORES.
+
+Por tu seguridad, te enviamos los datos de tu operación.
+
+Monto
+
+Total del consumo S/ 380.86
+
+Datos de la operación
+
+Operación realizada Consumo Tarjeta de Crédito
+Fecha y hora 03 de octubre de 2026 - 01:34 PM
+Número de Tarjeta de Crédito ************6957
+Empresa RIPLEY MIRAFLORES
+Número de operación 0000035979`,
+};
+
+describe("BCP", () => {
+  it("reconoce el remitente", () => {
+    expect(bancoDe("BCP Notificaciones <" + BCP + ">").nombre).toBe("BCP");
+  });
+
+  it("lee el consumo con su comercio, monto, tarjeta y número de operación", () => {
+    const r = leeAvisoBancario(BCP_CONSUMO);
+    expect(r.accion).toBe("registrar");
+    expect(r.banco).toBe("BCP");
+    expect(r.payload.merchant).toBe("RIPLEY MIRAFLORES");
+    expect(r.payload.cardHint).toBe("BCP ••6957");
+    expect(r.payload.externalId).toBe("0000035979");
+    expect(normalizeTransaction(r.payload).value.amount).toBe(380.86);
+  });
+
+  it("lee la fecha larga con su hora", () => {
+    const d = new Date(leeAvisoBancario(BCP_CONSUMO).payload.occurredAt);
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2026, 9, 3]);
+    expect(d.getHours()).toBe(13); // 01:34 PM
+  });
+
+  it("un consumo en dólares no se confunde con soles", () => {
+    const usd = { ...BCP_CONSUMO, cuerpo: BCP_CONSUMO.cuerpo.replace("Total del consumo S/ 380.86", "Total del consumo $ 58.40") };
+    const t = normalizeTransaction(leeAvisoBancario(usd).payload).value;
+    expect(t.amount).toBe(58.4);
+    expect(t.currency).toBe("USD");
+  });
+
+  it("'Número de operación' no se come el número de la tarjeta", () => {
+    const r = leeAvisoBancario(BCP_CONSUMO);
+    expect(r.payload.externalId).not.toContain("6957");
+    expect(r.payload.cardHint).toContain("6957");
+  });
+
+  it("sin monto no se registra", () => {
+    const rota = { ...BCP_CONSUMO, cuerpo: BCP_CONSUMO.cuerpo.replace(/Total del consumo|Monto/g, "Importe") };
+    expect(leeAvisoBancario(rota).accion).toBe("no-reconocido");
+  });
+
+  it("un asunto que no conoce no se registra", () => {
+    expect(leeAvisoBancario({ ...BCP_CONSUMO, asunto: "BCP te informa de una promoción" }).accion).toBe("no-reconocido");
+  });
+});
+
+// ── Yape ──────────────────────────────────────────────────────────────────
+// Cuerpos copiados tal cual de sus correos (25 jul 2026 y 4 set 2025).
+const YAPE = "notificaciones@yape.pe";
+
+const YAPE_SERVICIO = {
+  remitente: "YAPE Notificaciones <" + YAPE + ">",
+  asunto: "Tu yapeo de servicio ha sido confirmado",
+  cuerpo: `Hola ANDREA,
+¡Tu servicio fue yapeado con éxito!
+Monto total
+
+S/ 39.95
+
+Yapero(a): ANDREA CAROLINA SALINAS PALMA
+Número de celular: *** *** 935
+Fecha y hora: 25 Jul. 2026 - 07:05 am
+Nº de operación Yape: 00807810
+Detalle del servicio:
+Empresa: Bitel
+Servicio: Postpago Bitel Soles`,
+};
+
+const YAPE_PAGO = {
+  remitente: YAPE,
+  asunto: "Envío Automático - Constancia de Transferencia - Yape",
+  cuerpo: `Hola ANDREA, ¡Tu pago en Yape Promos fue exitoso!
+Monto total S/ 18.90
+Fecha y hora: 04 sept. 2025 - 07:20 pm
+Titular: ANDREA CAROLINA SALINAS PALMA
+Celular: *** *** 935
+Número de operación Yape: 00123456`,
+};
+
+describe("Yape", () => {
+  it("reconoce el remitente y no lo confunde con BCP", () => {
+    expect(bancoDe("YAPE Notificaciones <" + YAPE + ">").nombre).toBe("Yape");
+  });
+
+  it("lee un pago de servicio con la empresa y el servicio", () => {
+    const r = leeAvisoBancario(YAPE_SERVICIO);
+    expect(r.accion).toBe("registrar");
+    expect(r.payload.merchant).toBe("Bitel · Postpago Bitel Soles");
+    expect(r.payload.cardHint).toBe("Yape");
+    expect(r.payload.externalId).toBe("00807810");
+    expect(normalizeTransaction(r.payload).value.amount).toBe(39.95);
+  });
+
+  it("lee la fecha con su hora en minúscula", () => {
+    const d = new Date(leeAvisoBancario(YAPE_SERVICIO).payload.occurredAt);
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2026, 6, 25]);
+    expect(d.getHours()).toBe(7); // 07:05 am
+  });
+
+  it("lee un pago de Yape Promos", () => {
+    const r = leeAvisoBancario(YAPE_PAGO);
+    expect(r.accion).toBe("registrar");
+    expect(r.payload.merchant).toBe("Pago por Yape");
+    expect(normalizeTransaction(r.payload).value.amount).toBe(18.9);
+    // "sept." con cuatro letras y punto también se entiende
+    expect(new Date(r.payload.occurredAt).getMonth()).toBe(8);
+  });
+
+  it("lo que no es un movimiento se descarta con su motivo", () => {
+    for (const asunto of ["¡Listo, activaste tu biometría digital en Yape!", "Ingresaste a Yape de forma segura", "Te hemos elegido para ayudarnos a mejorar — encuesta"]) {
+      expect(leeAvisoBancario({ ...YAPE_SERVICIO, asunto }).accion).toBe("ignorar");
+    }
+  });
+
+  it("una promo publicitaria no se registra", () => {
+    expect(leeAvisoBancario({ ...YAPE_SERVICIO, asunto: "¡Tienes hasta S/200 DSCTO. en iShop!" }).accion).toBe("no-reconocido");
+  });
+
+  it("sin monto no se registra", () => {
+    const rota = { ...YAPE_SERVICIO, cuerpo: YAPE_SERVICIO.cuerpo.replace("Monto total", "Importe") };
+    expect(leeAvisoBancario(rota).accion).toBe("no-reconocido");
+  });
+});

@@ -260,11 +260,155 @@ export function leeBBVA({ asunto, cuerpo }) {
   return { accion: "no-reconocido", motivo: "asunto no reconocido" };
 }
 
+// ── BCP ───────────────────────────────────────────────────────────────────
+// Tercera plantilla, tercer formato: BCP escribe la etiqueta y el valor en la
+// MISMA línea separados por un solo espacio ("Empresa RIPLEY MIRAFLORES"), así
+// que `campo` —que exige dos espacios o un salto— no sirve acá.
+
+// "Empresa RIPLEY MIRAFLORES" → "RIPLEY MIRAFLORES".
+// Se compara sobre la línea sin tildes para que "Número"/"Numero" den igual, y
+// se exige que la etiqueta ocupe el inicio exacto: así "Número de operación" no
+// se come lo de "Número de Tarjeta de Crédito".
+export function campoBCP(cuerpo, etiqueta) {
+  const objetivo = plano(etiqueta);
+  for (const cruda of String(cuerpo || "").split(/\r?\n/)) {
+    const linea = limpia(cruda);
+    const l = plano(linea);
+    if (!l.startsWith(objetivo)) continue;
+    const resto = linea.slice(etiqueta.length);
+    if (!/^\s/.test(resto)) continue; // "Empresas" no es "Empresa"
+    const valor = limpia(resto);
+    if (valor) return valor;
+  }
+  return "";
+}
+
+// "03 de octubre de 2026 - 01:34 PM" → Date
+export function fechaLarga(raw) {
+  const m = /^(\d{1,2})\s+de\s+([A-Za-zÁÉÍÓÚáéíóúÑñ]+)\s+de\s+(\d{4})(?:\s*[-–]\s*(.+))?$/.exec(limpia(raw));
+  if (!m) return null;
+  const mes = MESES[plano(m[2]).slice(0, 3)];
+  if (mes === undefined) return null;
+  const t = horaAMPM(m[4] || "");
+  const out = new Date(Number(m[3]), mes, Number(m[1]), t.h, t.min, 0, 0);
+  return isNaN(out.getTime()) ? null : out;
+}
+
+function bcpConsumo(cuerpo) {
+  const monto = campoBCP(cuerpo, "Total del consumo") || campoBCP(cuerpo, "Monto");
+  if (!monto) return { accion: "no-reconocido", motivo: "no encontré el monto" };
+  const fecha = fechaLarga(campoBCP(cuerpo, "Fecha y hora"));
+  // "************6957" — los últimos 4 son lo único que identifica la tarjeta.
+  const tarjeta = campoBCP(cuerpo, "Número de Tarjeta de Crédito") || campoBCP(cuerpo, "Número de Tarjeta");
+  const ult4 = /(\d{4})\s*$/.exec(tarjeta || "");
+  return {
+    accion: "registrar",
+    tipo: "consumo",
+    payload: {
+      amount: monto,
+      merchant: campoBCP(cuerpo, "Empresa") || "Compra",
+      cardHint: ult4 ? "BCP ••" + ult4[1] : "BCP",
+      occurredAt: fecha ? fecha.toISOString() : null,
+      source: "correo",
+      externalId: campoBCP(cuerpo, "Número de operación") || undefined,
+    },
+  };
+}
+
+const IGNORAR_BCP = [
+  { clave: "estado de cuenta", motivo: "es el resumen del mes, no un movimiento" },
+  { clave: "recibiste", motivo: "es un ingreso, no un gasto" },
+  { clave: "abono", motivo: "es un ingreso, no un gasto" },
+  { clave: "clave", motivo: "no es un movimiento" },
+];
+
+export function leeBCP({ asunto, cuerpo }) {
+  const a = plano(asunto);
+  if (a.includes("pago de tarjeta") || a.includes("pagaste tu tarjeta")) {
+    return { accion: "ignorar", motivo: "es un pago de tarjeta: anótalo desde la tarjeta, así baja tu saldo y cuenta como gasto" };
+  }
+  for (const r of IGNORAR_BCP) {
+    if (a.includes(r.clave)) return { accion: "ignorar", motivo: r.motivo };
+  }
+  if (a.includes("realizaste un consumo")) return bcpConsumo(cuerpo);
+  return { accion: "no-reconocido", motivo: "asunto no reconocido" };
+}
+
+// ── Yape ──────────────────────────────────────────────────────────────────
+// OJO con el alcance: Yape NO manda correo por los yapeos normales (de persona
+// a persona ni los QR en comercios). Solo por **pagos de servicios** y por
+// compras en Yape Promos. Lo demás vive únicamente dentro de la app, así que
+// esos gastos se siguen anotando a mano.
+//
+// Mezcla los dos formatos según el correo: el de servicios pone la etiqueta en
+// su propia línea, el de Yape Promos la pone pegada al valor con un solo
+// espacio. Se prueban los dos extractores.
+const campoYape = (cuerpo, etiqueta) => campo(cuerpo, etiqueta) || campoBCP(cuerpo, etiqueta);
+
+function yapeServicio(cuerpo) {
+  const monto = campoYape(cuerpo, "Monto total");
+  if (!monto) return { accion: "no-reconocido", motivo: "no encontré el monto" };
+  const empresa = campoYape(cuerpo, "Empresa");
+  const servicio = campoYape(cuerpo, "Servicio");
+  return {
+    accion: "registrar",
+    tipo: "yape-servicio",
+    payload: {
+      amount: monto,
+      merchant: empresa ? (servicio ? empresa + " · " + servicio : empresa) : "Pago de servicio por Yape",
+      cardHint: "Yape",
+      occurredAt: (fechaTextual(campoYape(cuerpo, "Fecha y hora")) || {}).toISOString?.() || null,
+      source: "correo",
+      externalId: campoYape(cuerpo, "Nº de operación Yape") || campoYape(cuerpo, "Número de operación Yape") || undefined,
+    },
+  };
+}
+
+function yapePago(cuerpo, queEs) {
+  const monto = campoYape(cuerpo, "Monto total");
+  if (!monto) return { accion: "no-reconocido", motivo: "no encontré el monto" };
+  return {
+    accion: "registrar",
+    tipo: "yape-pago",
+    payload: {
+      amount: monto,
+      merchant: campoYape(cuerpo, "Comercio") || queEs,
+      cardHint: "Yape",
+      occurredAt: (fechaTextual(campoYape(cuerpo, "Fecha y hora")) || {}).toISOString?.() || null,
+      source: "correo",
+      externalId: campoYape(cuerpo, "Número de operación Yape") || campoYape(cuerpo, "Nº de operación Yape") || undefined,
+    },
+  };
+}
+
+const IGNORAR_YAPE = [
+  { clave: "biometria", motivo: "no es un movimiento" },
+  { clave: "clave", motivo: "no es un movimiento" },
+  { clave: "ingresaste a yape", motivo: "no es un movimiento" },
+  { clave: "bienvenida", motivo: "no es un movimiento" },
+  { clave: "terminos y condiciones", motivo: "no es un movimiento" },
+  { clave: "encuesta", motivo: "no es un movimiento" },
+  { clave: "recibiste", motivo: "es un ingreso, no un gasto" },
+];
+
+export function leeYape({ asunto, cuerpo }) {
+  const a = plano(asunto);
+  for (const r of IGNORAR_YAPE) {
+    if (a.includes(r.clave)) return { accion: "ignorar", motivo: r.motivo };
+  }
+  if (a.includes("yapeo de servicio")) return yapeServicio(cuerpo);
+  if (a.includes("constancia de transferencia")) return yapePago(cuerpo, "Pago por Yape");
+  if (a.includes("tu compra de") && a.includes("exitosa")) return yapePago(cuerpo, "Compra por Yape");
+  return { accion: "no-reconocido", motivo: "asunto no reconocido" };
+}
+
 // ── Punto de entrada ──────────────────────────────────────────────────────
 
 const BANCOS = [
   { nombre: "Interbank", dominios: ["netinterbank.com.pe", "interbank.pe", "interbank.com.pe"], lee: leeInterbank },
   { nombre: "BBVA", dominios: ["bbva.com.pe", "bbva.pe", "bbvacontinental.pe"], lee: leeBBVA },
+  { nombre: "BCP", dominios: ["notificacionesbcp.com.pe", "viabcp.com", "bcp.com.pe"], lee: leeBCP },
+  { nombre: "Yape", dominios: ["yape.pe", "yape.com.pe"], lee: leeYape },
 ];
 
 export function bancoDe(remitente) {
