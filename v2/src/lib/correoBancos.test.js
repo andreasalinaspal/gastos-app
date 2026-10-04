@@ -595,3 +595,67 @@ describe("Yape", () => {
     expect(leeAvisoBancario(rota).accion).toBe("no-reconocido");
   });
 });
+
+// ── Banco Ripley ──────────────────────────────────────────────────────────
+// Frase corrida, sin etiquetas. Copiada tal cual de su correo del 5 set 2026.
+const RIPLEY = "alerta-autorizaciones@notificaciones.bancoripley.com.pe";
+
+const RIPLEY_CONSUMO = {
+  remitente: "Banco Ripley <" + RIPLEY + ">",
+  asunto: "Notificaciones consumos Banco Ripley",
+  cuerpo: "BANCO RIPLEY - Te informamos que el día 05/09/2026 a las 21:08:10 has realizado un consumo con tu tarjeta Ripley MASTERCARD SILVER (Titular) número 525435******1862 por S/ 219.90, en TIENDA VIRTUAL/FONO COMPRAS RIPLEY. El número de la operación es 435865.\nSi tienes alguna consulta, comunícate de inmediato con nosotros llamando al 611-5757.",
+};
+
+describe("Banco Ripley", () => {
+  it("reconoce el remitente", () => {
+    expect(bancoDe(RIPLEY_CONSUMO.remitente).nombre).toBe("Banco Ripley");
+  });
+
+  it("saca monto, comercio, tarjeta y operación de una frase sin etiquetas", () => {
+    const r = leeAvisoBancario(RIPLEY_CONSUMO);
+    expect(r.accion).toBe("registrar");
+    expect(r.payload.merchant).toBe("TIENDA VIRTUAL/FONO COMPRAS RIPLEY");
+    expect(r.payload.cardHint).toBe("Ripley ••1862");
+    expect(r.payload.externalId).toBe("435865");
+    expect(normalizeTransaction(r.payload).value.amount).toBe(219.9);
+  });
+
+  it("la hora del cuerpo es UTC: una compra de noche no se corre de día", () => {
+    // 05/09 21:08 UTC = 05/09 16:08 en Lima — el mismo día.
+    const d = new Date(leeAvisoBancario(RIPLEY_CONSUMO).payload.occurredAt);
+    expect(d.toISOString()).toBe("2026-09-05T21:08:10.000Z");
+    // Y una de 01:00 UTC pertenece al día ANTERIOR en Lima.
+    const tarde = { ...RIPLEY_CONSUMO, cuerpo: RIPLEY_CONSUMO.cuerpo.replace("05/09/2026 a las 21:08:10", "06/09/2026 a las 01:30:00") };
+    const d2 = new Date(leeAvisoBancario(tarde).payload.occurredAt);
+    expect(d2.toISOString()).toBe("2026-09-06T01:30:00.000Z");
+  });
+
+  it("entiende un retiro de efectivo", () => {
+    const retiro = { ...RIPLEY_CONSUMO, cuerpo: "BANCO RIPLEY - Te informamos que el día 05/08/2026 a las 14:52:24 has realizado un retiro de efectivo con tu tarjeta de Débito número 525435******1862 por S/ 300.00. El número de la operación es 111222." };
+    const r = leeAvisoBancario(retiro);
+    expect(r.tipo).toBe("retiro");
+    expect(r.payload.merchant).toBe("Retiro de efectivo");
+    expect(normalizeTransaction(r.payload).value.amount).toBe(300);
+  });
+
+  it("un consumo en dólares no se confunde con soles", () => {
+    const usd = { ...RIPLEY_CONSUMO, cuerpo: RIPLEY_CONSUMO.cuerpo.replace("por S/ 219.90", "por US$ 45.00") };
+    const t = normalizeTransaction(leeAvisoBancario(usd).payload).value;
+    expect(t.amount).toBe(45);
+    expect(t.currency).toBe("USD");
+  });
+
+  it("el estado de cuenta se descarta: viene en un PDF", () => {
+    const ec = { ...RIPLEY_CONSUMO, asunto: "Estado de Cuenta Banco Ripley", cuerpo: "Te enviamos adjunto tu estado de cuenta" };
+    expect(leeAvisoBancario(ec).accion).toBe("ignorar");
+  });
+
+  it("una promoción no se registra", () => {
+    expect(leeAvisoBancario({ ...RIPLEY_CONSUMO, asunto: "¡Octubre llega con descuentos exclusivos!" }).accion).toBe("no-reconocido");
+  });
+
+  it("sin monto no se registra", () => {
+    const rota = { ...RIPLEY_CONSUMO, cuerpo: RIPLEY_CONSUMO.cuerpo.replace("por S/ 219.90", "sin monto") };
+    expect(leeAvisoBancario(rota).accion).toBe("no-reconocido");
+  });
+});

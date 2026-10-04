@@ -343,3 +343,16 @@ describe("montos tal como los escribe Interbank", () => {
     expect(parseMoney(",")).toBe(null);
   });
 });
+
+// F56: un separador colgando al final es puntuación de la frase, no del número.
+describe("parseMoney — separador al final", () => {
+  it("no convierte 219.90 en 21,990 por una coma de la frase", () => {
+    expect(parseMoney("S/ 219.90,")).toBe(219.9);
+    expect(parseMoney("S/ 219.90.")).toBe(219.9);
+  });
+  it("los montos normales siguen igual", () => {
+    expect(parseMoney("S/. 38.00")).toBe(38);
+    expect(parseMoney("S/ 1,274.71")).toBe(1274.71);
+    expect(parseMoney("US$ 4.86")).toBe(4.86);
+  });
+});

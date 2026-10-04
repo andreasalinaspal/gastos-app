@@ -48,7 +48,9 @@ export function parseMoney(raw) {
   if (!cleaned) return null;
 
   const negative = cleaned.startsWith("-");
-  const body = cleaned.replace(/-/g, "");
+  // Un separador colgando al final es puntuación de la frase, no del número:
+  // "por S/ 219.90," llegaba con la coma y 219.90 se leía como 21,990.
+  const body = cleaned.replace(/-/g, "").replace(/[.,]+$/, "");
   if (!/\d/.test(body)) return null;
   // Un separador suelto sin dígitos alrededor no es un monto.
   if (!/^\d[\d.,]*$/.test(body)) return null;

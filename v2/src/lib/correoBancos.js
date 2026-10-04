@@ -402,6 +402,67 @@ export function leeYape({ asunto, cuerpo }) {
   return { accion: "no-reconocido", motivo: "asunto no reconocido" };
 }
 
+// ── Banco Ripley ──────────────────────────────────────────────────────────
+// Quinto banco, quinto formato — y el más incómodo: no hay etiquetas. Todo
+// viene en una frase corrida, así que se lee con expresiones regulares:
+//
+//   "Te informamos que el día 05/09/2026 a las 21:08:10 has realizado un consumo
+//    con tu tarjeta Ripley MASTERCARD SILVER (Titular) número 525435******1862
+//    por S/ 219.90, en TIENDA VIRTUAL/FONO COMPRAS RIPLEY. El número de la
+//    operación es 435865."
+
+// La hora del cuerpo viene en UTC, no en hora de Lima: ese correo decía
+// "21:08:10" y Gmail lo recibió a las 4:08 p.m. — cinco horas exactas, que es el
+// huso de Perú. Si se leyera como local, una compra de la noche caería al día
+// siguiente.
+export function fechaRipley(dmy, hms) {
+  const f = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(limpia(dmy));
+  if (!f) return null;
+  const t = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(limpia(hms)) || [];
+  const out = new Date(Date.UTC(
+    Number(f[3]), Number(f[2]) - 1, Number(f[1]),
+    Number(t[1] || 12), Number(t[2] || 0), Number(t[3] || 0)
+  ));
+  return isNaN(out.getTime()) ? null : out;
+}
+
+export function leeRipley({ asunto, cuerpo }) {
+  const a = plano(asunto);
+  if (a.includes("estado de cuenta")) {
+    return { accion: "ignorar", motivo: "el estado de cuenta viene en un PDF adjunto, no se puede leer" };
+  }
+  if (!a.includes("notificaciones consumos")) {
+    return { accion: "no-reconocido", motivo: "asunto no reconocido" };
+  }
+
+  const txt = limpia(cuerpo);
+  // Tiene que terminar en dígito: "por S/ 219.90," arrastraba la coma de la
+  // frase y 219.90 se leía como 21,990.
+  const mMonto = /\bpor\s+(S\/\.?\s*[\d.,]*\d|US\$\s*[\d.,]*\d|\$\s*[\d.,]*\d)/i.exec(txt);
+  if (!mMonto) return { accion: "no-reconocido", motivo: "no encontré el monto" };
+
+  const mFecha = /el\s+d[ií]a\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+a\s+las\s+([\d:]+)/i.exec(txt);
+  const mTarjeta = /n[uú]mero\s+([\d*]{8,})/i.exec(txt);
+  const mOp = /la\s+operaci[oó]n\s+es\s+(\d+)/i.exec(txt);
+  // "en TIENDA VIRTUAL/FONO COMPRAS RIPLEY." — hasta el punto que cierra la frase.
+  const mComercio = /,\s*en\s+(.+?)\.(?:\s|$)/i.exec(txt);
+  const esRetiro = /retiro de efectivo/i.test(txt);
+  const ult4 = mTarjeta ? /(\d{4})$/.exec(mTarjeta[1].replace(/\*/g, "")) : null;
+
+  return {
+    accion: "registrar",
+    tipo: esRetiro ? "retiro" : "consumo",
+    payload: {
+      amount: mMonto[1],
+      merchant: mComercio ? limpia(mComercio[1]) : (esRetiro ? "Retiro de efectivo" : "Compra"),
+      cardHint: ult4 ? "Ripley ••" + ult4[1] : "Ripley",
+      occurredAt: mFecha ? (fechaRipley(mFecha[1], mFecha[2]) || {}).toISOString?.() || null : null,
+      source: "correo",
+      externalId: mOp ? mOp[1] : undefined,
+    },
+  };
+}
+
 // ── Punto de entrada ──────────────────────────────────────────────────────
 
 const BANCOS = [
@@ -409,6 +470,7 @@ const BANCOS = [
   { nombre: "BBVA", dominios: ["bbva.com.pe", "bbva.pe", "bbvacontinental.pe"], lee: leeBBVA },
   { nombre: "BCP", dominios: ["notificacionesbcp.com.pe", "viabcp.com", "bcp.com.pe"], lee: leeBCP },
   { nombre: "Yape", dominios: ["yape.pe", "yape.com.pe"], lee: leeYape },
+  { nombre: "Banco Ripley", dominios: ["bancoripley.com.pe"], lee: leeRipley },
 ];
 
 export function bancoDe(remitente) {
